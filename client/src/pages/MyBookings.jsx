@@ -1,188 +1,138 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, Dumbbell, Trash2, XCircle, CheckCircle } from "lucide-react";
+import { MapPin, Dumbbell, Calendar, Loader2 } from "lucide-react";
+import API from "../utils/api";
 
-const MyBookings = () => {
+export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
-  const [confirmCancel, setConfirmCancel] = useState(null); // Which booking user is canceling
-  const [toast, setToast] = useState(null); // Toast message
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const storedBookings = JSON.parse(localStorage.getItem("bookings")) || [];
-    setBookings(storedBookings);
+    const fetchBookings = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          setError("User not logged in");
+          setLoading(false);
+          return;
+        }
+
+        console.log("📡 Fetching user bookings...");
+
+        const res = await API.get("/bookings/user", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        console.log("✅ Bookings received:", res.data);
+
+        setBookings(res.data);
+      } catch (err) {
+        console.error("❌ Error fetching bookings:", err.response?.data || err);
+        setError(err.response?.data?.message || "Failed to load bookings");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookings();
   }, []);
 
-  const handleCancelBooking = (id) => {
-    setConfirmCancel(id);
-  };
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">
+        <Loader2 className="animate-spin w-6 h-6 mr-2 text-blue-600" />
+        Loading your bookings...
+      </div>
+    );
 
-  const confirmCancelBooking = (id) => {
-    const updated = bookings.filter((b) => b.id !== id);
-    setBookings(updated);
-    localStorage.setItem("bookings", JSON.stringify(updated));
-    setConfirmCancel(null);
+  if (error)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-gray-600">
+        <p className="text-red-500 font-medium mb-4">{error}</p>
+        <Link
+          to="/login"
+          className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition"
+        >
+          Login Again
+        </Link>
+      </div>
+    );
 
-    // 🧠 Show toast message
-    setToast({
-      message: "❌ Booking Cancelled Successfully",
-      type: "error",
-    });
-
-    // Hide toast automatically after 2.5s
-    setTimeout(() => setToast(null), 2500);
-  };
-
-  const today = new Date().toISOString().split("T")[0];
+  if (!bookings || bookings.length === 0)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 via-white to-orange-50 text-center px-6">
+        <img
+          src="https://cdn-icons-png.flaticon.com/512/1047/1047711.png"
+          alt="No bookings"
+          className="w-28 h-28 mb-6 opacity-80"
+        />
+        <h2 className="text-2xl font-bold text-blue-700 mb-2">
+          You haven’t booked any passes yet 🏋️‍♂️
+        </h2>
+        <p className="text-gray-600 mb-6">
+          Start exploring gyms and get your first 1-day pass now!
+        </p>
+        <Link
+          to="/explore"
+          className="bg-gradient-to-r from-blue-600 to-orange-500 text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+        >
+          Explore Gyms
+        </Link>
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 relative">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-medium animate-fade-in ${
-            toast.type === "error" ? "bg-red-600" : "bg-green-600"
-          }`}
-        >
-          {toast.type === "error" ? (
-            <XCircle className="w-5 h-5" />
-          ) : (
-            <CheckCircle className="w-5 h-5" />
-          )}
-          {toast.message}
-        </div>
-      )}
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-orange-50 py-16 px-6">
+      <h1 className="text-4xl font-extrabold text-center text-blue-700 mb-10">
+        My Bookings
+      </h1>
 
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">
-          My Bookings 🏋️‍♂️
-        </h1>
+      <div className="max-w-5xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {bookings.map((booking) => (
+          <div
+            key={booking._id}
+            className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-gray-100"
+          >
+            <img
+              src={
+                booking.gym?.image ||
+                "https://source.unsplash.com/400x300/?gym,fitness"
+              }
+              alt={booking.gym?.name}
+              className="w-full h-40 object-cover rounded-lg mb-4"
+            />
 
-        {bookings.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-gray-600 mb-6 text-lg">
-              You haven’t booked any passes yet.
+            <h2 className="text-xl font-semibold text-blue-700 mb-1">
+              {booking.gym?.name || "Gym Name"}
+            </h2>
+            <p className="flex items-center text-gray-600 text-sm mb-1">
+              <MapPin className="w-4 h-4 mr-2 text-orange-500" />{" "}
+              {booking.gym?.city || "City"}
             </p>
+            <p className="flex items-center text-gray-600 text-sm mb-1">
+              <Calendar className="w-4 h-4 mr-2 text-blue-500" />{" "}
+              {new Date(booking.date).toLocaleDateString()}
+            </p>
+            <p className="flex items-center text-gray-600 text-sm mb-3">
+              <Dumbbell className="w-4 h-4 mr-2 text-blue-500" />{" "}
+              {booking.status || "confirmed"}
+            </p>
+
+            <p className="font-bold text-lg text-gray-800 mb-4">
+              ₹{booking.price || 499}
+            </p>
+
             <Link
-              to="/explore"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+              to={`/booking-success/${booking._id}`}
+              className="block w-full bg-gradient-to-r from-blue-600 to-orange-500 text-white py-2 rounded-lg font-semibold text-center hover:opacity-90 transition"
             >
-              Explore Gyms
+              View Details
             </Link>
           </div>
-        ) : (
-          <div className="grid gap-6">
-            {bookings.map((booking) => {
-              const isExpired = booking.date < today;
-              const isBeingCancelled = confirmCancel === booking.id;
-
-              return (
-                <div
-                  key={booking.id}
-                  className={`bg-white shadow-md rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between border border-gray-100 hover:shadow-lg transition-all duration-300 ${
-                    isBeingCancelled ? "opacity-50 scale-[0.98]" : ""
-                  }`}
-                >
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-800 mb-1 flex items-center gap-2">
-                      <Dumbbell className="w-5 h-5 text-blue-600" />
-                      {booking.name}
-                    </h2>
-                    <p className="text-gray-600 mb-1">{booking.city}</p>
-                    <p className="text-gray-700 flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4 text-blue-500" />
-                      <span>{booking.date}</span>
-                    </p>
-                    <p className="font-semibold text-gray-900 mt-1">
-                      ₹{booking.price}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 sm:mt-0 flex flex-col items-end">
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        isExpired
-                          ? "bg-gray-200 text-gray-600"
-                          : "bg-green-100 text-green-700"
-                      }`}
-                    >
-                      {isExpired ? "Expired" : "Active"}
-                    </span>
-
-                    <div className="flex gap-3 mt-3">
-                      <Link
-                        to={`/booking/${booking.id}`}
-                        className="text-blue-600 font-medium hover:underline"
-                      >
-                        Book Again
-                      </Link>
-
-                      {!isExpired && (
-                        <button
-                          onClick={() => handleCancelBooking(booking.id)}
-                          className="text-red-600 hover:text-red-800 flex items-center gap-1"
-                        >
-                          <Trash2 className="w-4 h-4" /> Cancel
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Cancel Confirmation Modal */}
-                  {isBeingCancelled && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                      <div className="bg-white rounded-xl shadow-lg p-8 w-[90%] max-w-md text-center relative">
-                        <XCircle className="text-red-500 w-12 h-12 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-800 mb-3">
-                          Cancel Booking?
-                        </h3>
-                        <p className="text-gray-600 mb-6">
-                          Are you sure you want to cancel your booking for{" "}
-                          <span className="font-medium text-blue-600">
-                            {booking.name}
-                          </span>{" "}
-                          on <span className="font-semibold">{booking.date}</span>?
-                        </p>
-
-                        <div className="flex justify-center gap-4">
-                          <button
-                            onClick={() => setConfirmCancel(null)}
-                            className="px-5 py-2 rounded-lg border border-gray-300 hover:bg-gray-100"
-                          >
-                            No, Keep It
-                          </button>
-                          <button
-                            onClick={() => confirmCancelBooking(booking.id)}
-                            className="px-5 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
-                          >
-                            Yes, Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        ))}
       </div>
-
-      {/* Animation styles */}
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fade-out {
-          from { opacity: 1; transform: translateY(0); }
-          to { opacity: 0; transform: translateY(20px); }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.4s ease-out;
-        }
-      `}</style>
     </div>
   );
-};
-
-export default MyBookings;
+}

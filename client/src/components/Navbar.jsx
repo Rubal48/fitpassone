@@ -1,113 +1,145 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Menu, X } from "lucide-react";
 
-const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+export default function Navbar() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    setUser(storedUser ? JSON.parse(storedUser) : null);
+  }, [location]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    setUser(null);
+    navigate("/login");
+  };
+
+  const navLinks = [
+    { name: "Home", path: "/" },
+    { name: "Explore", path: "/explore" },
+    { name: "Passes", path: "/passes" },
+    { name: "Partner", path: "/partner" },
+    { name: "About", path: "/about" },
+  ];
 
   return (
-    <nav className="bg-white shadow-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-        {/* Logo */}
-        <Link to="/" className="flex items-center space-x-1">
-          <h1 className="text-3xl font-bold">
-            <span className="text-blue-700">Passi</span>
-            <span className="text-orange-500">ify</span>
-          </h1>
+    <nav className="w-full bg-gradient-to-r from-blue-700 via-blue-600 to-orange-500 text-white shadow-md">
+      <div className="max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
+        {/* 🧿 Logo */}
+        <Link to="/" className="text-3xl font-extrabold tracking-tight flex items-center">
+          <span className="text-blue-400">Pass</span>
+          <span className="text-orange-400">iify</span>
         </Link>
+        <Link to="/about" className="hover:text-orange-300">About Us</Link>
 
-        {/* Desktop Menu */}
-        <ul className="hidden md:flex space-x-8 text-gray-700 font-medium">
-          <li>
+        {/* 🌍 Desktop Navigation */}
+        <div className="hidden md:flex items-center space-x-8">
+          {navLinks.map((link, index) => (
             <Link
-              to="/"
-              className="hover:text-blue-600 transition duration-300"
+              key={index}
+              to={link.path}
+              className="relative font-medium text-white/90 hover:text-white transition duration-300 group"
             >
-              Home
+              {link.name}
+              <span className="absolute left-0 bottom-[-4px] w-0 h-[2px] bg-orange-300 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-          </li>
-          <li>
-            <Link
-              to="/explore"
-              className="hover:text-blue-600 transition duration-300"
-            >
-              Explore
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/about"
-              className="hover:text-blue-600 transition duration-300"
-            >
-              About
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/contact"
-              className="hover:text-blue-600 transition duration-300"
-            >
-              Contact
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/login"
-              className="bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 transition"
-            >
-              Login
-            </Link>
-          </li>
-        </ul>
+          ))}
+        </div>
 
-        {/* Mobile Hamburger */}
-        <button
-          className="md:hidden flex flex-col space-y-1"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <span className="w-6 h-[2px] bg-gray-800"></span>
-          <span className="w-6 h-[2px] bg-gray-800"></span>
-          <span className="w-6 h-[2px] bg-gray-800"></span>
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      {isOpen && (
-        <div className="md:hidden bg-white shadow-inner border-t border-gray-100">
-          <ul className="flex flex-col space-y-3 p-4 text-gray-700 font-medium">
-            <li>
-              <Link to="/" onClick={() => setIsOpen(false)}>
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link to="/explore" onClick={() => setIsOpen(false)}>
-                Explore
-              </Link>
-            </li>
-            <li>
-              <Link to="/about" onClick={() => setIsOpen(false)}>
-                About
-              </Link>
-            </li>
-            <li>
-              <Link to="/contact" onClick={() => setIsOpen(false)}>
-                Contact
-              </Link>
-            </li>
-            <li>
+        {/* 👤 Auth Buttons */}
+        <div className="hidden md:flex items-center gap-4">
+          {user ? (
+            <>
+              <span className="text-white/90">
+                Hi, <span className="font-semibold text-orange-300">{user.user?.name || "User"}</span>
+              </span>
+              <button
+                onClick={handleLogout}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full font-semibold transition-all shadow-sm hover:shadow-md"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
               <Link
                 to="/login"
-                className="bg-blue-600 text-white text-center px-5 py-2 rounded-full hover:bg-blue-700 transition"
-                onClick={() => setIsOpen(false)}
+                className="border border-white/70 px-4 py-2 rounded-full hover:bg-white/10 transition-all"
               >
                 Login
               </Link>
-            </li>
-          </ul>
+              <Link
+                to="/register"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full font-semibold transition-all shadow-sm hover:shadow-md"
+              >
+                Register
+              </Link>
+            </>
+          )}
+        </div>
+
+        {/* 📱 Mobile Menu Button */}
+        <button
+          className="md:hidden text-white"
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          {menuOpen ? <X size={26} /> : <Menu size={26} />}
+        </button>
+      </div>
+
+      {/* 📱 Mobile Dropdown */}
+      {menuOpen && (
+        <div className="md:hidden bg-blue-800/90 backdrop-blur-lg text-white border-t border-white/10">
+          <div className="flex flex-col py-4 px-6 space-y-4 font-medium">
+            {navLinks.map((link, i) => (
+              <Link
+                key={i}
+                to={link.path}
+                onClick={() => setMenuOpen(false)}
+                className="hover:text-orange-300 transition"
+              >
+                {link.name}
+              </Link>
+            ))}
+            {user ? (
+              <>
+                <span className="text-white/80">Hi, {user.user?.name || "User"}</span>
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setMenuOpen(false);
+                  }}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full font-semibold transition-all"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="border border-white/40 px-4 py-2 rounded-full text-center hover:bg-white/10 transition"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setMenuOpen(false)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-center font-semibold transition"
+                >
+                  Register
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       )}
     </nav>
   );
-};
-
-export default Navbar;
+}

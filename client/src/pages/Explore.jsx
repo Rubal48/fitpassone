@@ -1,207 +1,188 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { Search, MapPin, Heart, Star, Play } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Search, MapPin, Star, Loader2 } from "lucide-react";
+import API from "../utils/api";
 
-const gymsData = [
-  {
-    id: 1,
-    name: "Gold's Gym Delhi",
-    type: "Gym",
-    city: "Delhi",
-    price: 299,
-    rating: 4.8,
-    images: [
-      "https://images.unsplash.com/photo-1571019613914-85f342c55f85?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1605296867304-46d5465a13f1?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1579758629934-095a20fce7bf?auto=format&fit=crop&w=800&q=80",
-    ],
-    video: "https://www.w3schools.com/html/mov_bbb.mp4",
-  },
-  {
-    id: 2,
-    name: "Zen Yoga Studio",
-    type: "Yoga",
-    city: "Mumbai",
-    price: 249,
-    rating: 4.6,
-    images: [
-      "https://images.unsplash.com/photo-1554306274-f23873d9a26f?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1575052814086-f385e2e2ad1d?auto=format&fit=crop&w=800&q=80",
-    ],
-    video: "https://www.w3schools.com/html/movie.mp4",
-  },
-  {
-    id: 3,
-    name: "Core Pilates Hub",
-    type: "Pilates",
-    city: "Bangalore",
-    price: 299,
-    rating: 4.5,
-    images: [
-      "https://images.unsplash.com/photo-1616690710506-7b6d3a4a4cc8?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1593079831268-3381b0db4a77?auto=format&fit=crop&w=800&q=80",
-    ],
-    video: "https://www.w3schools.com/html/mov_bbb.mp4",
-  },
-];
+export default function Explore() {
+  const [gyms, setGyms] = useState([]);
+  const [filteredGyms, setFilteredGyms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+  const location = useLocation();
 
-const Explore = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [category, setCategory] = useState("All");
-  const [likedGyms, setLikedGyms] = useState([]);
-  const [showVideo, setShowVideo] = useState(null);
+  // 🧠 Fetch gyms from backend
+  useEffect(() => {
+    const fetchGyms = async () => {
+      try {
+        const res = await API.get("/gyms");
+        setGyms(res.data);
+        setFilteredGyms(res.data);
+        setError("");
+      } catch (err) {
+        console.error("❌ Error fetching gyms:", err);
+        setError("Unable to load gyms. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGyms();
+  }, []);
 
-  const toggleLike = (id) => {
-    setLikedGyms((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+  // 🔍 Handle URL search query
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchQuery = params.get("query");
+    if (searchQuery) {
+      setQuery(searchQuery);
+      handleSearch(searchQuery);
+    }
+  }, [location.search, gyms]);
+
+  // 🔎 Filter gyms based on query
+  const handleSearch = (value) => {
+    const q = value.toLowerCase();
+    const results = gyms.filter(
+      (gym) =>
+        gym.name.toLowerCase().includes(q) ||
+        gym.city.toLowerCase().includes(q) ||
+        (gym.description && gym.description.toLowerCase().includes(q))
+    );
+    setFilteredGyms(results);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleSearch(query);
+  };
+
+  // 🖼️ Smart Dynamic Image (Pexels + Unsplash + fallback)
+  const getGymImage = (gym) => {
+    if (gym.image && gym.image.startsWith("http")) return gym.image;
+    if (gym.images && gym.images.length > 0 && gym.images[0].startsWith("http"))
+      return gym.images[0];
+
+    const keyword = encodeURIComponent(`${gym.name} ${gym.city} gym fitness`);
+    const pexelsImages = [
+      "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "https://images.pexels.com/photos/4754142/pexels-photo-4754142.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "https://images.pexels.com/photos/1552106/pexels-photo-1552106.jpeg?auto=compress&cs=tinysrgb&w=800",
+    ];
+    const randomIndex = Math.floor(Math.random() * pexelsImages.length);
+
+    return (
+      pexelsImages[randomIndex] ||
+      `https://source.unsplash.com/800x600/?${keyword}`
     );
   };
 
-  const filteredGyms = gymsData.filter((gym) => {
-    const matchesSearch =
-      gym.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      gym.city.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      category === "All" ? true : gym.type === category;
-    return matchesSearch && matchesCategory;
-  });
-
   return (
-    <div className="bg-gray-50 min-h-screen pb-20">
-      {/* Header */}
-      <section className="bg-gradient-to-r from-blue-600 to-blue-400 text-white py-16 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">Explore Fitness Near You</h1>
-        <p className="text-blue-100 max-w-xl mx-auto">
-          See real gyms, yoga, and pilates studios through photos and videos — then book your 1-day pass.
-        </p>
-      </section>
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-orange-50 text-gray-800">
+      {/* 🔍 Search Section */}
+      <section className="bg-gradient-to-r from-blue-700 via-blue-600 to-orange-500 py-16 text-center text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/4162443/pexels-photo-4162443.jpeg?auto=compress&cs=tinysrgb&w=1600')] bg-cover bg-center opacity-20"></div>
+        <div className="absolute inset-0 bg-black/20"></div>
 
-      {/* Search + Filters */}
-      <div className="max-w-6xl mx-auto px-6 mt-[-30px]">
-        <div className="bg-white shadow-lg rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex items-center bg-gray-100 px-4 py-2 rounded-lg w-full md:w-2/3">
-            <Search className="text-gray-500 mr-2" />
+        <div className="relative z-10 max-w-3xl mx-auto px-6">
+          <h1 className="text-5xl font-extrabold mb-6 drop-shadow-lg">
+            Explore <span className="text-orange-300">Gyms</span> Near You
+          </h1>
+          <p className="text-blue-100 mb-10 text-lg">
+            Discover fitness clubs, yoga studios, and training centers — anytime, anywhere.
+          </p>
+
+          <form
+            onSubmit={handleSubmit}
+            className="flex items-center justify-center max-w-2xl mx-auto bg-white/90 backdrop-blur-md rounded-full shadow-xl overflow-hidden border border-orange-300"
+          >
             <input
               type="text"
-              placeholder="Search by city or gym name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-transparent outline-none text-gray-700"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search gyms, studios or city (e.g. Delhi, Yoga)"
+              className="flex-1 px-6 py-3 text-gray-700 text-lg focus:outline-none"
             />
-          </div>
-
-          <div className="flex justify-center md:justify-end gap-2 w-full md:w-1/3">
-            {["All", "Gym", "Yoga", "Pilates"].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategory(cat)}
-                className={`px-4 py-2 rounded-full font-medium transition ${
-                  category === cat
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-blue-50"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+            <button
+              type="submit"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 flex items-center gap-2 font-semibold transition-all duration-300"
+            >
+              <Search size={20} /> Search
+            </button>
+          </form>
         </div>
-      </div>
+      </section>
 
-      {/* Results */}
-      <div className="max-w-6xl mx-auto px-6 mt-10">
-        {filteredGyms.length === 0 ? (
-          <p className="text-center text-gray-600 mt-20">
-            No gyms found. Try changing your filters.
+      {/* 🏋️ Gym Cards Section */}
+      <section className="max-w-7xl mx-auto px-6 py-16">
+        {loading ? (
+          <div className="flex justify-center items-center py-24">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+            <p className="text-gray-600">Loading gyms...</p>
+          </div>
+        ) : error ? (
+          <p className="text-center text-red-500 text-lg">{error}</p>
+        ) : filteredGyms.length === 0 ? (
+          <p className="text-center text-gray-500 text-lg">
+            No gyms found matching your search.
           </p>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-8">
             {filteredGyms.map((gym) => (
               <div
-                key={gym.id}
-                className="bg-white rounded-2xl shadow-md hover:shadow-xl transition overflow-hidden group"
+                key={gym._id}
+                className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden group border border-gray-100 transform hover:-translate-y-1"
               >
-                {/* Image Gallery */}
+                {/* 🖼️ Gym Image */}
                 <div className="relative">
-                  <div className="grid grid-cols-3 gap-1">
-                    {gym.images.slice(0, 3).map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt={gym.name}
-                        className="h-28 w-full object-cover hover:opacity-80 transition"
-                      />
-                    ))}
+                  <img
+                    src={getGymImage(gym)}
+                    alt={gym.name}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800";
+                    }}
+                    className="w-full h-52 object-cover rounded-t-2xl group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute top-3 left-3 bg-gradient-to-r from-blue-600 to-orange-500 text-white px-3 py-1 text-xs font-semibold rounded-full shadow-md">
+                    ₹{gym.price || 499} / 1-Day Pass
                   </div>
-
-                  {/* Video Play Button */}
-                  <button
-                    onClick={() => setShowVideo(gym.video)}
-                    className="absolute bottom-3 right-3 bg-white p-2 rounded-full shadow-md hover:scale-110 transition"
-                  >
-                    <Play size={18} className="text-blue-600" />
-                  </button>
-
-                  {/* Like Button */}
-                  <button
-                    onClick={() => toggleLike(gym.id)}
-                    className="absolute top-3 right-3 bg-white rounded-full p-2 shadow-md hover:scale-110 transition"
-                  >
-                    <Heart
-                      size={20}
-                      className={
-                        likedGyms.includes(gym.id)
-                          ? "text-red-500 fill-red-500"
-                          : "text-gray-500"
-                      }
-                    />
-                  </button>
                 </div>
 
-                {/* Gym Info */}
-                <div className="p-5">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-1">{gym.name}</h3>
-                  <div className="flex items-center text-gray-500 text-sm mb-2">
-                    <MapPin size={14} className="mr-1" /> {gym.city} • {gym.type}
+                {/* 📋 Gym Info */}
+                <div className="p-5 text-left">
+                  <h3 className="text-xl font-bold text-blue-700 mb-1 truncate">
+                    {gym.name}
+                  </h3>
+                  <p className="text-gray-600 flex items-center gap-1 mb-2 text-sm">
+                    <MapPin size={15} className="text-orange-500" /> {gym.city}
+                  </p>
+                  <p className="text-gray-500 text-sm mb-3 line-clamp-2">
+                    {gym.description ||
+                      "A modern fitness space equipped with premium machines, trainers, and classes."}
+                  </p>
+
+                  {/* ⭐ Rating + Button */}
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center text-yellow-400 text-sm">
+                      <Star size={15} className="fill-yellow-400" />{" "}
+                      <span className="ml-1">{gym.rating || "4.8"}</span>
+                    </div>
+                    <Link
+                      to={`/gyms/${gym._id}`}
+                      className="bg-gradient-to-r from-blue-600 to-orange-500 text-white px-4 py-1.5 rounded-full text-sm font-semibold hover:opacity-90 transition-all duration-300 shadow-md"
+                    >
+                      View Details
+                    </Link>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-gray-800 font-semibold">₹{gym.price}/day</p>
-                    <p className="text-yellow-500 text-sm flex items-center">
-                      <Star size={14} className="mr-1" /> {gym.rating}
-                    </p>
-                  </div>
-                  <Link
-                    to={`/gym/${gym.id}`}
-                    className="block text-center mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 font-semibold transition-all"
-                  >
-                    View Details
-                  </Link>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
-
-      {/* Video Modal */}
-      {showVideo && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
-          <div className="relative bg-white rounded-xl shadow-lg w-[90%] max-w-2xl overflow-hidden">
-            <video controls autoPlay className="w-full">
-              <source src={showVideo} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-            <button
-              onClick={() => setShowVideo(null)}
-              className="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full hover:bg-red-600"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+      </section>
     </div>
   );
-};
-
-export default Explore;
+}

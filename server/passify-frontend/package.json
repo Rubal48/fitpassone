@@ -1,5 +1,5 @@
 {
-  "name": "client",
+  "name": "passify-frontend",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -7,13 +7,8 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.12.2",
-    "canvas-confetti": "^1.9.3",
-    "lucide-react": "^0.546.0",
     "react": "^19.2.0",
-    "react-datepicker": "^8.8.0",
     "react-dom": "^19.2.0",
-    "react-modal": "^3.16.3",
     "react-router-dom": "^7.9.4",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
@@ -22,8 +17,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "lint": "eslint src --ext .js,.jsx"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
@@ -44,10 +38,8 @@
     ]
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.14",
     "autoprefixer": "^10.4.21",
-    "eslint": "^8.57.1",
     "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.13"
+    "tailwindcss": "^4.1.16"
   }
 }

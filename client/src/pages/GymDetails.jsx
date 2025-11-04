@@ -1,416 +1,426 @@
-import React, { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
-  Star,
   MapPin,
-  Clock,
   ShieldCheck,
-  ThumbsUp,
+  Clock,
   Dumbbell,
-  CheckCircle,
-  PlayCircle,
-  Award,
+  ThumbsUp,
   Shield,
-  CreditCard,
+  Award,
   Users,
+  CreditCard,
+  Loader2,
+  CheckCircle,
+  CalendarDays,
+  Star,
+  Wifi,
+  Droplet,
+  ExternalLink,
 } from "lucide-react";
+import API from "../utils/api";
 
-const gymsData = [
-  {
-    id: 1,
-    name: "Gold’s Gym",
-    city: "Delhi",
-    price: 499,
-    rating: 4.8,
-    totalReviews: 312,
-    description:
-      "India’s #1 premium gym chain — trusted by over 2 million fitness lovers. Train with certified experts using world-class equipment, clean spaces, and personalized routines.",
-    highlights: [
-      "Top-rated trainers with international certification",
-      "World-class equipment & 24/7 cleanliness",
-      "Free first-day consultation worth ₹999",
-      "Flexible timing: Morning to Late Night",
-    ],
-    images: [
-      "https://images.unsplash.com/photo-1605296867304-46d5465a13f1",
-      "https://images.unsplash.com/photo-1571019613914-85f342c55f9e",
-      "https://images.unsplash.com/photo-1554284126-aa88f22d8b74",
-    ],
-    video: "https://www.w3schools.com/html/mov_bbb.mp4",
-    amenities: [
-      "AC Facility",
-      "Locker Rooms",
-      "Personal Trainer",
-      "Parking Area",
-      "Free WiFi",
-      "Shower Rooms",
-    ],
-    offer: "Limited Offer: Save ₹100 on today’s booking!",
-  },
-];
-
-const GymDetails = () => {
+export default function GymDetails() {
   const { id } = useParams();
-  const gym = gymsData.find((g) => g.id === parseInt(id));
-  const [selectedImage, setSelectedImage] = useState(gym.images[0]);
-  const [showLogin, setShowLogin] = useState(false);
+  const navigate = useNavigate();
+  const [gym, setGym] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
 
-  if (!gym)
-    return <p className="text-center mt-20 text-gray-500">Gym not found 🏋️‍♂️</p>;
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [gymRes, reviewRes] = await Promise.all([
+          API.get(`/gyms/${id}`),
+          API.get(`/reviews/${id}`),
+        ]);
+        setGym(gymRes.data);
+        setReviews(reviewRes.data);
+      } catch (err) {
+        console.error("❌ Error fetching gym:", err);
+        setError("Could not load gym details.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [id]);
+
+  const handleBooking = async () => {
+    try {
+      setBookingLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("Please login first!");
+        navigate("/login");
+        return;
+      }
+
+      const gymId = gym?._id || id;
+      const { data } = await API.post(
+        "/bookings",
+        { gymId, date: selectedDate },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowSuccess(true);
+      setTimeout(() => navigate(`/booking-success/${data._id}`), 1500);
+    } catch (error) {
+      console.error("❌ Booking failed:", error);
+      alert("Booking failed. Try again.");
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    if (!token) return navigate("/login");
+
+    try {
+      await API.post(
+        `/reviews/${id}`,
+        { rating, comment },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setRating(0);
+      setComment("");
+      const res = await API.get(`/reviews/${id}`);
+      setReviews(res.data);
+    } catch (err) {
+      console.error("Error posting review:", err);
+      alert("Could not post review. Try again later.");
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="min-h-screen flex justify-center items-center text-gray-600">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+        Loading gym details...
+      </div>
+    );
+
+  if (error || !gym)
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center text-gray-600">
+        <p className="text-lg">⚠️ {error || "Gym not found."}</p>
+        <Link
+          to="/explore"
+          className="mt-4 bg-gradient-to-r from-blue-600 to-orange-500 text-white px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition"
+        >
+          Back to Explore
+        </Link>
+      </div>
+    );
+
+  const galleryImages =
+    gym.images && gym.images.length > 0
+      ? gym.images.map((img) =>
+          img.startsWith("http") ? img : `http://localhost:5000${img}`
+        )
+      : [
+          "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg",
+          "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg",
+        ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16">
-      {/* Hero Section */}
-      <div className="relative w-full h-[60vh] md:h-[75vh]">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-orange-50 pb-20">
+      {/* 🏋️‍♂️ Hero Section */}
+      <div className="relative w-full h-[60vh] overflow-hidden">
         <img
-          src={selectedImage}
+          src={galleryImages[0]}
           alt={gym.name}
           className="w-full h-full object-cover brightness-90"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
-        {/* Gym Name and Rating */}
-        <div className="absolute bottom-10 left-6 md:left-16 text-white">
-          <h1 className="text-3xl md:text-5xl font-bold mb-2">{gym.name}</h1>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Star className="text-yellow-400 w-5 h-5" />
-              <span className="font-medium">{gym.rating}</span>
-              <span className="text-gray-300 text-sm">
-                ({gym.totalReviews} Reviews)
-              </span>
-            </div>
-          </div>
-          <p className="flex items-center gap-2 text-gray-300 mt-2">
-            <MapPin className="w-4 h-4" /> {gym.city}
+        <div className="absolute bottom-10 left-6 md:left-16 text-white drop-shadow-lg">
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-2 flex items-center gap-2">
+            {gym.name}
+            {gym.verified && (
+              <ShieldCheck className="text-green-400 w-7 h-7" title="Verified" />
+            )}
+          </h1>
+          <p className="flex items-center gap-2 text-blue-100">
+            <MapPin className="w-5 h-5 text-orange-300" /> {gym.city}
+          </p>
+          <p className="flex items-center gap-2 text-yellow-300 mt-1">
+            <Star className="w-5 h-5 text-yellow-400" />{" "}
+            {gym.rating ? `${gym.rating.toFixed(1)} / 5` : "No ratings yet"}
           </p>
         </div>
       </div>
 
-      {/* Details Section */}
-      <div className="max-w-6xl mx-auto mt-10 px-6 grid md:grid-cols-3 gap-10">
-        {/* Left: Images + Video */}
+      {/* 💪 About + Booking */}
+      <div className="max-w-6xl mx-auto mt-12 px-6 grid md:grid-cols-3 gap-10">
+        {/* Left Column */}
         <div className="md:col-span-2">
-          {/* Image Thumbnails */}
-          <div className="flex gap-3 mb-6 overflow-x-auto">
-            {gym.images.map((img, index) => (
-              <img
-                key={index}
-                src={img}
-                onClick={() => setSelectedImage(img)}
-                className={`w-32 h-24 object-cover rounded-xl cursor-pointer border-2 ${
-                  selectedImage === img ? "border-blue-600" : "border-transparent"
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* About Section */}
-          <h2 className="text-2xl font-semibold mb-3 text-gray-800">
-            Why Choose {gym.name}?
+          <h2 className="text-3xl font-extrabold mb-4 text-blue-700">
+            Why Choose <span className="text-orange-500">{gym.name}</span>?
           </h2>
-          <p className="text-gray-700 leading-relaxed mb-5">
-            {gym.description}
+          <p className="text-gray-700 leading-relaxed mb-6 text-lg">
+            {gym.description ||
+              "Train smarter with premium equipment, certified trainers, and a motivating environment to help you reach your goals."}
           </p>
 
-          {/* Highlights */}
-          <ul className="space-y-3 mb-6">
-            {gym.highlights.map((point, i) => (
-              <li key={i} className="flex items-center gap-2 text-gray-800">
-                <CheckCircle className="text-green-500 w-5 h-5" />
-                {point}
-              </li>
-            ))}
-          </ul>
-
-          {/* Amenities */}
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">
-            Amenities
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-            {gym.amenities.map((item, i) => (
-              <div
-                key={i}
-                className="bg-white shadow-md border rounded-lg px-4 py-3 flex items-center gap-2 text-gray-700 hover:shadow-lg transition"
-              >
-                <Dumbbell className="text-blue-600 w-5 h-5" /> {item}
-              </div>
-            ))}
-          </div>
-
-          {/* Video Section */}
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">
-            Explore the Gym
-          </h3>
-          <div className="relative">
-            <video
-              src={gym.video}
-              controls
-              className="w-full rounded-2xl shadow-lg"
-            ></video>
-            <PlayCircle className="absolute top-1/2 left-1/2 w-16 h-16 text-white/80 transform -translate-x-1/2 -translate-y-1/2" />
-          </div>
-            {/* 🗣️ Reviews & Testimonials Section */}
-<div className="mt-12">
-  <h3 className="text-2xl font-semibold mb-4 text-gray-800 text-center">
-    What Our Members Say 💬
-  </h3>
-  <p className="text-center text-gray-600 mb-8 max-w-2xl mx-auto">
-    Real reviews from people who actually trained at <span className="font-medium text-blue-600">{gym.name}</span>.  
-    Authentic, verified, and confidence-building.
-  </p>
-
-  {/* Reviews Grid */}
-  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-    {[
-      {
-        name: "Rahul Verma",
-        review:
-          "One of the cleanest gyms I’ve been to. Trainers actually correct your form and motivate you!",
-        rating: 5,
-        image:
-          "https://randomuser.me/api/portraits/men/45.jpg",
-      },
-      {
-        name: "Sneha Kapoor",
-        review:
-          "Loved the energy here! Great crowd, great music, and very professional staff.",
-        rating: 4,
-        image:
-          "https://randomuser.me/api/portraits/women/44.jpg",
-      },
-      {
-        name: "Arjun Mehta",
-        review:
-          "Booked a 1-day pass just to try, and now I’ve got a 3-month membership. Worth every rupee!",
-        rating: 5,
-        image:
-          "https://randomuser.me/api/portraits/men/22.jpg",
-      },
-    ].map((rev, i) => (
-      <div
-        key={i}
-        className="bg-white p-6 rounded-2xl shadow-md border hover:shadow-xl transition"
-      >
-        <div className="flex items-center gap-4 mb-3">
-          <img
-            src={rev.image}
-            alt={rev.name}
-            className="w-12 h-12 rounded-full object-cover"
-          />
-          <div>
-            <h4 className="font-semibold text-gray-800">{rev.name}</h4>
-            <div className="flex">
-              {Array(rev.rating)
-                .fill()
-                .map((_, i) => (
-                  <span key={i} className="text-yellow-400">★</span>
-                ))}
-            </div>
-          </div>
-        </div>
-        <p className="text-gray-700 italic">“{rev.review}”</p>
-      </div>
-    ))}
-  </div>
-
-  {/* Write a Review Form */}
-  <div className="mt-10 bg-gray-100 p-6 rounded-2xl max-w-3xl mx-auto">
-    <h4 className="text-lg font-semibold mb-3 text-gray-800 text-center">
-      Share Your Experience
-    </h4>
-    <div className="flex flex-col md:flex-row gap-3 justify-center">
-      <input
-        type="text"
-        placeholder="Your name"
-        className="border rounded-lg px-4 py-2 w-full md:w-1/3"
-      />
-      <textarea
-        placeholder="Write your review..."
-        className="border rounded-lg px-4 py-2 w-full md:w-2/3"
-      ></textarea>
-    </div>
-    <button className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition mx-auto block">
-      Submit Review
-    </button>
-  </div>
-</div>
-{/* 🗣️ Reviews & Testimonials Section */}
-<div className="mt-12">
-  <h3 className="text-2xl font-semibold mb-4 text-gray-800 text-center">
-    What Our Members Say 💬
-  </h3>
-  <p className="text-center text-gray-600 mb-8 max-w-2xl mx-auto">
-    Real reviews from people who actually trained at <span className="font-medium text-blue-600">{gym.name}</span>.  
-    Authentic, verified, and confidence-building.
-  </p>
-
-  {/* Reviews Grid */}
-  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-    {[
-      {
-        name: "Rahul Verma",
-        review:
-          "One of the cleanest gyms I’ve been to. Trainers actually correct your form and motivate you!",
-        rating: 5,
-        image:
-          "https://randomuser.me/api/portraits/men/45.jpg",
-      },
-      {
-        name: "Sneha Kapoor",
-        review:
-          "Loved the energy here! Great crowd, great music, and very professional staff.",
-        rating: 4,
-        image:
-          "https://randomuser.me/api/portraits/women/44.jpg",
-      },
-      {
-        name: "Arjun Mehta",
-        review:
-          "Booked a 1-day pass just to try, and now I’ve got a 3-month membership. Worth every rupee!",
-        rating: 5,
-        image:
-          "https://randomuser.me/api/portraits/men/22.jpg",
-      },
-    ].map((rev, i) => (
-      <div
-        key={i}
-        className="bg-white p-6 rounded-2xl shadow-md border hover:shadow-xl transition"
-      >
-        <div className="flex items-center gap-4 mb-3">
-          <img
-            src={rev.image}
-            alt={rev.name}
-            className="w-12 h-12 rounded-full object-cover"
-          />
-          <div>
-            <h4 className="font-semibold text-gray-800">{rev.name}</h4>
-            <div className="flex">
-              {Array(rev.rating)
-                .fill()
-                .map((_, i) => (
-                  <span key={i} className="text-yellow-400">★</span>
-                ))}
-            </div>
-          </div>
-        </div>
-        <p className="text-gray-700 italic">“{rev.review}”</p>
-      </div>
-    ))}
-  </div>
-
-  {/* Write a Review Form */}
-  <div className="mt-10 bg-gray-100 p-6 rounded-2xl max-w-3xl mx-auto">
-    <h4 className="text-lg font-semibold mb-3 text-gray-800 text-center">
-      Share Your Experience
-    </h4>
-    <div className="flex flex-col md:flex-row gap-3 justify-center">
-      <input
-        type="text"
-        placeholder="Your name"
-        className="border rounded-lg px-4 py-2 w-full md:w-1/3"
-      />
-      <textarea
-        placeholder="Write your review..."
-        className="border rounded-lg px-4 py-2 w-full md:w-2/3"
-      ></textarea>
-    </div>
-    <button className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition mx-auto block">
-      Submit Review
-    </button>
-  </div>
-</div>
-
-          {/* Review Section */}
+          {/* ✅ Amenities */}
           <div className="mt-10">
-            <h3 className="text-xl font-semibold mb-3 text-gray-800">
-              What Members Say
+            <h3 className="text-2xl font-bold text-blue-700 mb-4">
+              Amenities & Facilities
             </h3>
-            <div className="bg-white p-6 rounded-xl shadow-md border">
-              <p className="italic text-gray-600">
-                “One of the cleanest and most professional gyms I’ve visited.
-                Trainers actually care about your form and progress. Worth every
-                rupee!”
-              </p>
-              <p className="mt-3 font-semibold text-gray-800">— Rahul Verma</p>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {["AC", "Lockers", "Showers", "WiFi", "Parking", "Trainers"].map(
+                (a, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-4 rounded-2xl bg-white/70 backdrop-blur-md border border-blue-100 shadow-md hover:scale-[1.02] transition"
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-blue-600 to-orange-400 grid place-items-center text-white">
+                      {i % 3 === 0 && <Dumbbell className="w-5 h-5" />}
+                      {i % 3 === 1 && <Wifi className="w-5 h-5" />}
+                      {i % 3 === 2 && <Droplet className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800">{a}</div>
+                      <div className="text-xs text-slate-500">Available</div>
+                    </div>
+                  </div>
+                )
+              )}
             </div>
+          </div>
+
+          {/* ✅ Gallery Section */}
+          <div className="mt-10">
+            <h3 className="text-2xl font-bold text-blue-700 mb-4">Gallery</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {galleryImages.slice(0, 6).map((img, i) => (
+                <img
+                  key={i}
+                  src={img}
+                  alt={`${gym.name}-${i}`}
+                  onClick={() => {
+                    setActiveImage(i);
+                    setGalleryOpen(true);
+                  }}
+                  className="w-full h-40 object-cover rounded-xl shadow-md cursor-pointer hover:scale-105 transition-transform"
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* ✅ Address Section */}
+          <div className="mt-10">
+            <h3 className="text-2xl font-bold text-blue-700 mb-4">Address</h3>
+            <div className="bg-gradient-to-r from-blue-600 to-orange-500 text-white p-6 rounded-2xl shadow-lg">
+              <p className="font-semibold text-lg">{gym.address}</p>
+              <p className="text-blue-100">{gym.city}</p>
+              <p className="mt-2 text-sm">📞 {gym.phone || "Not available"}</p>
+              <p className="mt-2 text-sm">
+                🕒 {gym.openingHours || "6:00 AM - 10:00 PM"}
+              </p>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  `${gym.address || ""} ${gym.city || ""}`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 mt-4 text-sm bg-white/20 px-4 py-2 rounded-lg"
+              >
+                <ExternalLink className="w-4 h-4" /> View on Google Maps
+              </a>
+            </div>
+          </div>
+
+          {/* ✅ Reviews */}
+          <div className="mt-12">
+            <h3 className="text-2xl font-bold text-blue-700 mb-4 flex items-center gap-2">
+              <Star className="text-yellow-400 w-6 h-6" /> Member Reviews
+            </h3>
+
+            {reviews.length === 0 ? (
+              <p className="text-gray-600 mb-4">No reviews yet. Be the first!</p>
+            ) : (
+              <div className="space-y-4 mb-6">
+                {reviews.map((r, i) => (
+                  <div
+                    key={i}
+                    className="border border-gray-200 bg-white/80 backdrop-blur-md p-4 rounded-xl shadow-sm"
+                  >
+                    <p className="font-semibold text-gray-800">
+                      {r.user?.name || "Anonymous"}
+                    </p>
+                    <p className="text-yellow-500 mb-1">⭐ {r.rating}/5</p>
+                    <p className="text-gray-700">{r.comment}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ⭐ Star Rating Form */}
+            <form
+              onSubmit={handleReviewSubmit}
+              className="bg-white/80 backdrop-blur-md border border-blue-100 rounded-2xl p-6 shadow-md"
+            >
+              <h4 className="font-semibold mb-3 text-blue-700">Add Your Review</h4>
+              <div className="flex items-center gap-2 mb-4">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-7 h-7 cursor-pointer transition-transform ${
+                      s <= rating
+                        ? "text-yellow-400 scale-110"
+                        : "text-gray-300 hover:text-yellow-300"
+                    }`}
+                    onClick={() => setRating(s)}
+                  />
+                ))}
+              </div>
+              <textarea
+                placeholder="Share your experience..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 text-gray-700 focus:ring-2 focus:ring-orange-400 outline-none"
+              />
+              <button
+                type="submit"
+                className="bg-gradient-to-r from-blue-600 to-orange-500 text-white px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition"
+              >
+                Submit Review
+              </button>
+            </form>
           </div>
         </div>
 
-        {/* Right: Booking Card */}
-        <div className="bg-white p-6 rounded-2xl shadow-lg sticky top-24 h-fit border">
+        {/* ✅ Booking Card */}
+        <div className="bg-white p-8 rounded-2xl shadow-lg h-fit border border-gray-100 sticky top-20">
           <div className="flex items-center justify-between mb-2">
             <p className="text-3xl font-bold text-gray-900">₹{gym.price}</p>
             <span className="text-green-600 text-sm font-semibold bg-green-100 px-2 py-1 rounded">
-              {gym.offer}
+              1-Day Pass
             </span>
           </div>
-          <p className="text-gray-600 mb-4">1-Day All Access Pass</p>
+          <p className="text-gray-600 mb-4">Instant Booking Available</p>
+
+          <div className="mb-5">
+            <label className="text-gray-700 text-sm font-semibold flex items-center gap-2 mb-1">
+              <CalendarDays className="w-4 h-4 text-blue-600" />
+              Select Date
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-700 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            />
+          </div>
 
           <ul className="space-y-2 text-sm text-gray-700 mb-5">
             <li className="flex items-center gap-2">
               <ShieldCheck className="text-blue-600 w-4 h-4" /> Verified Gym
             </li>
             <li className="flex items-center gap-2">
-              <ThumbsUp className="text-blue-600 w-4 h-4" /> Trusted by 2M+
-              users
+              <ThumbsUp className="text-blue-600 w-4 h-4" /> Trusted by 2M+ users
             </li>
             <li className="flex items-center gap-2">
-              <Clock className="text-blue-600 w-4 h-4" /> Instant Pass
-              Activation
+              <Clock className="text-blue-600 w-4 h-4" /> Instant Pass Activation
             </li>
           </ul>
 
-         <Link
-  to={`/booking/${gym.id}`}
-  className="block w-full text-center bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition"
->
-  Book 1-Day Pass
-</Link>
-
-          <p className="text-xs text-gray-500 mt-3">
-            * No extra charges. Cancel anytime before activation.
-          </p>
+          <button
+            onClick={handleBooking}
+            disabled={bookingLoading || !gym.verified}
+            className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center ${
+              !gym.verified
+                ? "bg-gray-400 text-white cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-600 to-orange-500 text-white hover:opacity-90"
+            }`}
+          >
+            {bookingLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin mr-2" /> Booking...
+              </>
+            ) : !gym.verified ? (
+              "Awaiting Verification"
+            ) : (
+              "Book 1-Day Pass"
+            )}
+          </button>
         </div>
       </div>
 
-      {/* ✅ Trust Footer */}
-      <div className="mt-16 bg-white py-10 border-t">
-        <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-6 text-center px-4">
+      {/* Gallery Modal */}
+      {galleryOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <button
+            onClick={() => setGalleryOpen(false)}
+            className="absolute top-5 right-5 text-white text-2xl font-bold"
+          >
+            ✕
+          </button>
+          <img
+            src={galleryImages[activeImage]}
+            alt="active"
+            className="max-w-4xl w-full max-h-[80vh] object-contain rounded-xl shadow-lg"
+          />
+        </div>
+      )}
+
+      {/* 🛡️ Trust Section */}
+      <div className="mt-20 bg-gradient-to-r from-blue-700 via-blue-600 to-orange-500 py-12 text-white">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-8 text-center px-4">
           <div>
-            <Shield className="mx-auto w-8 h-8 text-blue-600 mb-2" />
-            <h4 className="font-semibold text-gray-800">100% Verified Gyms</h4>
-            <p className="text-gray-600 text-sm">
-              We partner only with certified fitness centers.
-            </p>
+            <Shield className="mx-auto w-8 h-8 text-orange-300 mb-2" />
+            <h4 className="font-semibold">Verified Gyms</h4>
+            <p className="text-blue-100 text-sm">Certified & trusted centers.</p>
           </div>
           <div>
-            <CreditCard className="mx-auto w-8 h-8 text-blue-600 mb-2" />
-            <h4 className="font-semibold text-gray-800">Secure Payments</h4>
-            <p className="text-gray-600 text-sm">
-              Pay safely using UPI, Cards or Wallets.
-            </p>
+            <CreditCard className="mx-auto w-8 h-8 text-orange-300 mb-2" />
+            <h4 className="font-semibold">Secure Payments</h4>
+            <p className="text-blue-100 text-sm">UPI, Cards & Wallets supported.</p>
           </div>
           <div>
-            <Award className="mx-auto w-8 h-8 text-blue-600 mb-2" />
-            <h4 className="font-semibold text-gray-800">Top Rated Gyms</h4>
-            <p className="text-gray-600 text-sm">
-              All gyms rated 4.5★ and above by verified users.
-            </p>
+            <Award className="mx-auto w-8 h-8 text-orange-300 mb-2" />
+            <h4 className="font-semibold">Top Rated</h4>
+            <p className="text-blue-100 text-sm">Rated 4.5★ and above.</p>
           </div>
           <div>
-            <Users className="mx-auto w-8 h-8 text-blue-600 mb-2" />
-            <h4 className="font-semibold text-gray-800">2 Million+ Users</h4>
-            <p className="text-gray-600 text-sm">
-              Join India’s biggest fitness community.
+            <Users className="mx-auto w-8 h-8 text-orange-300 mb-2" />
+            <h4 className="font-semibold">2M+ Users</h4>
+            <p className="text-blue-100 text-sm">
+              India’s biggest fitness network.
             </p>
           </div>
         </div>
       </div>
 
-   
+      {/* 🎉 Success Toast */}
+      {showSuccess && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
+          <div className="bg-white p-6 rounded-2xl shadow-xl text-center animate-fade-in-up">
+            <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">
+              Booking Confirmed!
+            </h3>
+            <p className="text-gray-600 text-sm">
+              Redirecting to your booking details...
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
-
-export default GymDetails;
+}
