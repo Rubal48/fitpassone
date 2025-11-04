@@ -339,26 +339,26 @@ export default function GymDetails() {
               <Clock className="text-blue-600 w-4 h-4" /> Instant Pass Activation
             </li>
           </ul>
+<button
+  onClick={handleBooking}
+  disabled={bookingLoading || gym.status?.toLowerCase().trim() !== "approved"}
+  className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center ${
+    gym.status?.toLowerCase().trim() !== "approved"
+      ? "bg-gray-400 text-white cursor-not-allowed"
+      : "bg-gradient-to-r from-blue-600 to-orange-500 text-white hover:opacity-90"
+  }`}
+>
+  {bookingLoading ? (
+    <>
+      <Loader2 className="w-5 h-5 animate-spin mr-2" /> Booking...
+    </>
+  ) : gym.status?.toLowerCase().trim() !== "approved" ? (
+    "Awaiting Verification"
+  ) : (
+    "Book 1-Day Pass"
+  )}
+</button>
 
-          <button
-            onClick={handleBooking}
-            disabled={bookingLoading || !gym.verified}
-            className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center ${
-              !gym.verified
-                ? "bg-gray-400 text-white cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-orange-500 text-white hover:opacity-90"
-            }`}
-          >
-            {bookingLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin mr-2" /> Booking...
-              </>
-            ) : !gym.verified ? (
-              "Awaiting Verification"
-            ) : (
-              "Book 1-Day Pass"
-            )}
-          </button>
         </div>
       </div>
 

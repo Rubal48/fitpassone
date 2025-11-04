@@ -1,79 +1,85 @@
 import React, { useEffect, useState } from "react";
 import API from "../utils/api";
-import { ShieldCheck, Loader2, Check } from "lucide-react";
 
-export default function AdminDashboard() {
+import { CheckCircle, Loader2 } from "lucide-react";
+
+const AdminDashboard = () => {
   const [gyms, setGyms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem("adminToken");
 
   useEffect(() => {
     const fetchGyms = async () => {
       try {
-        const { data } = await API.get("/gyms");
-        setGyms(data);
+        const res = await API.get("/admin/gyms", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setGyms(res.data);
       } catch (error) {
-        console.error("Error fetching gyms:", error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
     };
     fetchGyms();
-  }, []);
+  }, [token]);
 
-  const handleVerify = async (gymId) => {
+  const handleApprove = async (id) => {
     try {
-      await API.put(`/admin/verify/${gymId}`);
+      await API.put(`/admin/gyms/${id}/approve`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setGyms((prev) =>
-        prev.map((g) => (g._id === gymId ? { ...g, verified: true } : g))
+        prev.map((gym) =>
+          gym._id === id ? { ...gym, status: "approved", verified: true } : gym
+        )
       );
-      alert("✅ Gym verified successfully!");
     } catch (error) {
-      console.error("Error verifying gym:", error);
-      alert("❌ Verification failed.");
+      console.error(error);
     }
   };
 
   if (loading)
     return (
-      <div className="flex items-center justify-center min-h-screen text-gray-600">
-        <Loader2 className="w-6 h-6 animate-spin mr-2" />
-        Loading gyms...
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading gyms...
       </div>
     );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <h1 className="text-4xl font-bold text-blue-700 mb-8 text-center">
-        Admin Dashboard
-      </h1>
-
-      <div className="grid md:grid-cols-3 gap-6">
+    <div className="p-8 bg-gray-50 min-h-screen">
+      <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+      <div className="grid gap-4">
         {gyms.map((gym) => (
-          <div
-            key={gym._id}
-            className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100"
-          >
-            <h2 className="text-2xl font-semibold mb-2 text-gray-800">
-              {gym.name}
-            </h2>
-            <p className="text-gray-500 mb-3">{gym.city}</p>
-            <p className="text-gray-600 mb-4">{gym.description}</p>
-
-            {gym.verified ? (
-              <p className="text-green-600 flex items-center gap-2 font-semibold">
-                <ShieldCheck className="w-5 h-5" /> Verified
-              </p>
-            ) : (
-              <button
-                onClick={() => handleVerify(gym._id)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2"
-              >
-                <Check className="w-4 h-4" /> Verify Gym
-              </button>
-            )}
+          <div key={gym._id} className="bg-white p-6 rounded-xl shadow border">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-xl">{gym.name}</h2>
+                <p className="text-gray-500 text-sm">{gym.city}</p>
+                <p
+                  className={`text-sm mt-1 ${
+                    gym.verified ? "text-green-600" : "text-yellow-600"
+                  }`}
+                >
+                  Status: {gym.status}
+                </p>
+              </div>
+              {!gym.verified ? (
+                <button
+                  onClick={() => handleApprove(gym._id)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Approve
+                </button>
+              ) : (
+                <span className="flex items-center gap-1 text-green-600">
+                  <CheckCircle className="w-5 h-5" /> Approved
+                </span>
+              )}
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
-}
+};
+
+export default AdminDashboard;

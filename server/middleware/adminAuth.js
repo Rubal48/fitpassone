@@ -1,4 +1,3 @@
-// middleware/adminAuth.js
 import jwt from "jsonwebtoken";
 import Admin from "../models/Admin.js";
 
@@ -28,5 +27,4 @@ const verifyAdmin = async (req, res, next) => {
   }
 };
 
-// ✅ This line is CRITICAL — makes it a default export
 export default verifyAdmin;
