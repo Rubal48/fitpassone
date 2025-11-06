@@ -25,12 +25,13 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 // 🧑‍💼 Admin Pages
 import AdminLogin from "./pages/AdminLogin";
-import AdminDashboard from "./pages/AdminDashboard"; // ✅ fixed filename casing
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminGymDetails from "./pages/AdminGymDetails"; // ✅ new admin gym detail page
 
 const App = () => {
   return (
     <>
-      {/* Navbar shown on all pages */}
+      {/* Navbar shown on all pages except admin */}
       <Navbar />
 
       <Routes>
@@ -56,6 +57,7 @@ const App = () => {
         {/* 🧑‍💼 Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/gym/:id" element={<AdminGymDetails />} /> {/* ✅ NEW */}
       </Routes>
     </>
   );

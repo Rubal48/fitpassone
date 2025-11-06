@@ -67,11 +67,8 @@ export default function GymDetails() {
       }
 
       const gymId = gym?._id || id;
-      const { data } = await API.post(
-        "/bookings",
-        { gymId, date: selectedDate },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const { data } = await API.post("/bookings", { gymId, date: selectedDate });
+
       setShowSuccess(true);
       setTimeout(() => navigate(`/booking-success/${data._id}`), 1500);
     } catch (error) {

@@ -13,12 +13,18 @@ export const adminLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid password" });
 
-    const token = jwt.sign({ id: admin._id, role: "admin" }, process.env.JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign(
+      { id: admin._id, role: "admin" },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
     res.json({ token });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+// ✅ Create Admin (One-time setup)
 export const createAdmin = async (req, res) => {
   try {
     const existing = await Admin.findOne({ email: "rubals7777@gmail.com" });
@@ -37,17 +43,36 @@ export const createAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-// ✅ Get all gyms
+
+// ✅ Get all gyms (for admin dashboard)
 export const getAllGyms = async (req, res) => {
   try {
-    const gyms = await Gym.find().sort({ createdAt: -1 });
+    const gyms = await Gym.find()
+      .sort({ createdAt: -1 })
+      .select(
+        "name city images amenities price description verified status createdAt"
+      );
+
     res.json(gyms);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ Approve or reject gym
+// ✅ Get single gym details (for admin view page)
+export const getGymById = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+    if (!gym) {
+      return res.status(404).json({ message: "Gym not found" });
+    }
+    res.json(gym);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Approve gym
 export const approveGym = async (req, res) => {
   try {
     const gym = await Gym.findById(req.params.id);
@@ -58,6 +83,35 @@ export const approveGym = async (req, res) => {
     await gym.save();
 
     res.json({ message: "Gym approved successfully", gym });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Reject gym
+export const rejectGym = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+    if (!gym) return res.status(404).json({ message: "Gym not found" });
+
+    gym.status = "rejected";
+    gym.verified = false;
+    await gym.save();
+
+    res.json({ message: "Gym rejected successfully", gym });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Delete gym
+export const deleteGym = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+    if (!gym) return res.status(404).json({ message: "Gym not found" });
+
+    await gym.deleteOne();
+    res.json({ message: "Gym deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

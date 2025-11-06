@@ -1,11 +1,26 @@
 import express from "express";
-import { adminLogin, getAllGyms, approveGym } from "../controllers/adminController.js";
-import verifyAdmin from "../middleware/adminAuth.js"; // ✅ default import
-import { createAdmin } from "../controllers/adminController.js";
+import verifyAdmin from "../middleware/adminAuth.js";
+import {
+  adminLogin,
+  createAdmin,
+  getAllGyms,
+  getGymById,
+  approveGym,
+  rejectGym,
+  deleteGym,
+} from "../controllers/adminController.js";
+
 const router = express.Router();
 
+// 🔐 Admin Authentication
 router.post("/login", adminLogin);
-router.get("/gyms", verifyAdmin, getAllGyms);
-router.put("/gyms/:id/approve", verifyAdmin, approveGym);
 router.post("/create", createAdmin);
+
+// 🏋️ Admin Gym Management
+router.get("/gyms", verifyAdmin, getAllGyms);
+router.get("/gyms/:id", verifyAdmin, getGymById);
+router.put("/gyms/:id/approve", verifyAdmin, approveGym);
+router.put("/gyms/:id/reject", verifyAdmin, rejectGym);
+router.delete("/gyms/:id", verifyAdmin, deleteGym);
+
 export default router;
