@@ -10,6 +10,8 @@ import {
   Dumbbell,
   Image,
   Trash2,
+  FileText,
+  Video,
 } from "lucide-react";
 
 const AdminGymDetails = () => {
@@ -32,25 +34,20 @@ const AdminGymDetails = () => {
     fetchGym();
   }, [id]);
 
-  const handleApprove = async () => {
-    if (!window.confirm("Approve this gym?")) return;
-    try {
-      await API.put(`/admin/gyms/${id}/approve`);
-      alert("Gym approved successfully!");
-      navigate("/admin/dashboard");
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const handleVerification = async (status) => {
+    if (!window.confirm(`Are you sure you want to mark this gym as ${status}?`))
+      return;
 
-  const handleReject = async () => {
-    if (!window.confirm("Reject this gym?")) return;
     try {
-      await API.put(`/admin/gyms/${id}/reject`);
-      alert("Gym rejected successfully!");
+      await API.put(`/admin/gyms/${id}/verify`, {
+        status,
+        verified: status === "approved",
+      });
+      alert(`Gym ${status === "approved" ? "verified ✅" : "rejected ❌"} successfully!`);
       navigate("/admin/dashboard");
     } catch (error) {
       console.error(error);
+      alert("Error updating verification status.");
     }
   };
 
@@ -84,13 +81,13 @@ const AdminGymDetails = () => {
         <h1 className="text-3xl font-bold text-gray-800">{gym.name}</h1>
         <div className="flex gap-2">
           <button
-            onClick={handleApprove}
+            onClick={() => handleVerification("approved")}
             className="bg-green-600 text-white px-4 py-2 rounded-md flex items-center gap-1 hover:bg-green-700"
           >
-            <CheckCircle size={16} /> Approve
+            <CheckCircle size={16} /> Verify
           </button>
           <button
-            onClick={handleReject}
+            onClick={() => handleVerification("rejected")}
             className="bg-yellow-500 text-white px-4 py-2 rounded-md flex items-center gap-1 hover:bg-yellow-600"
           >
             <XCircle size={16} /> Reject
@@ -104,7 +101,7 @@ const AdminGymDetails = () => {
         </div>
       </div>
 
-      {/* ✅ Gallery */}
+      {/* ✅ Images */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-6">
         {gym.images && gym.images.length > 0 ? (
           gym.images.map((img, i) => (
@@ -122,8 +119,8 @@ const AdminGymDetails = () => {
         )}
       </div>
 
-      {/* ✅ Basic Info */}
-      <div className="bg-white rounded-xl shadow p-6">
+      {/* ✅ Info Card */}
+      <div className="bg-white rounded-xl shadow p-6 mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
           <div>
             <p className="flex items-center text-gray-700">
@@ -152,16 +149,16 @@ const AdminGymDetails = () => {
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-gray-800">Description</h3>
           <p className="text-gray-700 mt-1 leading-relaxed">
-            {gym.description || "No description provided by the gym."}
+            {gym.description || "No description provided."}
           </p>
         </div>
 
-        {/* ✅ Amenities */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Amenities</h3>
-          {gym.amenities && gym.amenities.length > 0 ? (
+        {/* ✅ Facilities */}
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Facilities</h3>
+          {gym.facilities && gym.facilities.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {gym.amenities.map((a, i) => (
+              {gym.facilities.map((a, i) => (
                 <span
                   key={i}
                   className="flex items-center bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm border border-gray-200"
@@ -171,8 +168,83 @@ const AdminGymDetails = () => {
               ))}
             </div>
           ) : (
-            <p className="text-gray-600 text-sm">No amenities listed.</p>
+            <p className="text-gray-600 text-sm">No facilities listed.</p>
           )}
+        </div>
+
+        {/* ✅ Contact Info */}
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-1">Contact Info</h3>
+          <p className="text-gray-700">📞 {gym.phone || "No phone provided"}</p>
+          {gym.website && (
+            <p className="text-blue-600 underline">
+              🌐 <a href={gym.website} target="_blank" rel="noreferrer">{gym.website}</a>
+            </p>
+          )}
+          {gym.instagram && (
+            <p className="text-pink-600 underline">
+              📸 <a href={gym.instagram} target="_blank" rel="noreferrer">{gym.instagram}</a>
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ✅ Verification Documents */}
+      <div className="bg-white rounded-xl shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+          Verification Documents
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="border p-3 rounded-lg">
+            <p className="text-sm font-semibold mb-2 text-gray-700 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-orange-500" /> Business Proof
+            </p>
+            {gym.businessProof ? (
+              <a
+                href={gym.businessProof}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 underline text-sm"
+              >
+                View Document
+              </a>
+            ) : (
+              <p className="text-gray-500 text-sm">Not uploaded</p>
+            )}
+          </div>
+
+          <div className="border p-3 rounded-lg">
+            <p className="text-sm font-semibold mb-2 text-gray-700 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-orange-500" /> Owner ID Proof
+            </p>
+            {gym.ownerIdProof ? (
+              <a
+                href={gym.ownerIdProof}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 underline text-sm"
+              >
+                View Document
+              </a>
+            ) : (
+              <p className="text-gray-500 text-sm">Not uploaded</p>
+            )}
+          </div>
+
+          <div className="border p-3 rounded-lg">
+            <p className="text-sm font-semibold mb-2 text-gray-700 flex items-center gap-2">
+              <Video className="w-4 h-4 text-orange-500" /> Intro Video
+            </p>
+            {gym.video ? (
+              <video
+                src={gym.video}
+                controls
+                className="w-full rounded-lg border border-gray-300"
+              />
+            ) : (
+              <p className="text-gray-500 text-sm">Not uploaded</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

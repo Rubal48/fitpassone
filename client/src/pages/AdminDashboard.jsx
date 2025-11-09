@@ -1,11 +1,19 @@
 import React, { useEffect, useState } from "react";
 import API from "../utils/api";
-import { Loader2, CheckCircle, XCircle, Trash2, Eye } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Trash2,
+  Eye,
+  ShieldCheck,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 const AdminDashboard = () => {
   const [gyms, setGyms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
   // ✅ Fetch all gyms
   useEffect(() => {
@@ -22,34 +30,35 @@ const AdminDashboard = () => {
     fetchGyms();
   }, []);
 
-  const handleApprove = async (id) => {
-    if (!window.confirm("Approve this gym?")) return;
+  // ✅ Unified verification (Approve / Reject)
+  const handleVerification = async (id, status) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to ${status === "approved" ? "approve ✅" : "reject ❌"} this gym?`
+      )
+    )
+      return;
+
     try {
-      await API.put(`/admin/gyms/${id}/approve`);
+      await API.put(`/admin/gyms/${id}/verify`, {
+        status,
+        verified: status === "approved",
+      });
+
       setGyms((prev) =>
         prev.map((gym) =>
-          gym._id === id ? { ...gym, status: "approved", verified: true } : gym
+          gym._id === id
+            ? { ...gym, status, verified: status === "approved" }
+            : gym
         )
       );
     } catch (error) {
       console.error(error);
+      alert("Error updating status");
     }
   };
 
-  const handleReject = async (id) => {
-    if (!window.confirm("Reject this gym?")) return;
-    try {
-      await API.put(`/admin/gyms/${id}/reject`);
-      setGyms((prev) =>
-        prev.map((gym) =>
-          gym._id === id ? { ...gym, status: "rejected", verified: false } : gym
-        )
-      );
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
+  // ✅ Delete gym
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this gym permanently?")) return;
     try {
@@ -59,6 +68,11 @@ const AdminDashboard = () => {
       console.error(error);
     }
   };
+
+  // ✅ Filter gyms based on status
+  const filteredGyms = gyms.filter((gym) =>
+    filter === "all" ? true : gym.status === filter
+  );
 
   if (loading) {
     return (
@@ -70,18 +84,41 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Admin Dashboard</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-gray-800 mb-4 md:mb-0">
+          Admin Dashboard
+        </h1>
 
-      {gyms.length === 0 ? (
-        <p className="text-gray-500">No gyms found.</p>
+        {/* ✅ Status Filters */}
+        <div className="flex gap-3 flex-wrap">
+          {["all", "pending", "approved", "rejected"].map((status) => (
+            <button
+              key={status}
+              onClick={() => setFilter(status)}
+              className={`px-4 py-2 rounded-full font-semibold transition ${
+                filter === status
+                  ? "bg-gradient-to-r from-blue-600 to-orange-500 text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              {status === "all"
+                ? "All"
+                : status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {filteredGyms.length === 0 ? (
+        <p className="text-gray-500">No gyms found for this filter.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {gyms.map((gym) => (
+          {filteredGyms.map((gym) => (
             <div
               key={gym._id}
               className="bg-white shadow rounded-xl overflow-hidden border border-gray-200 hover:shadow-lg transition"
             >
-              {/* ✅ Gym Image */}
+              {/* 🏋️‍♂️ Gym Image */}
               {gym.images && gym.images.length > 0 ? (
                 <Link to={`/admin/gym/${gym._id}`}>
                   <img
@@ -97,10 +134,19 @@ const AdminDashboard = () => {
               )}
 
               <div className="p-4">
-                {/* ✅ Gym Info */}
+                {/* 🧾 Gym Info */}
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h2 className="text-xl font-semibold">{gym.name}</h2>
+                    <h2 className="text-xl font-semibold flex items-center gap-2">
+                      {gym.name}
+                      {gym.verified && (
+                        <ShieldCheck
+                          size={18}
+                          className="text-green-500"
+                          title="Verified by Passiify"
+                        />
+                      )}
+                    </h2>
                     <p className="text-sm text-gray-500">{gym.city}</p>
                   </div>
 
@@ -112,23 +158,21 @@ const AdminDashboard = () => {
                   </Link>
                 </div>
 
-                <p className="text-gray-700 text-sm mt-2">
-                  ₹{gym.price} / Day
-                </p>
+                <p className="text-gray-700 text-sm mt-2">₹{gym.price} / Day</p>
                 <p className="text-gray-600 text-sm mt-2 line-clamp-2">
                   {gym.description || "No description available."}
                 </p>
 
-                {/* ✅ Amenities */}
-                {gym.amenities && gym.amenities.length > 0 && (
+                {/* ✅ Facilities */}
+                {gym.facilities && gym.facilities.length > 0 && (
                   <div className="mt-2 text-xs text-gray-600">
-                    <span className="font-semibold">Amenities:</span>{" "}
-                    {gym.amenities.slice(0, 3).join(", ")}{" "}
-                    {gym.amenities.length > 3 && "..."}
+                    <span className="font-semibold">Facilities:</span>{" "}
+                    {gym.facilities.slice(0, 3).join(", ")}{" "}
+                    {gym.facilities.length > 3 && "..."}
                   </div>
                 )}
 
-                {/* ✅ Status Badge */}
+                {/* 🟢 Status Badge */}
                 <div className="mt-3">
                   <span
                     className={`inline-block px-3 py-1 text-xs font-semibold rounded-full ${
@@ -143,11 +187,11 @@ const AdminDashboard = () => {
                   </span>
                 </div>
 
-                {/* ✅ Action Buttons */}
+                {/* 🧭 Action Buttons */}
                 <div className="flex gap-2 mt-4 flex-wrap">
                   {gym.status !== "approved" && (
                     <button
-                      onClick={() => handleApprove(gym._id)}
+                      onClick={() => handleVerification(gym._id, "approved")}
                       className="flex items-center gap-1 bg-green-600 text-white px-3 py-1 rounded-md text-sm hover:bg-green-700"
                     >
                       <CheckCircle size={16} /> Approve
@@ -155,7 +199,7 @@ const AdminDashboard = () => {
                   )}
                   {gym.status !== "rejected" && (
                     <button
-                      onClick={() => handleReject(gym._id)}
+                      onClick={() => handleVerification(gym._id, "rejected")}
                       className="flex items-center gap-1 bg-yellow-500 text-white px-3 py-1 rounded-md text-sm hover:bg-yellow-600"
                     >
                       <XCircle size={16} /> Reject

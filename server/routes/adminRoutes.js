@@ -1,26 +1,43 @@
 import express from "express";
-import verifyAdmin from "../middleware/adminAuth.js";
 import {
   adminLogin,
   createAdmin,
   getAllGyms,
   getGymById,
+  deleteGym,
+  verifyGym,
   approveGym,
   rejectGym,
-  deleteGym,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
 
-// 🔐 Admin Authentication
+/* =======================================================
+ ✅ Admin Routes
+======================================================= */
+
+// 🔐 Admin login
 router.post("/login", adminLogin);
+
+// ⚙️ One-time admin creation (optional)
 router.post("/create", createAdmin);
 
-// 🏋️ Admin Gym Management
-router.get("/gyms", verifyAdmin, getAllGyms);
-router.get("/gyms/:id", verifyAdmin, getGymById);
-router.put("/gyms/:id/approve", verifyAdmin, approveGym);
-router.put("/gyms/:id/reject", verifyAdmin, rejectGym);
-router.delete("/gyms/:id", verifyAdmin, deleteGym);
+// 📋 Fetch all gyms for dashboard
+router.get("/gyms", getAllGyms);
+
+// 🔍 Get single gym detail
+router.get("/gyms/:id", getGymById);
+
+// 🟢 Unified verify/reject endpoint (used by AdminGymDetails.jsx)
+router.put("/gyms/:id/verify", verifyGym);
+
+// 🟩 Legacy approve route (still works)
+router.put("/gyms/:id/approve", approveGym);
+
+// 🟥 Legacy reject route (still works)
+router.put("/gyms/:id/reject", rejectGym);
+
+// ❌ Delete gym permanently
+router.delete("/gyms/:id", deleteGym);
 
 export default router;
