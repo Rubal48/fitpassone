@@ -62,17 +62,15 @@ const AdminGymDetails = () => {
     }
   };
 
-  if (loading) {
+  if (loading)
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="animate-spin w-10 h-10 text-orange-500" />
       </div>
     );
-  }
 
-  if (!gym) {
+  if (!gym)
     return <p className="text-center mt-10 text-gray-600">Gym not found.</p>;
-  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -101,7 +99,7 @@ const AdminGymDetails = () => {
         </div>
       </div>
 
-      {/* ✅ Images */}
+      {/* ✅ Image Gallery */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-6">
         {gym.images && gym.images.length > 0 ? (
           gym.images.map((img, i) => (
@@ -109,7 +107,7 @@ const AdminGymDetails = () => {
               key={i}
               src={img}
               alt={`Gym Image ${i + 1}`}
-              className="w-full h-48 object-cover rounded-lg border border-gray-300"
+              className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:scale-[1.02] transition-transform"
             />
           ))
         ) : (
@@ -145,8 +143,52 @@ const AdminGymDetails = () => {
           </span>
         </div>
 
+        {/* ✅ Custom Prices */}
+        {gym.customPrice && Object.keys(gym.customPrice).length > 0 && (
+          <div className="mt-4 bg-blue-50 p-3 rounded-lg">
+            <h3 className="text-lg font-semibold text-blue-700 mb-2">
+              💰 Custom Prices
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {Object.entries(gym.customPrice).map(([days, price]) => (
+                <p
+                  key={days}
+                  className="text-gray-800 bg-white rounded-md border border-gray-200 px-3 py-2 shadow-sm"
+                >
+                  <span className="font-semibold text-blue-600">
+                    {days}-Day Pass:
+                  </span>{" "}
+                  ₹{price}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Passes */}
+        {gym.passes && gym.passes.length > 0 && (
+          <div className="mt-4 bg-orange-50 p-3 rounded-lg">
+            <h3 className="text-lg font-semibold text-orange-700 mb-2">
+              🎟️ Passes
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {gym.passes.map((p, i) => (
+                <p
+                  key={i}
+                  className="text-gray-800 bg-white rounded-md border border-gray-200 px-3 py-2 shadow-sm"
+                >
+                  <span className="font-semibold text-orange-600">
+                    {p.duration}-Day Pass:
+                  </span>{" "}
+                  ₹{p.price}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ✅ Description */}
-        <div className="mb-4">
+        <div className="mt-6">
           <h3 className="text-lg font-semibold text-gray-800">Description</h3>
           <p className="text-gray-700 mt-1 leading-relaxed">
             {gym.description || "No description provided."}
@@ -154,8 +196,10 @@ const AdminGymDetails = () => {
         </div>
 
         {/* ✅ Facilities */}
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Facilities</h3>
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Facilities
+          </h3>
           {gym.facilities && gym.facilities.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {gym.facilities.map((a, i) => (
@@ -173,17 +217,25 @@ const AdminGymDetails = () => {
         </div>
 
         {/* ✅ Contact Info */}
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-1">Contact Info</h3>
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-1">
+            Contact Info
+          </h3>
           <p className="text-gray-700">📞 {gym.phone || "No phone provided"}</p>
           {gym.website && (
             <p className="text-blue-600 underline">
-              🌐 <a href={gym.website} target="_blank" rel="noreferrer">{gym.website}</a>
+              🌐{" "}
+              <a href={gym.website} target="_blank" rel="noreferrer">
+                {gym.website}
+              </a>
             </p>
           )}
           {gym.instagram && (
             <p className="text-pink-600 underline">
-              📸 <a href={gym.instagram} target="_blank" rel="noreferrer">{gym.instagram}</a>
+              📸{" "}
+              <a href={gym.instagram} target="_blank" rel="noreferrer">
+                {gym.instagram}
+              </a>
             </p>
           )}
         </div>

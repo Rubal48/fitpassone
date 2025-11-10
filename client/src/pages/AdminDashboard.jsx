@@ -7,6 +7,8 @@ import {
   Trash2,
   Eye,
   ShieldCheck,
+  IndianRupee,
+  Dumbbell,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -34,7 +36,9 @@ const AdminDashboard = () => {
   const handleVerification = async (id, status) => {
     if (
       !window.confirm(
-        `Are you sure you want to ${status === "approved" ? "approve ✅" : "reject ❌"} this gym?`
+        `Are you sure you want to ${
+          status === "approved" ? "approve ✅" : "reject ❌"
+        } this gym?`
       )
     )
       return;
@@ -74,22 +78,22 @@ const AdminDashboard = () => {
     filter === "all" ? true : gym.status === filter
   );
 
-  if (loading) {
+  if (loading)
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
       </div>
     );
-  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
         <h1 className="text-3xl font-bold text-gray-800 mb-4 md:mb-0">
           Admin Dashboard
         </h1>
 
-        {/* ✅ Status Filters */}
+        {/* Status Filters */}
         <div className="flex gap-3 flex-wrap">
           {["all", "pending", "approved", "rejected"].map((status) => (
             <button
@@ -109,6 +113,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {/* Gym Cards */}
       {filteredGyms.length === 0 ? (
         <p className="text-gray-500">No gyms found for this filter.</p>
       ) : (
@@ -118,7 +123,7 @@ const AdminDashboard = () => {
               key={gym._id}
               className="bg-white shadow rounded-xl overflow-hidden border border-gray-200 hover:shadow-lg transition"
             >
-              {/* 🏋️‍♂️ Gym Image */}
+              {/* Gym Image */}
               {gym.images && gym.images.length > 0 ? (
                 <Link to={`/admin/gym/${gym._id}`}>
                   <img
@@ -128,13 +133,13 @@ const AdminDashboard = () => {
                   />
                 </Link>
               ) : (
-                <div className="w-full h-48 bg-gray-300 flex items-center justify-center text-gray-600">
+                <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
                   No Image
                 </div>
               )}
 
+              {/* Gym Info */}
               <div className="p-4">
-                {/* 🧾 Gym Info */}
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <h2 className="text-xl font-semibold flex items-center gap-2">
@@ -158,12 +163,57 @@ const AdminDashboard = () => {
                   </Link>
                 </div>
 
-                <p className="text-gray-700 text-sm mt-2">₹{gym.price} / Day</p>
+                {/* ✅ Base Price */}
+                <p className="flex items-center text-gray-700 text-sm mt-1">
+                  <IndianRupee
+                    className="w-4 h-4 text-green-600 mr-1"
+                    size={16}
+                  />
+                  {gym.price ? `₹${gym.price} / day` : "—"}
+                </p>
+
+                {/* ✅ Custom Prices / Passes Preview */}
+                {(gym.customPrice && Object.keys(gym.customPrice).length > 0) ||
+                (gym.passes && gym.passes.length > 0) ? (
+                  <div className="mt-3 bg-gray-50 p-2 rounded-lg border text-xs text-gray-700">
+                    <span className="font-semibold text-blue-600 block mb-1">
+                      Pricing:
+                    </span>
+
+                    {/* Custom Prices */}
+                    {gym.customPrice &&
+                      Object.entries(gym.customPrice).map(([days, price]) => (
+                        <p key={days}>
+                          {days} Days:{" "}
+                          <span className="font-semibold text-green-700">
+                            ₹{price}
+                          </span>
+                        </p>
+                      ))}
+
+                    {/* Passes */}
+                    {gym.passes &&
+                      gym.passes.map((p, i) => (
+                        <p key={i}>
+                          {p.duration} Days:{" "}
+                          <span className="font-semibold text-orange-600">
+                            ₹{p.price}
+                          </span>
+                        </p>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-2">
+                    No custom prices added
+                  </p>
+                )}
+
+                {/* Description */}
                 <p className="text-gray-600 text-sm mt-2 line-clamp-2">
                   {gym.description || "No description available."}
                 </p>
 
-                {/* ✅ Facilities */}
+                {/* Facilities */}
                 {gym.facilities && gym.facilities.length > 0 && (
                   <div className="mt-2 text-xs text-gray-600">
                     <span className="font-semibold">Facilities:</span>{" "}
@@ -172,7 +222,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
 
-                {/* 🟢 Status Badge */}
+                {/* Status Badge */}
                 <div className="mt-3">
                   <span
                     className={`inline-block px-3 py-1 text-xs font-semibold rounded-full ${
@@ -187,7 +237,7 @@ const AdminDashboard = () => {
                   </span>
                 </div>
 
-                {/* 🧭 Action Buttons */}
+                {/* Action Buttons */}
                 <div className="flex gap-2 mt-4 flex-wrap">
                   {gym.status !== "approved" && (
                     <button
