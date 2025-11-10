@@ -13,6 +13,7 @@ import bookingRoutes from "./routes/bookingRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import testEmailRoute from "./routes/testEmailRoute.js";
 
 dotenv.config();
 
@@ -37,7 +38,7 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/admin", adminRoutes);
-
+app.use("/api/test", testEmailRoute);
 // ✅ Health check + root
 app.get("/", (req, res) => res.send("🚀 Passiify Backend is Running"));
 app.get("/api/health", (req, res) => {

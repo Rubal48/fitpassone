@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import {
   Loader2,
   CheckCircle,
-  
   DollarSign,
   Phone,
-
+  Plus,
+  Trash2,
 } from "lucide-react";
 import API from "../utils/api";
 
@@ -16,7 +16,6 @@ export default function Partner() {
     city: "",
     address: "",
     phone: "",
-    price: "",
     description: "",
     tags: "",
     website: "",
@@ -24,6 +23,7 @@ export default function Partner() {
     googleMapLink: "",
   });
 
+  const [passes, setPasses] = useState([{ duration: 1, price: "" }]); // ✅ new
   const [images, setImages] = useState([]);
   const [businessProof, setBusinessProof] = useState(null);
   const [ownerIdProof, setOwnerIdProof] = useState(null);
@@ -45,10 +45,21 @@ export default function Partner() {
     "Women-Only Section",
   ];
 
-  // handle input change
+  // input handler
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  // ✅ Pass management
+  const handlePassChange = (index, field, value) => {
+    const updated = [...passes];
+    updated[index][field] = value;
+    setPasses(updated);
+  };
+
+  const addPass = () => setPasses([...passes, { duration: "", price: "" }]);
+  const removePass = (index) =>
+    setPasses(passes.filter((_, i) => i !== index));
 
   // facilities checkboxes
   const handleFacilityChange = (e) => {
@@ -58,7 +69,7 @@ export default function Partner() {
     );
   };
 
-  // handle image upload
+  // file uploads
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -72,14 +83,13 @@ export default function Partner() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setImages(res.data.images);
-    } catch (err) {
+    } catch {
       setError("Image upload failed.");
     } finally {
       setUploading(false);
     }
   };
 
-  // upload documents
   const handleProofUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -106,8 +116,13 @@ export default function Partner() {
     setError("");
     setSuccess(false);
 
-    if (!formData.name || !formData.city || !formData.price || !formData.phone) {
+    if (!formData.name || !formData.city || !formData.phone) {
       setError("Please fill all required fields.");
+      return;
+    }
+
+    if (passes.some((p) => !p.duration || !p.price)) {
+      setError("Please fill duration and price for all passes.");
       return;
     }
 
@@ -120,7 +135,10 @@ export default function Partner() {
       setLoading(true);
       const payload = {
         ...formData,
-        price: Number(formData.price),
+        passes: passes.map((p) => ({
+          duration: Number(p.duration),
+          price: Number(p.price),
+        })),
         tags: formData.tags
           ? formData.tags.split(",").map((t) => t.trim())
           : [],
@@ -141,7 +159,6 @@ export default function Partner() {
           city: "",
           address: "",
           phone: "",
-          price: "",
           description: "",
           tags: "",
           website: "",
@@ -153,8 +170,10 @@ export default function Partner() {
         setBusinessProof(null);
         setOwnerIdProof(null);
         setVideo(null);
+        setPasses([{ duration: 1, price: "" }]);
       }
     } catch (err) {
+      console.error(err);
       setError("Something went wrong. Try again.");
     } finally {
       setLoading(false);
@@ -167,15 +186,17 @@ export default function Partner() {
       <section className="relative bg-gradient-to-r from-blue-700 via-blue-600 to-orange-500 py-24 text-center text-white overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1600')] bg-cover bg-center opacity-15"></div>
         <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]"></div>
-
         <div className="relative z-10 max-w-4xl mx-auto px-6">
           <h1 className="text-6xl font-extrabold mb-6">
             Partner With <span className="text-orange-300">Passiify</span>
           </h1>
           <p className="text-lg text-blue-100 mb-8">
             Join India’s growing fitness & wellness network. List your{" "}
-            <span className="text-orange-200 font-semibold">Gym, Yoga, MMA</span>{" "}
-            or Wellness Centre and reach thousands of short-term users instantly.
+            <span className="text-orange-200 font-semibold">
+              Gym, Yoga, MMA
+            </span>{" "}
+            or Wellness Centre and reach thousands of short-term users
+            instantly.
           </p>
         </div>
       </section>
@@ -206,7 +227,9 @@ export default function Partner() {
             <h2 className="text-3xl font-extrabold text-blue-700 mb-6 text-center">
               Add Your Gym / Centre Details
             </h2>
-            {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+            {error && (
+              <p className="text-red-500 text-center mb-4 font-medium">{error}</p>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Business Type */}
@@ -290,37 +313,52 @@ export default function Partner() {
                 </div>
               </div>
 
-              {/* Google Map Link */}
+              {/* ✅ Custom Pass Section */}
               <div>
                 <label className="block text-sm font-semibold mb-2">
-                  Google Map Link (optional)
+                  Add Custom Passes (Duration & Price) *
                 </label>
-                <input
-                  type="text"
-                  name="googleMapLink"
-                  value={formData.googleMapLink}
-                  onChange={handleChange}
-                  placeholder="Paste Google Maps link"
-                  className="w-full border border-gray-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
-                />
-              </div>
-
-              {/* Price */}
-              <div>
-                <label className="block text-sm font-semibold mb-2">
-                  Price (₹ for 1-day pass) *
-                </label>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="text-orange-500 w-5 h-5" />
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    placeholder="Enter price"
-                    className="w-full border border-gray-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
-                  />
-                </div>
+                {passes.map((pass, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 mb-2 border border-gray-200 rounded-lg p-3"
+                  >
+                    <input
+                      type="number"
+                      placeholder="Duration (days)"
+                      value={pass.duration}
+                      onChange={(e) =>
+                        handlePassChange(index, "duration", e.target.value)
+                      }
+                      className="w-1/2 border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price ₹"
+                      value={pass.price}
+                      onChange={(e) =>
+                        handlePassChange(index, "price", e.target.value)
+                      }
+                      className="w-1/2 border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
+                    />
+                    {passes.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePass(index)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addPass}
+                  className="mt-2 flex items-center text-blue-600 text-sm font-semibold hover:text-blue-800"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Add Another Pass
+                </button>
               </div>
 
               {/* Description */}
@@ -387,7 +425,9 @@ export default function Partner() {
                     />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Intro Video (optional)</p>
+                    <p className="text-sm text-gray-600 mb-1">
+                      Intro Video (optional)
+                    </p>
                     <input
                       type="file"
                       accept="video/*"
@@ -412,7 +452,8 @@ export default function Partner() {
                 />
                 {uploading && (
                   <p className="text-blue-500 text-sm mt-1 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Uploading images...
+                    <Loader2 className="w-4 h-4 animate-spin" /> Uploading
+                    images...
                   </p>
                 )}
                 {images.length > 0 && (

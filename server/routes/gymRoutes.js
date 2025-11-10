@@ -41,12 +41,27 @@ router.get(
 router.post(
   "/",
   asyncHandler(async (req, res) => {
-    const { name, city, address, price, description, images = [], tags = [] } = req.body;
-    if (!name || !city || !price) {
+    let { name, city, address, price, description, images = [], tags = [], passes = [], customPrice = {} } = req.body;
+
+    // ✅ Validate required fields (name + city)
+    if (!name || !city) {
       res.status(400);
-      throw new Error("Name, city, and price are required");
+      throw new Error("Name and city are required");
     }
 
+    // ✅ Derive price dynamically if not directly provided
+    if (!price) {
+      if (Array.isArray(passes) && passes.length > 0 && passes[0].price) {
+        price = passes[0].price; // take first pass price
+      } else if (customPrice && Object.values(customPrice).length > 0) {
+        price = Object.values(customPrice)[0]; // take first available custom price
+      } else {
+        res.status(400);
+        throw new Error("Price information missing (no price/passes/customPrice found)");
+      }
+    }
+
+    // ✅ Create new pending gym
     const gym = await Gym.create({
       name,
       city,
@@ -55,7 +70,9 @@ router.post(
       description,
       images,
       tags,
-      status: "pending", // ✅ new gyms need manual approval
+      passes,
+      customPrice,
+      status: "pending", // ✅ new gyms need admin approval
     });
 
     res.status(201).json({
@@ -64,6 +81,7 @@ router.post(
     });
   })
 );
+
 // ✅ PUT /api/gyms/approve/:id -> Approve gym manually
 router.put(
   "/approve/:id",

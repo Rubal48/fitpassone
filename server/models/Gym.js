@@ -8,7 +8,16 @@ const reviewSchema = new mongoose.Schema(
     comment: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
   },
-  { _id: false } // optional, avoids nested _id for each review
+  { _id: false }
+);
+
+// ✅ New Sub-schema for custom passes
+const passSchema = new mongoose.Schema(
+  {
+    duration: { type: Number, required: true }, // e.g. 1, 3, 7 days
+    price: { type: Number, required: true },
+  },
+  { _id: false }
 );
 
 const gymSchema = new mongoose.Schema(
@@ -16,23 +25,23 @@ const gymSchema = new mongoose.Schema(
     name: { type: String, required: true },
     city: { type: String, required: true },
     address: { type: String },
-    price: { type: Number, required: true },
-    rating: { type: Number, default: 0 }, // Average rating (auto-calculated)
+    // ❌ removed fixed price
+    passes: {
+      type: [passSchema], // ✅ now supports multiple custom passes
+      default: [{ duration: 1, price: 250 }], // default 1-day pass
+    },
+    rating: { type: Number, default: 0 },
     images: { type: [String], default: [] },
     description: { type: String },
     tags: { type: [String], default: [] },
 
-    // ✅ Gym verification (admin badge)
     verified: { type: Boolean, default: false },
-
-    // ✅ Gym approval for listing visibility
     status: {
       type: String,
       enum: ["pending", "approved"],
       default: "pending",
     },
 
-    // ✅ User reviews
     reviews: [reviewSchema],
 
     createdAt: { type: Date, default: Date.now },
@@ -40,12 +49,12 @@ const gymSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🧮 Middleware: Auto-update average rating when reviews change
+// 🧮 Auto-calculate average rating
 gymSchema.pre("save", function (next) {
   if (this.reviews.length > 0) {
     const avg =
       this.reviews.reduce((acc, r) => acc + r.rating, 0) / this.reviews.length;
-    this.rating = Math.round(avg * 10) / 10; // round to 1 decimal (e.g., 4.3)
+    this.rating = Math.round(avg * 10) / 10;
   } else {
     this.rating = 0;
   }
