@@ -19,23 +19,25 @@ export default function Navbar() {
     navigate("/login");
   };
 
+  // ✅ Updated Navigation Links (Removed About & Passes, Added Events)
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Explore", path: "/explore" },
-    { name: "Passes", path: "/passes" },
+    { name: "Events", path: "/events" },
     { name: "Partner", path: "/partner" },
-    { name: "About", path: "/about" },
   ];
 
   return (
     <nav className="w-full bg-gradient-to-r from-blue-700 via-blue-600 to-orange-500 text-white shadow-md">
       <div className="max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
         {/* 🧿 Logo */}
-        <Link to="/" className="text-3xl font-extrabold tracking-tight flex items-center">
+        <Link
+          to="/"
+          className="text-3xl font-extrabold tracking-tight flex items-center"
+        >
           <span className="text-blue-400">Pass</span>
           <span className="text-orange-400">iify</span>
         </Link>
-        <Link to="/about" className="hover:text-orange-300">About Us</Link>
 
         {/* 🌍 Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-8">
@@ -56,7 +58,10 @@ export default function Navbar() {
           {user ? (
             <>
               <span className="text-white/90">
-                Hi, <span className="font-semibold text-orange-300">{user.user?.name || "User"}</span>
+                Hi,{" "}
+                <span className="font-semibold text-orange-300">
+                  {user.user?.name || "User"}
+                </span>
               </span>
               <button
                 onClick={handleLogout}
@@ -108,7 +113,9 @@ export default function Navbar() {
             ))}
             {user ? (
               <>
-                <span className="text-white/80">Hi, {user.user?.name || "User"}</span>
+                <span className="text-white/80">
+                  Hi, {user.user?.name || "User"}
+                </span>
                 <button
                   onClick={() => {
                     handleLogout();

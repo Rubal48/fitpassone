@@ -16,7 +16,9 @@ import BookingPage from "./pages/BookingPage";
 import BookingSuccess from "./pages/BookingSuccess";
 import BookingCheckout from "./pages/BookingCheckout";
 import MyBookings from "./pages/MyBookings";
-
+// Event Page
+import EventsPage from "./pages/EventsPage";
+import EventDetail from "./pages/EventDetail";
 // 🔐 Auth Pages
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
@@ -47,6 +49,10 @@ const App = () => {
         <Route path="/booking-success/:id" element={<BookingSuccess />} />
         <Route path="/booking-checkout/:id" element={<BookingCheckout />} />
         <Route path="/my-bookings" element={<MyBookings />} />
+        {/* 🔐Event */}
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+
 
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
