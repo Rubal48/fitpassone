@@ -22,7 +22,6 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "Event or User not found" });
     }
 
-    // Calculate total price
     const totalPrice = event.price * tickets;
 
     const booking = new EventBooking({
@@ -49,7 +48,7 @@ router.post("/", async (req, res) => {
 
 /**
  * @route GET /api/event-bookings/user/:userId
- * @desc  Get all event bookings for a user
+ * @desc  Get all event bookings for a specific user
  */
 router.get("/user/:userId", async (req, res) => {
   try {
@@ -63,6 +62,30 @@ router.get("/user/:userId", async (req, res) => {
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch bookings" });
+  }
+});
+
+/**
+ * @route GET /api/event-bookings/:id
+ * @desc  Get a single event booking by ID
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const booking = await EventBooking.findById(req.params.id)
+      .populate("event", "name image location date price organizer");
+
+    if (!booking) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Booking not found" });
+    }
+
+    res.status(200).json({ success: true, booking });
+  } catch (error) {
+    console.error("❌ Error fetching event booking:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch booking" });
   }
 });
 

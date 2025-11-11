@@ -16,9 +16,13 @@ import BookingPage from "./pages/BookingPage";
 import BookingSuccess from "./pages/BookingSuccess";
 import BookingCheckout from "./pages/BookingCheckout";
 import MyBookings from "./pages/MyBookings";
-// Event Page
+
+// 🎟️ Event Pages
 import EventsPage from "./pages/EventsPage";
 import EventDetail from "./pages/EventDetail";
+import BookEvent from "./pages/MyEventBookings";          // ✅ new event booking page
+import MyEventBookings from "./pages/MyEventBookings"; // ✅ user’s booked events
+
 // 🔐 Auth Pages
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
@@ -28,12 +32,12 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 // 🧑‍💼 Admin Pages
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
-import AdminGymDetails from "./pages/AdminGymDetails"; // ✅ new admin gym detail page
+import AdminGymDetails from "./pages/AdminGymDetails"; // ✅ Admin Gym Detail
 
 const App = () => {
   return (
     <>
-      {/* Navbar shown on all pages except admin */}
+      {/* Navbar shown on all pages except admin routes */}
       <Navbar />
 
       <Routes>
@@ -43,16 +47,18 @@ const App = () => {
         <Route path="/about" element={<About />} />
         <Route path="/partner" element={<PartnerWithUs />} />
 
-        {/* 🏋️ Gym & Booking */}
+        {/* 🏋️ Gym Booking Flow */}
         <Route path="/gyms/:id" element={<GymDetails />} />
         <Route path="/booking/:id" element={<BookingPage />} />
         <Route path="/booking-success/:id" element={<BookingSuccess />} />
         <Route path="/booking-checkout/:id" element={<BookingCheckout />} />
         <Route path="/my-bookings" element={<MyBookings />} />
-        {/* 🔐Event */}
+
+        {/* 🎟️ Event Booking Flow */}
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetail />} />
-
+        <Route path="/book-event/:id" element={<BookEvent />} /> {/* ✅ new */}
+        <Route path="/my-event-bookings" element={<MyEventBookings />} /> {/* ✅ new */}
 
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
@@ -63,7 +69,7 @@ const App = () => {
         {/* 🧑‍💼 Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/gym/:id" element={<AdminGymDetails />} /> {/* ✅ NEW */}
+        <Route path="/admin/gym/:id" element={<AdminGymDetails />} />
       </Routes>
     </>
   );

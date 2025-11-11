@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   RotateCcw,
   MessageCircle,
-  Sparkles,
   Clock,
 } from "lucide-react";
 import API from "../utils/api";
@@ -22,10 +21,11 @@ const EventDetail = () => {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Fetch Event Details
   useEffect(() => {
     const fetchEvent = async () => {
       try {
-        const res = await API.get(`/events/${id}`); // ✅ fixed /api/api issue
+        const res = await API.get(`/events/${id}`);
         setEvent(res.data.event);
       } catch (error) {
         console.error("Error fetching event:", error);
@@ -36,23 +36,39 @@ const EventDetail = () => {
     fetchEvent();
   }, [id]);
 
+  // ✅ Handle Booking
   const handleBookEvent = async () => {
     try {
-      const user = JSON.parse(localStorage.getItem("user"));
-      if (!user) {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) {
+        alert("Please login to book this event.");
         navigate("/login");
         return;
       }
 
-      const res = await API.post("/api/event-bookings", {
-        userId: user.user._id,
+      const user = JSON.parse(storedUser);
+      const userId = user._id || user.user?._id;
+
+      if (!userId) {
+        alert("User not found. Please log in again.");
+        navigate("/login");
+        return;
+      }
+
+      // ✅ Correct API endpoint (removed extra /api)
+      const res = await API.post("/event-bookings", {
+        userId,
         eventId: event._id,
         tickets: 1,
       });
 
       if (res.data.success) {
         alert("🎉 Event booked successfully!");
-        navigate("/profile");
+        navigate(`/booking-success/${res.data.booking._id}`, {
+          state: { type: "event", name: event.name },
+        });
+      } else {
+        alert(res.data.message || "Something went wrong. Please try again.");
       }
     } catch (error) {
       console.error("Error booking event:", error);
@@ -60,6 +76,7 @@ const EventDetail = () => {
     }
   };
 
+  // ✅ Loading State
   if (loading)
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
@@ -80,7 +97,7 @@ const EventDetail = () => {
       </div>
     );
 
-  // 🕒 Countdown Logic
+  // 🕒 Countdown
   const eventDate = new Date(event.date);
   const today = new Date();
   const diffDays = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
@@ -97,7 +114,7 @@ const EventDetail = () => {
         </button>
       </div>
 
-      {/* 🌟 Event Hero Section */}
+      {/* 🌟 Hero Section */}
       <div className="relative max-w-7xl mx-auto rounded-3xl overflow-hidden shadow-lg mb-10">
         <img
           src={event.image || "/images/default-event.jpg"}
@@ -118,7 +135,7 @@ const EventDetail = () => {
         </div>
       </div>
 
-      {/* 🧭 Event Info Section */}
+      {/* 🧭 Event Info */}
       <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-3 gap-10">
         {/* Left Details */}
         <div className="md:col-span-2 bg-white rounded-3xl shadow-md p-8">
@@ -129,7 +146,6 @@ const EventDetail = () => {
             {event.description}
           </p>
 
-          {/* Quick Info */}
           <div className="flex flex-wrap gap-6 text-gray-700 text-sm mb-6">
             <div className="flex items-center gap-2">
               <CalendarDays size={18} />{" "}
@@ -149,7 +165,7 @@ const EventDetail = () => {
             </div>
           </div>
 
-          {/* 🧘 Organizer Section */}
+          {/* Organizer */}
           <div className="bg-blue-50 rounded-xl p-6 mb-8 flex items-center justify-between">
             <div>
               <p className="font-semibold text-gray-700 flex items-center gap-2">
@@ -168,19 +184,7 @@ const EventDetail = () => {
             />
           </div>
 
-          {/* ✨ Organizer Note */}
-          <div className="bg-gradient-to-r from-blue-100 to-orange-100 p-6 rounded-2xl mb-8">
-            <p className="italic text-gray-700">
-              “We started this event to bring together like-minded adventurers
-              and create meaningful memories. Every moment is designed to
-              inspire, connect, and energize you.”
-            </p>
-            <p className="text-sm text-right text-gray-500 mt-2">
-              — {event.organizer}
-            </p>
-          </div>
-
-          {/* 🎯 What to Expect */}
+          {/* What to Expect */}
           <div className="bg-blue-50 rounded-xl p-6 mb-8">
             <h3 className="text-lg font-bold mb-3 text-blue-700">
               What You'll Experience
@@ -192,7 +196,7 @@ const EventDetail = () => {
             </ul>
           </div>
 
-          {/* 🗺️ Map */}
+          {/* Map */}
           <div className="rounded-2xl overflow-hidden shadow-md">
             <iframe
               src={`https://www.google.com/maps?q=${encodeURIComponent(
@@ -208,56 +212,57 @@ const EventDetail = () => {
           </div>
         </div>
 
-        {/* Right CTA */}
-        <div className="bg-gradient-to-b from-blue-600 to-orange-500 text-white rounded-3xl shadow-lg p-8 flex flex-col justify-between">
-          <div>
-            <h3 className="text-2xl font-bold mb-2">
-              ₹{event.price} per ticket
-            </h3>
-            <p className="text-blue-100 text-sm mb-4">
-              Secure your spot instantly — limited seats available!
-            </p>
-
-            {/* Countdown / Urgency */}
-            {diffDays > 0 ? (
-              <p className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl text-sm mb-4">
-                <Clock size={16} /> Starts in {diffDays} days
+        {/* ✅ Sticky Booking Card */}
+        <div className="relative md:sticky md:top-24 h-fit">
+          <div className="bg-gradient-to-b from-blue-600 to-orange-500 text-white rounded-3xl shadow-lg p-8 flex flex-col justify-between transition-all duration-300 ease-in-out">
+            <div>
+              <h3 className="text-2xl font-bold mb-2">
+                ₹{event.price} per ticket
+              </h3>
+              <p className="text-blue-100 text-sm mb-4">
+                Secure your spot instantly — limited seats available!
               </p>
-            ) : (
-              <p className="text-yellow-200 text-sm mb-4">Event is live today!</p>
-            )}
 
-            {event.capacity < 10 && (
-              <p className="text-red-300 font-semibold mb-4">
-                Only {event.capacity} seats left! 🔥
+              {diffDays > 0 ? (
+                <p className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl text-sm mb-4">
+                  <Clock size={16} /> Starts in {diffDays} days
+                </p>
+              ) : (
+                <p className="text-yellow-200 text-sm mb-4">
+                  Event is live today!
+                </p>
+              )}
+
+              {event.capacity < 10 && (
+                <p className="text-red-300 font-semibold mb-4">
+                  Only {event.capacity} seats left! 🔥
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={handleBookEvent}
+              className="w-full flex items-center justify-center gap-2 bg-white text-blue-700 font-semibold px-6 py-3 rounded-full shadow-md hover:bg-orange-100 transition-all hover:scale-105"
+            >
+              <Ticket size={18} /> Book Now
+            </button>
+
+            <div className="mt-8 bg-white/20 p-4 rounded-xl text-sm space-y-2">
+              <p className="flex items-center gap-2">
+                <ShieldCheck size={16} /> 100% Secure Payment
               </p>
-            )}
-          </div>
-
-          {/* Book Now Button */}
-          <button
-            onClick={handleBookEvent}
-            className="w-full flex items-center justify-center gap-2 bg-white text-blue-700 font-semibold px-6 py-3 rounded-full shadow-md hover:bg-orange-100 transition-all hover:scale-105"
-          >
-            <Ticket size={18} /> Book Now
-          </button>
-
-          {/* Trust Badges */}
-          <div className="mt-8 bg-white/20 p-4 rounded-xl text-sm space-y-2">
-            <p className="flex items-center gap-2">
-              <ShieldCheck size={16} /> 100% Secure Payment
-            </p>
-            <p className="flex items-center gap-2">
-              <RotateCcw size={16} /> Easy Refunds if event canceled
-            </p>
-            <p className="flex items-center gap-2">
-              <MessageCircle size={16} /> Verified Community Reviews
-            </p>
+              <p className="flex items-center gap-2">
+                <RotateCcw size={16} /> Easy Refunds if event canceled
+              </p>
+              <p className="flex items-center gap-2">
+                <MessageCircle size={16} /> Verified Community Reviews
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 💬 Footer CTA */}
+      {/* Footer CTA */}
       <div className="text-center py-16 mt-16 bg-gradient-to-r from-blue-700 to-orange-500 text-white">
         <h2 className="text-3xl font-semibold mb-3">
           Experience. Connect. Grow.
