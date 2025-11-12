@@ -19,11 +19,21 @@ const BookEvent = () => {
   const [tickets, setTickets] = useState(1);
   const [booking, setBooking] = useState(false);
 
+  // ✅ Fetch event safely
   useEffect(() => {
     const fetchEvent = async () => {
+      if (!id) {
+        console.warn("⚠️ No event ID found in URL");
+        setLoading(false);
+        return;
+      }
       try {
         const res = await API.get(`/events/${id}`);
-        setEvent(res.data.event);
+        if (res.data && res.data.event) {
+          setEvent(res.data.event);
+        } else {
+          console.error("⚠️ No event found for given ID");
+        }
       } catch (error) {
         console.error("Error loading event:", error);
       } finally {
@@ -33,31 +43,52 @@ const BookEvent = () => {
     fetchEvent();
   }, [id]);
 
+  // ✅ Handle booking
   const handleConfirmBooking = async () => {
     try {
-      const user = JSON.parse(localStorage.getItem("user"));
-      if (!user) {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) {
+        alert("Please log in to continue.");
         navigate("/login");
+        return;
+      }
+
+      const user = JSON.parse(storedUser);
+      const userId = user._id || user.user?._id;
+
+      if (!userId) {
+        alert("User session expired. Please login again.");
+        navigate("/login");
+        return;
+      }
+
+      if (!event || !event._id) {
+        alert("Event data not found. Please try again later.");
         return;
       }
 
       setBooking(true);
 
-      const res = await API.post("/api/event-bookings", {
-        userId: user.user._id,
+      const payload = {
+        userId,
         eventId: event._id,
         tickets,
         totalPrice: event.price * tickets,
-      });
+      };
 
-      if (res.data.success) {
-        navigate("/booking-success");
+      const res = await API.post("/api/event-bookings", payload);
+
+      if (res.data.success && res.data.booking) {
+        alert("🎉 Booking Confirmed!");
+        navigate(`/booking-success/${res.data.booking._id}`, {
+          state: { type: "event", name: event.name },
+        });
       } else {
-        alert("Booking failed. Please try again later.");
+        alert(res.data.message || "Booking failed. Please try again.");
       }
     } catch (error) {
       console.error("Error confirming booking:", error);
-      alert("Something went wrong while booking.");
+      alert("Something went wrong while booking. Please try again later.");
     } finally {
       setBooking(false);
     }
@@ -73,7 +104,7 @@ const BookEvent = () => {
   if (!event)
     return (
       <div className="text-center py-20 text-gray-600">
-        <p>❌ Event not found.</p>
+        <p>❌ Event not found or has been removed.</p>
         <Link
           to="/events"
           className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-orange-500 transition"
@@ -110,7 +141,9 @@ const BookEvent = () => {
           {/* Right Details */}
           <div className="md:w-1/2 p-8 flex flex-col justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-blue-700 mb-2">{event.name}</h1>
+              <h1 className="text-3xl font-bold text-blue-700 mb-2">
+                {event.name}
+              </h1>
               <p className="text-gray-500 mb-4">{event.description}</p>
 
               <div className="flex flex-col gap-2 text-sm text-gray-700 mb-4">
@@ -127,7 +160,7 @@ const BookEvent = () => {
                   })}
                 </p>
                 <p className="flex items-center gap-2">
-                  <Users size={16} /> {event.capacity} People
+                  <Users size={16} /> Capacity: {event.capacity} People
                 </p>
               </div>
 
@@ -157,7 +190,9 @@ const BookEvent = () => {
 
               {/* Total */}
               <div className="bg-blue-50 rounded-xl p-4 flex justify-between items-center mb-6">
-                <span className="font-semibold text-gray-700">Total Price:</span>
+                <span className="font-semibold text-gray-700">
+                  Total Price:
+                </span>
                 <span className="text-xl font-bold text-blue-700">
                   ₹{totalPrice.toLocaleString("en-IN")}
                 </span>

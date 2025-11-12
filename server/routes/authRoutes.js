@@ -3,8 +3,12 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
+import { updateUserProfile } from "../controllers/userController.js";
+import verifyToken from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+// ✅ Update user profile (name/email)
+router.put("/update-profile/:id", verifyToken, updateUserProfile);
 
 // ✅ Token Generator
 const generateToken = (id, expiresIn = "7d") =>

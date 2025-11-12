@@ -31,7 +31,7 @@ export default function BookingPage() {
     fetchGym();
   }, [id]);
 
-  // 💳 Handle booking
+  // 💳 Handle booking (✅ Fixed version)
   const handleBooking = async () => {
     const token = localStorage.getItem("token");
 
@@ -46,6 +46,9 @@ export default function BookingPage() {
     }
 
     try {
+      setErrorMessage("");
+      alert("⏳ Processing your booking...");
+
       const res = await API.post(
         "/bookings",
         { gymId: gym._id, date: selectedDate },
@@ -57,7 +60,15 @@ export default function BookingPage() {
         }
       );
 
-      navigate(`/booking-success/${res.data._id}`);
+      if (res.data.success && res.data.booking) {
+        alert("🎉 Booking successful!");
+        navigate(`/booking-success/${res.data.booking._id}`, {
+          state: { type: "gym", name: res.data.booking.gym?.name },
+        });
+      } else {
+        console.warn("⚠️ Unexpected response:", res.data);
+        setErrorMessage("Booking failed. Please try again.");
+      }
     } catch (err) {
       console.error("❌ Booking failed:", err.response?.data || err);
       setErrorMessage("Something went wrong during booking!");

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, X, User } from "lucide-react";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -15,16 +15,18 @@ export default function Navbar() {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
     setUser(null);
     navigate("/login");
   };
 
-  // ✅ Updated Navigation Links (Removed About & Passes, Added Events)
+  // ✅ Updated Navigation Links (Added About + Dashboard)
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Explore", path: "/explore" },
     { name: "Events", path: "/events" },
     { name: "Partner", path: "/partner" },
+    { name: "About", path: "/about" },
   ];
 
   return (
@@ -51,18 +53,32 @@ export default function Navbar() {
               <span className="absolute left-0 bottom-[-4px] w-0 h-[2px] bg-orange-300 transition-all duration-300 group-hover:w-full"></span>
             </Link>
           ))}
+
+          {/* ✅ Dashboard Link (only if logged in) */}
+          {user && (
+            <Link
+              to="/my-dashboard"
+              className="relative font-medium text-white/90 hover:text-white transition duration-300 group"
+            >
+              Dashboard
+              <span className="absolute left-0 bottom-[-4px] w-0 h-[2px] bg-orange-300 transition-all duration-300 group-hover:w-full"></span>
+            </Link>
+          )}
         </div>
 
         {/* 👤 Auth Buttons */}
         <div className="hidden md:flex items-center gap-4">
           {user ? (
             <>
-              <span className="text-white/90">
-                Hi,{" "}
-                <span className="font-semibold text-orange-300">
-                  {user.user?.name || "User"}
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-orange-300" />
+                <span className="text-white/90">
+                  Hi,{" "}
+                  <span className="font-semibold text-orange-300">
+                    {user.user?.name || user.name || "User"}
+                  </span>
                 </span>
-              </span>
+              </div>
               <button
                 onClick={handleLogout}
                 className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full font-semibold transition-all shadow-sm hover:shadow-md"
@@ -111,10 +127,22 @@ export default function Navbar() {
                 {link.name}
               </Link>
             ))}
+
+            {/* ✅ Dashboard in Mobile View */}
+            {user && (
+              <Link
+                to="/my-dashboard"
+                onClick={() => setMenuOpen(false)}
+                className="hover:text-orange-300 transition"
+              >
+                Dashboard
+              </Link>
+            )}
+
             {user ? (
               <>
                 <span className="text-white/80">
-                  Hi, {user.user?.name || "User"}
+                  Hi, {user.user?.name || user.name || "User"}
                 </span>
                 <button
                   onClick={() => {

@@ -3,6 +3,7 @@ import React from "react";
 import { Routes, Route } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
+import MyDashboard from "./pages/MyDashboard";
 
 // 🏠 Main Pages
 import Home from "./pages/Home";
@@ -59,7 +60,8 @@ const App = () => {
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/book-event/:id" element={<BookEvent />} /> {/* ✅ new */}
         <Route path="/my-event-bookings" element={<MyEventBookings />} /> {/* ✅ new */}
-
+          {/* ✅ User Dashboard Route */}
+        <Route path="/my-dashboard" element={<MyDashboard />} />
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />

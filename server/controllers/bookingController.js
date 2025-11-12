@@ -173,3 +173,18 @@ export const getBookingById = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch booking" });
   }
 };
+// ✅ Fetch all bookings by user ID (for dashboard)
+export const getBookingsByUserId = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bookings = await Booking.find({ user: id })
+      .populate("gym", "name city images")
+      .populate("user", "name email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ bookings });
+  } catch (error) {
+    console.error("❌ Error fetching bookings by user ID:", error);
+    res.status(500).json({ message: "Failed to fetch user bookings" });
+  }
+};

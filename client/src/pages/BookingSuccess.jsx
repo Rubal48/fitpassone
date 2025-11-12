@@ -59,12 +59,17 @@ export default function BookingSuccess() {
         });
 
         // ✅ Correct: backend returns { success, booking }
-        if (res.data?.booking) {
-          setBooking(res.data.booking);
-        } else {
-          console.warn("⚠️ Unexpected booking response:", res.data);
-          setError("Booking data not found.");
-        }
+       // ✅ Handle both response formats
+if (res.data?.booking) {
+  setBooking(res.data.booking);
+} else if (res.data?._id) {
+  // Direct booking object returned
+  setBooking(res.data);
+} else {
+  console.warn("⚠️ Unexpected booking response:", res.data);
+  setError("Booking data not found.");
+}
+
       } catch (err) {
         console.error("Error fetching booking:", err);
         setError("Could not load your booking details.");
