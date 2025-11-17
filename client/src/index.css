@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ✨ Passiify Global Theme */
+:root {
+  --passiify-blue: #1e40af; /* blue-700 */
+  --passiify-blue-light: #2563eb; /* blue-600 */
+  --passiify-orange: #f97316; /* orange-500 */
+  --passiify-orange-light: #fb923c; /* orange-400 */
+  --passiify-bg-light: #f9fafb;
+  --passiify-text-dark: #1e293b;
+}
+
+/* ✨ Font Setup */
+html,
+body,
+#root {
+  font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--passiify-bg-light);
+  color: var(--passiify-text-dark);
+  scroll-behavior: smooth;
+}
+
+/* ✨ Soft Glow Animation */
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(249, 115, 22, 0.6);
+  }
+}
+
+.animate-glow {
+  animation: glow 2.5s ease-in-out infinite;
+}
+
+/* ✨ Brand Tagline Font */
+.tagline {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+}
+
+/* ✨ Gradient Helpers */
+.bg-passiify {
+  background-image: linear-gradient(to right, var(--passiify-blue), var(--passiify-orange));
+}
+
+.text-passiify {
+  background: linear-gradient(to right, var(--passiify-blue), var(--passiify-orange));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ✨ Button + Card Enhancements */
+.btn-passiify {
+  background: linear-gradient(to right, var(--passiify-blue), var(--passiify-orange));
+  color: white;
+  font-weight: 600;
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+}
+
+.btn-passiify:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.card-passiify {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  border-radius: 1rem;
+  box-shadow: 0 4px 15px rgba(30, 64, 175, 0.08);
+  transition: all 0.3s ease;
+}
+
+.card-passiify:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(30, 64, 175, 0.15);
+}
