@@ -5,251 +5,400 @@ import {
   Search,
   CalendarDays,
   MapPin,
-  Dumbbell,
-  Star,
-  Clock,
   Shield,
   Award,
   Heart,
+  Clock,
+  Dumbbell,
+  Star,
 } from "lucide-react";
 import API from "../utils/api";
-import HeroRive from "../components/HeroRive"; // adjust path if needed
 
+/* =========================================================
+   THEME / DESIGN TOKENS — "SUNSET NOMAD"
+   Warm, cinematic, travel-friendly but still edgy
+   ========================================================= */
 
-const COLORS = {
-  inkBlack: "#0C0C0C",
-  sakuraOffwhite: "#F7F5F2",
-  calmGrey: "#C8C8C8",
-  warmCoral: "#FF6D5E",
-  mossGreen: "#6DA674",
+const THEME = {
+  bg: "#050308", // deep plum-black
+  bgSoft: "#0A0812",
+  card: "rgba(15, 10, 24, 0.96)",
+  cardAlt: "rgba(12, 8, 20, 0.96)",
+  accent1: "#FF4B5C", // coral red
+  accent2: "#FF9F68", // warm peach
+  accent3: "#FFC857", // soft golden
+  textMain: "#FDFCFB",
+  textMuted: "#A3A3B5",
+  borderSoft: "rgba(245, 213, 189, 0.24)",
 };
 
-// -----------------------------
-// Helper: graceful image getters
-// -----------------------------
+/* =========================================================
+   FALLBACK IMAGES (keep backend compatible)
+   ========================================================= */
+
 const fallbackEventImage = () =>
-  "https://images.unsplash.com/photo-1508609349937-5ec4ae374ebf?w=1400&q=80&auto=format&fit=crop";
+  "https://images.unsplash.com/photo-1549576490-b0b4831ef60a?w=1400&q=80&auto=format&fit=crop";
+
 const fallbackGymImage = () =>
   "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1400";
 
-// -----------------------------
-// HERO SECTION
-// -----------------------------
-function HeroSection({ onSearch }) {
+/* =========================================================
+   HERO SECTION
+   - Main sunset nomad / traveller + fighter intro
+   ========================================================= */
+
+function Hero({ topEvent, onSearch }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [type, setType] = useState("all");
-  const [riveAvailable, setRiveAvailable] = useState(false);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    let mounted = true;
-    const check = async () => {
-      try {
-        const res = await fetch("/riv/hero.riv", { method: "HEAD" });
-        if (!mounted) return;
-        setRiveAvailable(res.ok);
-      } catch (err) {
-        if (!mounted) return;
-        setRiveAvailable(false);
-      }
-    };
-    check();
-    return () => (mounted = false);
-  }, []);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (onSearch) onSearch(query, type);
 
-  const handleSearch = (e) => {
-    e?.preventDefault?.();
-    if (onSearch) onSearch(query.trim(), type);
-    // default behaviour: navigate to explore page
-    const q = query.trim();
     const params = new URLSearchParams();
-    if (q) params.set("query", q);
+    if (query?.trim()) params.set("query", query.trim());
     if (type && type !== "all") params.set("type", type);
+
+    navigate(`/explore?${params.toString()}`);
+  };
+
+  const quickSearch = (value) => {
+    const params = new URLSearchParams();
+    params.set("query", value);
     navigate(`/explore?${params.toString()}`);
   };
 
   return (
-    <header className="relative overflow-hidden" style={{ background: COLORS.inkBlack }}>
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `linear-gradient(180deg, ${COLORS.inkBlack} 0%, rgba(12,12,12,0.75) 45%, ${COLORS.sakuraOffwhite} 100%)`,
-        }}
-      />
+    <header className="relative overflow-hidden">
+      {/* Background warm glows */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div
+          className="absolute -top-40 -left-36 w-96 h-96 rounded-full blur-3xl opacity-40"
+          style={{ background: THEME.accent1 }}
+        />
+        <div
+          className="absolute -bottom-40 -right-36 w-[420px] h-[420px] rounded-full blur-3xl opacity-35"
+          style={{ background: THEME.accent2 }}
+        />
+      </div>
 
-      <div className="relative max-w-7xl mx-auto px-6 py-24 md:py-32">
-        <div className="grid md:grid-cols-2 gap-10 items-center">
-          {/* LEFT */}
-          <div className="z-10">
-            <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/6 backdrop-blur border border-white/10 mb-6">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <circle cx="12" cy="12" r="10" stroke={COLORS.warmCoral} strokeWidth={2} />
-              </svg>
-              <span className="text-sm font-semibold text-white/90">Curated for travellers</span>
+      <div className="relative max-w-7xl mx-auto px-6 pt-24 pb-16 lg:pt-28 lg:pb-24">
+        <div className="grid lg:grid-cols-[1.1fr,1fr] gap-10 items-center">
+          {/* LEFT: copy + search */}
+          <div>
+            {/* tiny brand pill */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur shadow-sm mb-6">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-semibold text-gray-200 uppercase tracking-[0.2em]">
+                Built for travellers & movers
+              </span>
             </div>
 
-            <h1 className="text-4xl md:text-5xl font-extrabold leading-tight text-white">
-              Move. Explore. Belong.
+            <h1 className="text-4xl md:text-5xl lg:text-[3.3rem] font-black tracking-tight text-white">
+              Train{" "}
               <span
-                className="block"
+                className="px-2 rounded-lg"
                 style={{
-                  backgroundImage: `linear-gradient(90deg, ${COLORS.warmCoral}, ${COLORS.mossGreen})`,
+                  backgroundImage: `linear-gradient(90deg, ${THEME.accent1}, ${THEME.accent2})`,
                   WebkitBackgroundClip: "text",
-                  backgroundClip: "text",
                   color: "transparent",
                 }}
               >
-                Find experiences that stay with you.
+                anywhere
               </span>
+              . No contracts.
             </h1>
 
-            <p className="mt-4 text-lg text-white/80 max-w-xl">
-              Handpicked retreats, fight camps, yoga & cultural experiences — trusted local hosts, instant booking, and flexible passes for travellers who want more than a visit.
+            <p className="mt-4 text-base md:text-lg text-gray-300 max-w-xl">
+              Bounce between MMA gyms, rooftop yoga, dance studios or strength
+              clubs in any city. Book 1-day passes & events — no long-term
+              membership, no small talk at the front desk.
             </p>
 
-            <form onSubmit={handleSearch} className="mt-8 flex gap-3 items-center max-w-xl">
-              <div className="flex items-center rounded-xl bg-[rgba(247,245,242,0.95)] p-1 w-full shadow-lg border border-white/10">
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  aria-label="Type"
-                  className="rounded-lg px-3 py-3 bg-transparent text-black outline-none border-r border-white/10 text-sm font-medium"
-                >
-                  <option value="all">All</option>
-                  <option value="events">Events</option>
-                  <option value="gyms">Gyms & Studios</option>
-                </select>
+            {/* Search bar */}
+            <form
+              onSubmit={handleSubmit}
+              className="mt-8 max-w-xl"
+              aria-label="Search fitness experiences"
+            >
+              <div
+                className="flex items-stretch rounded-2xl border backdrop-blur shadow-xl"
+                style={{
+                  borderColor: THEME.borderSoft,
+                  background:
+                    "radial-gradient(circle at 0 0, rgba(248,250,252,0.08), transparent 60%), rgba(10,10,18,0.9)",
+                }}
+              >
+                {/* type selector */}
+                <div className="flex items-center px-3 border-r border-white/10">
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    className="bg-transparent text-xs md:text-sm text-gray-200 outline-none pr-2"
+                  >
+                    <option value="all" className="bg-slate-900 text-gray-100">
+                      All
+                    </option>
+                    <option value="events" className="bg-slate-900 text-gray-100">
+                      Events
+                    </option>
+                    <option value="gyms" className="bg-slate-900 text-gray-100">
+                      Gyms & Studios
+                    </option>
+                  </select>
+                </div>
 
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search MMA, Yoga, studio, or city — e.g. Rishikesh"
-                  aria-label="Search query"
-                  className="flex-1 px-4 py-3 bg-transparent text-sm text-black placeholder:text-gray-400 focus:outline-none"
-                />
+                {/* input */}
+                <div className="flex-1 flex items-center px-3">
+                  <Search size={18} className="text-gray-500 hidden sm:block" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="flex-1 bg-transparent text-sm md:text-base text-gray-100 placeholder:text-gray-500 px-2 py-3 outline-none"
+                    placeholder="Search MMA, yoga, dance or a city — e.g. Goa"
+                  />
+                </div>
 
+                {/* submit */}
                 <button
                   type="submit"
-                  onClick={handleSearch}
-                  className="ml-2 mr-1 px-5 py-3 rounded-lg font-semibold text-white"
+                  className="px-4 md:px-6 py-3 text-sm md:text-base font-semibold rounded-r-2xl flex items-center gap-2"
                   style={{
-                    backgroundImage: `linear-gradient(90deg, ${COLORS.warmCoral}, ${COLORS.mossGreen})`,
-                    boxShadow: "0 8px 24px rgba(255,109,94,0.12)",
+                    backgroundImage: `linear-gradient(90deg, ${THEME.accent1}, ${THEME.accent2})`,
+                    boxShadow: "0 15px 40px rgba(0,0,0,0.6)",
+                    color: "#1B0B0C",
                   }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Search size={16} />
-                    <span className="hidden sm:inline">Search</span>
-                  </div>
+                  <span>Search</span>
                 </button>
+              </div>
+
+              {/* quick chips */}
+              <div className="mt-4 flex flex-wrap gap-2 text-xs md:text-sm">
+                {["MMA", "Sunrise yoga", "Dance studio", "CrossFit", "Bootcamp"].map(
+                  (chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => quickSearch(chip)}
+                      className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10 transition"
+                    >
+                      #{chip}
+                    </button>
+                  )
+                )}
               </div>
             </form>
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              {["Yoga", "MMA", "Dance", "Pilates", "Hiking"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => {
-                    setQuery(c);
-                    setType("all");
-                    const params = new URLSearchParams();
-                    params.set("query", c);
-                    navigate(`/explore?${params.toString()}`);
-                  }}
-                  className="px-4 py-1.5 rounded-full bg-white/6 text-white text-sm hover:bg-white/10 transition"
-                >
-                  #{c}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-6 items-center text-white/90">
+            {/* trust badges */}
+            <div className="mt-6 flex flex-wrap gap-4 text-gray-300 text-xs md:text-sm">
               <div className="flex items-center gap-2">
-                <Shield size={16} className="text-white/90" />
-                <div className="text-sm font-medium">Verified hosts</div>
+                <Shield size={16} className="text-emerald-400" />
+                <span>Verified hosts & venues</span>
               </div>
-
               <div className="flex items-center gap-2">
-                <Award size={16} className="text-white/90" />
-                <div className="text-sm font-medium">Secure payments</div>
+                <Award size={16} className="text-yellow-300" />
+                <span>Secure, instant booking</span>
               </div>
-
               <div className="flex items-center gap-2">
-                <Heart size={16} className="text-white/90" />
-                <div className="text-sm font-medium">Flexible passes</div>
+                <Heart size={16} className="text-rose-400" />
+                <span>100% flexible, 1-day passes</span>
               </div>
             </div>
           </div>
 
-          {/* RIGHT */}
-          <div className="relative z-10">
-            <div className="rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              {riveAvailable ? (
-                <div className="w-full h-96 md:h-[520px]"><HeroRive src="/riv/hero.riv" autoplay={true} /></div>
-              ) : (
-                <div className="w-full h-96 md:h-[520px] relative bg-gray-100">
-                  <img src={fallbackEventImage()} alt="Featured" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                  <div className="absolute left-6 bottom-6 right-6 text-white">
-                    <div className="text-sm text-white/80">Featured</div>
-                    <h3 className="text-2xl font-bold">Himalayan Yoga Retreat</h3>
-                    <div className="mt-3 flex gap-3">
-                      <div className="p-3 bg-white/90 text-black rounded-xl">
-                        <div className="text-sm font-bold">500+</div>
-                        <div className="text-xs text-gray-600">Gyms & Studios</div>
+          {/* RIGHT: hero visual + top event */}
+          <div className="relative">
+            <div
+              className="rounded-[28px] overflow-hidden shadow-[0_40px_120px_rgba(0,0,0,0.95)] border"
+              style={{ borderColor: "rgba(248, 236, 220, 0.25)" }}
+            >
+              <div className="relative h-80 md:h-[420px] bg-black">
+                <img
+                  src={topEvent?.image || fallbackEventImage()}
+                  alt={topEvent?.name || "Passiify Experience"}
+                  className="w-full h-full object-cover transform hover:scale-[1.03] transition duration-700"
+                />
+
+                {/* overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
+
+                {/* label */}
+                <div className="absolute top-4 left-4">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/55 text-[10px] text-gray-100 border border-white/15 uppercase tracking-[0.18em]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    Top pick this week
+                  </span>
+                </div>
+
+                {/* top event info card */}
+                {topEvent && (
+                  <div className="absolute left-4 right-4 bottom-4">
+                    <div className="flex gap-3 sm:gap-4 items-stretch">
+                      <div className="hidden sm:block w-20 h-20 rounded-2xl overflow-hidden border border-white/15 bg-black/40">
+                        <img
+                          src={topEvent.image || fallbackEventImage()}
+                          alt={topEvent.name}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                      <div className="p-3 bg-white/90 text-black rounded-xl">
-                        <div className="text-sm font-bold">200+</div>
-                        <div className="text-xs text-gray-600">Events Monthly</div>
+
+                      <div className="flex-1 rounded-2xl bg-black/70 backdrop-blur border border-white/15 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex-1">
+                          <h3 className="text-sm md:text-base font-semibold text-white line-clamp-1">
+                            {topEvent.name}
+                          </h3>
+                          <div className="mt-1 flex flex-wrap gap-3 text-[11px] md:text-xs text-gray-300">
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarDays size={13} />
+                              {new Date(topEvent.date).toLocaleDateString()}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <MapPin size={13} />
+                              {topEvent.location || topEvent.city || "TBA"}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Clock size={13} />
+                              1-day access
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end justify-between">
+                          <div className="text-xs text-gray-400">From</div>
+                          <div className="text-lg md:text-xl font-extrabold text-white">
+                            ₹{topEvent.price}
+                          </div>
+                          <div className="mt-1 flex gap-2">
+                            <Link
+                              to={`/events/${topEvent._id}`}
+                              className="px-3 py-1 rounded-full bg-white/5 border border-white/20 text-[11px] md:text-xs text-gray-100 hover:bg-white/10"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              to={`/book-event/${topEvent._id}`}
+                              className="px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold"
+                              style={{
+                                backgroundImage: `linear-gradient(90deg, ${THEME.accent1}, ${THEME.accent2})`,
+                                color: "#1B0B0C",
+                              }}
+                            >
+                              Book
+                            </Link>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* fallback when no topEvent */}
+                {!topEvent && (
+                  <div className="absolute left-4 right-4 bottom-4">
+                    <div className="rounded-2xl bg-black/75 backdrop-blur border border-white/10 px-4 py-3 text-center">
+                      <div className="text-sm font-semibold text-white">
+                        New experiences dropping soon
+                      </div>
+                      <div className="text-xs text-gray-300 mt-1">
+                        Hosts are lining up their next retreats, runs and
+                        fight-camps.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="mt-4 flex gap-3 justify-start">
-              <div className="px-3 py-2 bg-white/90 rounded-full text-sm font-semibold text-inkBlack">Local hosts</div>
-              <div className="px-3 py-2 bg-white/90 rounded-full text-sm font-semibold text-inkBlack">Instant booking</div>
+            {/* mini pills */}
+            <div className="mt-4 flex flex-wrap gap-3 text-xs">
+              <div className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-200 flex items-center gap-1.5">
+                <Dumbbell size={14} />
+                Day-pass gyms
+              </div>
+              <div className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-200 flex items-center gap-1.5">
+                <Star size={14} className="text-yellow-300" />
+                Traveler-approved studios
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="-mb-1">
-        <svg viewBox="0 0 1440 80" className="w-full h-12">
-          <path fill="#fff" d="M0,32L48,26.7C96,21,192,11,288,10.7C384,11,480,21,576,37.3C672,53,768,75,864,64C960,53,1056,11,1152,2.7C1248,-6,1344,3,1392,8L1440,13L1440,80L0,80Z" />
-        </svg>
       </div>
     </header>
   );
 }
 
-// -----------------------------
-// CATEGORIES SECTION (simple, editable)
-// -----------------------------
-function CategoriesSection() {
-  const categories = [
-    { name: "MMA", emoji: "🥊" },
-    { name: "Yoga", emoji: "🧘" },
-    { name: "Gym", emoji: "💪" },
-    { name: "Dance", emoji: "💃" },
-    { name: "Pilates", emoji: "🤸" },
-    { name: "CrossFit", emoji: "🏋️" },
+/* =========================================================
+   STATS STRIP
+   - Quick social proof band below hero
+   ========================================================= */
+
+function StatsStrip() {
+  const stats = [
+    { label: "Day-pass sessions booked", value: "5k+" },
+    { label: "Gyms & studios onboarded", value: "150+" },
+    { label: "Cities explored by movers", value: "40+" },
   ];
 
   return (
-    <section className="max-w-7xl mx-auto px-6 py-12">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-extrabold text-gray-900">Explore By Category</h2>
-        <p className="text-gray-600">Find the perfect fitness experience for your journey</p>
+    <section className="max-w-7xl mx-auto px-6 pb-6 -mt-6">
+      <div className="rounded-2xl border border-white/10 bg-black/40 px-5 py-4 grid sm:grid-cols-3 gap-4">
+        {stats.map((item) => (
+          <div key={item.label} className="flex flex-col">
+            <span className="text-sm font-semibold text-gray-50">
+              {item.value}
+            </span>
+            <span className="text-[11px] text-gray-400">{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   TRAVEL CITY STRIP
+   - Curated “tourist” cities
+   ========================================================= */
+
+function TravelCityStrip() {
+  const cities = [
+    { name: "Goa", tag: "Sunrise yoga & beach gyms" },
+    { name: "Bangkok", tag: "Muay Thai fight camps" },
+    { name: "Mumbai", tag: "Dance & boxing clubs" },
+    { name: "Bali", tag: "Retreats & surf strength" },
+  ];
+
+  return (
+    <section className="max-w-7xl mx-auto px-6 py-10">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <h2 className="text-xl font-semibold text-gray-50">
+          Landing in a new city soon?
+        </h2>
+        <p className="text-sm text-gray-400 max-w-md">
+          Browse curated fitness experiences in popular traveller hubs. Lock in
+          your next session before you land.
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {categories.map((c) => (
-          <Link key={c.name} to={`/explore?query=${encodeURIComponent(c.name)}`} className="group relative p-6 bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col items-center justify-center">
-            <div className="text-3xl mb-2">{c.emoji}</div>
-            <div className="font-bold text-gray-900">{c.name}</div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {cities.map((c) => (
+          <Link
+            key={c.name}
+            to={`/explore?query=${encodeURIComponent(c.name)}`}
+            className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/40 transition-all p-4 flex flex-col justify-between"
+          >
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-gray-500">
+                City
+              </div>
+              <div className="mt-1 text-lg font-semibold text-gray-50">
+                {c.name}
+              </div>
+              <div className="mt-2 text-xs text-gray-300">{c.tag}</div>
+            </div>
+            <div className="mt-4 text-xs text-gray-400">Tap to explore →</div>
           </Link>
         ))}
       </div>
@@ -257,72 +406,108 @@ function CategoriesSection() {
   );
 }
 
-// -----------------------------
-// ADVENTURE EVENTS SECTION (fetches events)
-// -----------------------------
-function AdventureEventsSection() {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+/* =========================================================
+   UPCOMING EVENTS SECTION
+   - Uses /events from backend
+   ========================================================= */
 
-  useEffect(() => {
-    let mounted = true;
-    const fetchEvents = async () => {
-      try {
-        const res = await API.get("/events");
-        // API may return { events } or array directly
-        const data = res.data?.events || res.data || res;
-        if (!mounted) return;
-        setEvents(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Error fetching events:", err);
-        if (!mounted) return;
-        setError(err);
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
-      }
-    };
-    fetchEvents();
-    return () => (mounted = false);
-  }, []);
+function UpcomingEventsSection({ events, loading }) {
+  const visible = (events || []).slice(0, 6);
 
   return (
-    <section className="max-w-7xl mx-auto px-6 py-16">
-      <div className="flex items-center justify-between mb-6">
+    <section className="max-w-7xl mx-auto px-6 py-10">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-gray-900">Adventure Events</h2>
-          <p className="text-sm text-gray-500 mt-1">Handpicked outdoor, wellness & adventure experiences for travelers.</p>
+          <h2 className="text-2xl font-semibold text-gray-50">
+            Upcoming events & experiences
+          </h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Curated runs, workshops, retreats and fight nights for your next
+            trip.
+          </p>
         </div>
-        <Link to="/events" className="text-sm font-semibold text-orange-500">See all events →</Link>
+        <Link
+          to="/events"
+          className="text-xs font-semibold text-gray-300 hover:text-white"
+        >
+          See all events →
+        </Link>
       </div>
 
       {loading ? (
-        <div className="text-gray-500">Loading events...</div>
-      ) : error ? (
-        <div className="text-red-500">Failed to load events.</div>
-      ) : events.length === 0 ? (
-        <div className="text-gray-500">No events available right now.</div>
+        <div className="text-sm text-gray-400">Loading events…</div>
+      ) : visible.length === 0 ? (
+        <div className="text-sm text-gray-500">
+          No events live right now — hosts are setting up the next drop.
+        </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.slice(0, 6).map((ev) => (
-            <article key={ev._id} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transform hover:-translate-y-1 transition">
-              <div className="relative h-56">
-                <img src={ev.image || fallbackEventImage()} alt={ev.name} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {visible.map((ev) => (
+            <article
+              key={ev._id}
+              className="rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-b from-white/5 via-white/0 to-white/5 hover:border-white/40 hover:shadow-[0_20px_70px_rgba(0,0,0,0.9)] transition-all"
+            >
+              <div className="relative h-48">
+                <img
+                  src={ev.image || fallbackEventImage()}
+                  alt={ev.name}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                <div className="absolute top-3 left-3">
+                  <span className="px-2 py-1 rounded-full bg-black/60 border border-white/20 text-[10px] uppercase tracking-[0.2em] text-gray-100">
+                    Event
+                  </span>
+                </div>
               </div>
 
-              <div className="p-4">
-                <h3 className="text-lg font-semibold">{ev.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">{ev.location}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="text-xs text-gray-500 flex items-center gap-2"><CalendarDays size={14} /> {new Date(ev.date).toLocaleDateString()}</div>
-                  <div className="text-lg font-bold text-orange-500">₹{ev.price}</div>
+              <div className="p-4 flex flex-col gap-3">
+                <div>
+                  <h3 className="text-sm md:text-base font-semibold text-gray-50 line-clamp-2">
+                    {ev.name}
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {ev.location || ev.city || "Location TBA"}
+                  </p>
                 </div>
 
-                <div className="mt-4 flex gap-2">
-                  <Link to={`/events/${ev._id}`} className="px-3 py-1 rounded-full bg-white border text-sm font-semibold">Details</Link>
-                  <Link to={`/book-event/${ev._id}`} className="px-3 py-1 rounded-full bg-gradient-to-r from-orange-400 to-blue-600 text-white text-sm font-semibold">Book</Link>
+                <div className="flex items-center justify-between text-xs text-gray-300">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays size={14} />
+                    {new Date(ev.date).toLocaleDateString()}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock size={14} />
+                    1-day entry
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between mt-1">
+                  <div className="text-sm font-bold text-gray-50">
+                    ₹{ev.price}
+                    <span className="text-[11px] text-gray-400 font-normal">
+                      {" "}
+                      / pass
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/events/${ev._id}`}
+                      className="px-3 py-1.5 rounded-full border border-white/15 text-[11px] text-gray-100 hover:bg-white/10"
+                    >
+                      Details
+                    </Link>
+                    <Link
+                      to={`/book-event/${ev._id}`}
+                      className="px-3 py-1.5 rounded-full text-[11px] font-semibold"
+                      style={{
+                        backgroundImage: `linear-gradient(90deg, ${THEME.accent1}, ${THEME.accent2})`,
+                        color: "#1B0B0C",
+                      }}
+                    >
+                      Book
+                    </Link>
+                  </div>
                 </div>
               </div>
             </article>
@@ -333,72 +518,105 @@ function AdventureEventsSection() {
   );
 }
 
-// -----------------------------
-// TOP GYMS SECTION (fetches gyms)
-// -----------------------------
-function TopGymsSection() {
-  const [gyms, setGyms] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
+/* =========================================================
+   DAY-PASS GYMS & STUDIOS
+   - Uses /gyms from backend
+   ========================================================= */
 
-  useEffect(() => {
-    let mounted = true;
-    const fetchGyms = async () => {
-      try {
-        const res = await API.get("/gyms");
-        const data = res.data || res;
-        if (!mounted) return;
-        setGyms(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Error fetching gyms:", error);
-        if (!mounted) return;
-        setErr(error);
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
-      }
-    };
-    fetchGyms();
-    return () => (mounted = false);
-  }, []);
+function DayPassGymsSection({ gyms, loading }) {
+  const visible = (gyms || []).slice(0, 8);
 
   return (
-    <section className="bg-white/50 py-16">
+    <section className="py-10">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-3xl font-extrabold text-gray-900">Top Gyms, MMA, Dance & Yoga</h2>
-            <p className="text-sm text-gray-500 mt-1">Try a studio pass or join a class — no membership needed.</p>
+            <h2 className="text-2xl font-semibold text-gray-50">
+              Day-pass gyms & studios
+            </h2>
+            <p className="text-sm text-gray-400 mt-1">
+              Drop into premium facilities without locking into a monthly
+              membership.
+            </p>
           </div>
-          <Link to="/explore" className="text-sm font-semibold text-orange-500">See all gyms →</Link>
+          <Link
+            to="/explore"
+            className="text-xs font-semibold text-gray-300 hover:text-white"
+          >
+            Browse all gyms →
+          </Link>
         </div>
 
         {loading ? (
-          <div className="text-gray-500">Loading gyms...</div>
-        ) : err ? (
-          <div className="text-red-500">Failed to load gyms.</div>
-        ) : gyms.length === 0 ? (
-          <div className="text-gray-500">No gyms available right now.</div>
+          <div className="text-sm text-gray-400">Loading gyms…</div>
+        ) : visible.length === 0 ? (
+          <div className="text-sm text-gray-500">
+            No gyms added yet — we’re onboarding hosts in your region.
+          </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {gyms.slice(0, 8).map((g) => (
-              <article key={g._id} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transform hover:-translate-y-1 transition">
-                <div className="relative h-44">
-                  <img src={g.images?.[0] || g.image || fallbackGymImage()} alt={g.name} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {visible.map((g) => (
+              <article
+                key={g._id}
+                className="rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-b from-white/5 via-white/0 to-white/5 hover:border-white/40 hover:shadow-[0_20px_70px_rgba(0,0,0,0.9)] transition-all"
+              >
+                <div className="relative h-40">
+                  <img
+                    src={g.images?.[0] || g.image || fallbackGymImage()}
+                    alt={g.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                  <div className="absolute top-3 left-3">
+                    <span className="px-2 py-1 rounded-full bg-black/60 border border-white/20 text-[10px] uppercase tracking-[0.2em] text-gray-100">
+                      Gym
+                    </span>
+                  </div>
                 </div>
 
-                <div className="p-4">
-                  <h3 className="font-semibold">{g.name}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{g.city}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="text-sm font-semibold text-orange-500">₹{g.price ?? "—"}</div>
-                    <div className="text-xs text-gray-400">{g.rating ?? "4.6"} ★</div>
+                <div className="p-4 flex flex-col gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-50 line-clamp-1">
+                      {g.name}
+                    </h3>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      {g.city || "City TBA"}
+                    </p>
                   </div>
 
-                  <div className="mt-4 flex gap-2">
-                    <Link to={`/gyms/${g._id}`} className="px-3 py-1 rounded-full bg-blue-600 text-white text-sm">View</Link>
-                    <Link to={`/booking/${g._id}`} className="px-3 py-1 rounded-full border border-gray-200 text-sm">Book</Link>
+                  <div className="flex items-center justify-between text-xs text-gray-300">
+                    <span className="inline-flex items-center gap-1">
+                      <Dumbbell size={14} />
+                      Day-pass
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Star size={14} className="text-yellow-300" />
+                      {g.rating ?? "4.6"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="text-sm font-bold text-gray-50">
+                      ₹{g.price ?? "—"}
+                      <span className="text-[11px] text-gray-400 font-normal">
+                        {" "}
+                        / day
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/gyms/${g._id}`}
+                        className="px-3 py-1.5 rounded-full bg-white/5 border border-white/15 text-[11px] text-gray-100 hover:bg-white/10"
+                      >
+                        View
+                      </Link>
+                      <Link
+                        to={`/booking/${g._id}`}
+                        className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white text-gray-900"
+                      >
+                        Book
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -410,126 +628,166 @@ function TopGymsSection() {
   );
 }
 
-// -----------------------------
-// TRENDING EXPERIENCES (mix)
-// -----------------------------
-function TrendingExperiencesSection() {
-  const [events, setEvents] = useState([]);
-  const [gyms, setGyms] = useState([]);
-  const [loading, setLoading] = useState(true);
+/* =========================================================
+   CATEGORY STRIP
+   - “Explore by vibe” chips/cards
+   ========================================================= */
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const [evRes, gymRes] = await Promise.all([API.get("/events"), API.get("/gyms")]);
-        const evData = evRes.data?.events || evRes.data || evRes;
-        const gymData = gymRes.data || gymRes;
-        if (!mounted) return;
-        setEvents(Array.isArray(evData) ? evData : []);
-        setGyms(Array.isArray(gymData) ? gymData : []);
-      } catch (err) {
-        console.error("Error loading trending:", err);
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
-      }
-    };
-    load();
-    return () => (mounted = false);
-  }, []);
-
-  const items = [
-    ...events.slice(0, 4).map((e) => ({ type: "event", data: e })),
-    ...gyms.slice(0, 4).map((g) => ({ type: "gym", data: g })),
-  ].slice(0, 8);
-
-  return (
-    <section className="max-w-7xl mx-auto px-6 py-16">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-3xl font-extrabold text-gray-900">Trending Experiences & Cultural Picks</h2>
-          <p className="text-sm text-gray-500 mt-1">Local favorites and cultural events loved by travelers.</p>
-        </div>
-        <Link to="/explore" className="text-sm font-semibold text-orange-500">Explore more →</Link>
-      </div>
-
-      {loading ? (
-        <div className="text-gray-500">Loading...</div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {items.map((item, idx) => (
-            <article key={idx} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-2xl transition">
-              <div className="relative h-44">
-                <img src={(item.type === "event" ? item.data.image : item.data.images?.[0] || item.data.image) || fallbackEventImage()} alt={item.data.name} className="w-full h-full object-cover" />
-              </div>
-
-              <div className="p-4">
-                <h3 className="font-semibold">{item.data.name}</h3>
-                <p className="text-xs text-gray-500 mt-1">{item.type === "event" ? item.data.location : item.data.city}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="text-sm text-gray-500">{item.type === "event" ? new Date(item.data.date).toLocaleDateString() : "Gym"}</div>
-                  <div className="text-lg font-bold text-orange-500">₹{item.data.price}</div>
-                </div>
-
-                <div className="mt-3 flex gap-2">
-                  <Link to={item.type === "event" ? `/events/${item.data._id}` : `/gyms/${item.data._id}`} className="px-3 py-1 rounded-full bg-blue-600 text-white text-sm">View</Link>
-                  <Link to={item.type === "event" ? "/events" : "/explore"} className="px-3 py-1 rounded-full border border-gray-200 text-sm">More</Link>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// -----------------------------
-// LOCAL DISCOVERY
-// -----------------------------
-function LocalDiscoverySection() {
-  const chips = ["Yoga", "Bootcamp", "Hiking", "Beach Workout", "Pilates", "MMA", "Dance"];
-  const navigate = useNavigate();
-
-  return (
-    <section className="max-w-7xl mx-auto px-6 py-12 bg-white/50 rounded-2xl">
-      <h3 className="text-2xl font-semibold mb-4">Discover locally</h3>
-      <div className="flex flex-wrap gap-3">
-        {chips.map((c) => (
-          <button
-            key={c}
-            onClick={() => navigate(`/explore?query=${encodeURIComponent(c)}`)}
-            className="px-4 py-2 rounded-full bg-white/90 border text-sm font-semibold hover:scale-[1.02] transition"
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// -----------------------------
-// HOW IT WORKS
-// -----------------------------
-function HowItWorksSection() {
-  const steps = [
-    { emoji: "🔎", title: "Discover", desc: "Find events and gyms near you." },
-    { emoji: "🧾", title: "Select", desc: "Choose the pass or event." },
-    { emoji: "💳", title: "Book", desc: "Secure checkout in seconds." },
-    { emoji: "🏃", title: "Attend", desc: "Show pass & enjoy the experience." },
+function CategoryStrip() {
+  const categories = [
+    { name: "MMA & Fight Clubs", emoji: "🥊" },
+    { name: "Yoga & Breathwork", emoji: "🧘" },
+    { name: "Dance Studios", emoji: "💃" },
+    { name: "Strength & Gym", emoji: "💪" },
+    { name: "CrossFit & HIIT", emoji: "🏋️" },
+    { name: "Outdoor & Trails", emoji: "⛰️" },
   ];
 
   return (
-    <section className="max-w-7xl mx-auto px-6 py-16">
-      <h2 className="text-3xl font-extrabold mb-8">How it works</h2>
-      <div className="grid md:grid-cols-4 gap-6">
-        {steps.map((s, i) => (
-          <div key={i} className="bg-white rounded-2xl p-6 shadow border border-gray-100 text-center">
-            <div className="text-4xl mb-3">{s.emoji}</div>
-            <div className="font-semibold mb-2">{s.title}</div>
-            <div className="text-sm text-gray-500">{s.desc}</div>
+    <section className="max-w-7xl mx-auto px-6 pb-6 pt-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm uppercase tracking-[0.25em] text-gray-400 font-semibold">
+          Explore by vibe
+        </h2>
+        <Link
+          to="/explore"
+          className="text-xs font-semibold text-gray-300 hover:text-white"
+        >
+          View all experiences →
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {categories.map((c) => (
+          <Link
+            key={c.name}
+            to={`/explore?query=${encodeURIComponent(c.name)}`}
+            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/0 to-white/10 hover:border-white/40 hover:shadow-[0_18px_60px_rgba(0,0,0,0.7)] transition-all p-4 flex flex-col items-start"
+          >
+            <span className="text-2xl mb-2">{c.emoji}</span>
+            <span className="text-xs font-semibold text-gray-100 leading-snug">
+              {c.name}
+            </span>
+            <span className="mt-2 text-[10px] text-gray-500 group-hover:text-gray-300">
+              Tap to explore
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   WHY PASSIIFY (VALUE PROP SECTION)
+   ========================================================= */
+
+function WhyPassiifySection() {
+  const items = [
+    {
+      title: "No contracts. Ever.",
+      desc: "Commit to the workout, not the membership. Every pass is flexible and short-term.",
+    },
+    {
+      title: "Travel-first design.",
+      desc: "Discover authentic local gyms, fight clubs and wellness spots in seconds.",
+    },
+    {
+      title: "Verified hosts.",
+      desc: "We manually review every partner so your experience feels safe and premium.",
+    },
+  ];
+
+  return (
+    <section className="max-w-7xl mx-auto px-6 py-12">
+      <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/5 via-white/0 to-white/10 p-6 md:p-8">
+        <div className="grid lg:grid-cols-[1.1fr,1.2fr] gap-8 items-center">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-semibold text-gray-50">
+              For movers, travellers & Gen-Z who want to{" "}
+              <span
+                style={{
+                  backgroundImage: `linear-gradient(90deg, ${THEME.accent2}, ${THEME.accent1})`,
+                  WebkitBackgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                try everything once.
+              </span>
+            </h2>
+            <p className="mt-3 text-sm md:text-base text-gray-300 max-w-lg">
+              Passiify lets you experiment with new disciplines — from Muay Thai
+              to rooftop yoga — without locking into long plans or awkward sales
+              tours.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-4">
+            {items.map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 flex flex-col justify-between"
+              >
+                <div className="text-xs uppercase tracking-[0.25em] text-gray-500 mb-2">
+                  PASSIIFY
+                </div>
+                <h3 className="text-sm font-semibold text-gray-50">
+                  {item.title}
+                </h3>
+                <p className="mt-2 text-xs text-gray-300">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   HOW IT WORKS (4 STEPS)
+   ========================================================= */
+
+function HowItWorksSection() {
+  const steps = [
+    {
+      emoji: "🌍",
+      title: "Drop a pin",
+      desc: "Choose your city or let Passiify find where you are.",
+    },
+    {
+      emoji: "🧾",
+      title: "Pick your vibe",
+      desc: "Filter by MMA, yoga, dance, strength or outdoor.",
+    },
+    {
+      emoji: "💳",
+      title: "Book your pass",
+      desc: "Instant checkout. No subscriptions. No lock-ins.",
+    },
+    {
+      emoji: "🏁",
+      title: "Show up & move",
+      desc: "Flash your pass at the venue and enjoy the experience.",
+    },
+  ];
+
+  return (
+    <section className="max-w-7xl mx-auto px-6 py-10">
+      <h2 className="text-2xl font-semibold text-gray-50 mb-6">
+        How Passiify works
+      </h2>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {steps.map((step) => (
+          <div
+            key={step.title}
+            className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col"
+          >
+            <div className="text-2xl mb-2">{step.emoji}</div>
+            <div className="text-sm font-semibold text-gray-50">
+              {step.title}
+            </div>
+            <div className="mt-2 text-xs text-gray-300">{step.desc}</div>
           </div>
         ))}
       </div>
@@ -537,71 +795,231 @@ function HowItWorksSection() {
   );
 }
 
-// -----------------------------
-// CTA
-// -----------------------------
-function CTASection() {
+/* =========================================================
+   LOCAL DISCOVERY INLINE (chips section)
+   ========================================================= */
+
+function LocalDiscoveryInline() {
+  const chips = [
+    "Morning yoga",
+    "Evening MMA",
+    "Beach workout",
+    "Dance cardio",
+    "Pilates",
+    "Strength club",
+  ];
+
+  const handleClick = (q) => {
+    window.location.href = `/explore?query=${encodeURIComponent(q)}`;
+  };
+
   return (
-    <section className="relative overflow-hidden">
-      <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${COLORS.inkBlack}, ${COLORS.warmCoral})`, opacity: 0.95 }} />
-      <div className="relative max-w-4xl mx-auto px-6 py-20 text-center text-white">
-        <h2 className="text-4xl font-black mb-4">Ready to Move Different?</h2>
-        <p className="text-lg text-blue-100 mb-8 max-w-2xl mx-auto">Join thousands of travelers discovering unforgettable fitness experiences worldwide</p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/events" className="px-8 py-4 bg-white text-gray-900 font-bold rounded-xl">Explore Events</Link>
-          <Link to="/explore" className="px-8 py-4 bg-orange-500 text-white font-bold rounded-xl">Find Gyms Near You</Link>
+    <section className="max-w-7xl mx-auto px-6 py-10">
+      <div className="rounded-2xl border border-white/10 bg-black/40 px-5 py-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 className="text-lg font-semibold text-gray-50">
+            Discover something close tonight
+          </h3>
+          <p className="text-xs text-gray-400 max-w-xs">
+            Quick filters that work anywhere — perfect for last-minute plans.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {chips.map((c) => (
+            <button
+              key={c}
+              onClick={() => handleClick(c)}
+              className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-gray-100 hover:bg-white/10 transition"
+            >
+              {c}
+            </button>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-// -----------------------------
-// Page assembly (default export)
-// -----------------------------
+/* =========================================================
+   CTA SECTION
+   ========================================================= */
+
+function CTASection() {
+  return (
+    <section className="relative overflow-hidden mt-4">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `linear-gradient(120deg, ${THEME.accent1}, ${THEME.accent2})`,
+          opacity: 0.97,
+        }}
+      />
+      <div className="relative max-w-4xl mx-auto px-6 py-16 text-center text-gray-900">
+        <h2 className="text-3xl font-black mb-3">
+          Ready to move differently on your next trip?
+        </h2>
+        <p className="text-sm md:text-base text-black/80 mb-7 max-w-2xl mx-auto">
+          Join travellers who treat every new city like a playground — book
+          fight clubs, studios and workouts in a few taps.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            to="/events"
+            className="px-6 py-3 bg-black text-white font-semibold rounded-xl text-sm md:text-base"
+          >
+            Explore events
+          </Link>
+          <Link
+            to="/explore"
+            className="px-6 py-3 border border-black/40 text-black font-semibold rounded-xl text-sm md:text-base bg-white/40"
+          >
+            Find gyms & studios
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+function Footer() {
+  return (
+    <footer className="border-t border-white/10 mt-12 bg-black/40">
+      <div className="max-w-7xl mx-auto px-6 py-10 grid md:grid-cols-3 gap-6">
+        <div>
+          <h4 className="text-xl font-bold text-gray-50">Passiify</h4>
+          <p className="text-xs text-gray-400 mt-2 max-w-xs">
+            One-day fitness passes and curated events for travellers, expats
+            and locals who hate long-term contracts.
+          </p>
+        </div>
+
+        <div>
+          <h5 className="text-sm font-semibold text-gray-200 mb-2">
+            Quick links
+          </h5>
+          <ul className="text-xs text-gray-400 space-y-1.5">
+            <li>
+              <Link to="/explore" className="hover:text-white">
+                Explore
+              </Link>
+            </li>
+            <li>
+              <Link to="/partner" className="hover:text-white">
+                Partner with us
+              </Link>
+            </li>
+            <li>
+              <Link to="/about" className="hover:text-white">
+                About
+              </Link>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 className="text-sm font-semibold text-gray-200 mb-2">
+            Contact
+          </h5>
+          <p className="text-xs text-gray-400">support@passiify.com</p>
+          <p className="text-xs text-gray-500 mt-3">
+            © {new Date().getFullYear()} Passiify. All rights reserved.
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* =========================================================
+   PAGE ASSEMBLY (DEFAULT EXPORT)
+   - Fetches /events and /gyms once and passes data to sections
+   ========================================================= */
+
 export default function Home() {
-  // central onSearch can be forwarded to sections if desired
-  const onSearch = (q, t) => {
-    // placeholder - sections individually navigate by default
-    console.log("search requested:", q, t);
+  const [events, setEvents] = useState([]);
+  const [gyms, setGyms] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingGyms, setLoadingGyms] = useState(true);
+  const [topEvent, setTopEvent] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const [evRes, gymRes] = await Promise.all([
+          API.get("/events"),
+          API.get("/gyms"),
+        ]);
+
+        if (!mounted) return;
+
+        const evData = evRes.data?.events || evRes.data || evRes;
+        const gymData = gymRes.data || gymRes;
+
+        const evArr = Array.isArray(evData) ? evData : [];
+        const gymArr = Array.isArray(gymData) ? gymData : [];
+
+        setEvents(evArr);
+        setGyms(gymArr);
+
+        // pick earliest upcoming or first as hero top event
+        const sorted = [...evArr].sort(
+          (a, b) => new Date(a.date) - new Date(b.date)
+        );
+        const upcoming =
+          sorted.find((e) => new Date(e.date) >= new Date()) || sorted[0] || null;
+        setTopEvent(upcoming);
+      } catch (err) {
+        console.error("Error loading home data:", err);
+      } finally {
+        if (!mounted) return;
+        setLoadingEvents(false);
+        setLoadingGyms(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleSearch = (q, t) => {
+    // central place if you add analytics later
+    console.log("Passiify search", { query: q, type: t });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F7F5F2] via-white to-[#C8C8C8]/20 text-gray-900">
-      <HeroSection onSearch={onSearch} />
-      <main className="space-y-8">
-        <CategoriesSection />
-        <AdventureEventsSection />
-        <TopGymsSection />
-        <TrendingExperiencesSection />
-        <LocalDiscoverySection />
+    <div
+      className="min-h-screen text-gray-100"
+      style={{
+        backgroundColor: THEME.bg,
+        backgroundImage:
+          "radial-gradient(circle at top, rgba(248, 216, 181, 0.16), transparent 55%)",
+      }}
+    >
+      {/* HERO */}
+      <Hero topEvent={topEvent} onSearch={handleSearch} />
+
+      {/* MAIN CONTENT */}
+      <main className="space-y-4">
+        <StatsStrip />
+        <TravelCityStrip />
+        <UpcomingEventsSection events={events} loading={loadingEvents} />
+        <DayPassGymsSection gyms={gyms} loading={loadingGyms} />
+        <CategoryStrip />
+        <WhyPassiifySection />
         <HowItWorksSection />
+        <LocalDiscoveryInline />
         <CTASection />
       </main>
 
-      <footer className="bg-white border-t mt-12">
-        <div className="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-3 gap-6">
-          <div>
-            <h4 className="text-2xl font-bold">Passiify</h4>
-            <p className="text-sm text-gray-600 mt-2">One-day fitness passes and curated events for travelers & locals.</p>
-          </div>
-
-          <div>
-            <h5 className="font-semibold mb-2">Quick Links</h5>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li><Link to="/explore" className="hover:text-orange-500">Explore</Link></li>
-              <li><Link to="/partner" className="hover:text-orange-500">Partner with us</Link></li>
-              <li><Link to="/about" className="hover:text-orange-500">About</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <h5 className="font-semibold mb-2">Contact</h5>
-            <p className="text-sm text-gray-600">support@passiify.com</p>
-            <p className="text-sm text-gray-600 mt-2">© {new Date().getFullYear()} Passiify</p>
-          </div>
-        </div>
-      </footer>
+      {/* FOOTER */}
+      <Footer />
     </div>
   );
 }
