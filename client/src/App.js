@@ -23,7 +23,7 @@ import EventsPage from "./pages/EventsPage";
 import EventDetail from "./pages/EventDetail";
 import BookEvent from "./pages/BookEvent";
 import MyEventBookings from "./pages/MyEventBookings";
-import HostEvent from "./pages/HostEvent";   // ⭐ added
+import HostEvent from "./pages/HostEvent"; // ⭐ added
 
 // 🔐 Auth Pages
 import LoginPage from "./pages/LoginPage";
@@ -58,10 +58,7 @@ const App = () => {
         {/* 🎟️ Event Booking Flow */}
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetail />} />
-        
-        {/* ⭐ CREATE EVENT PAGE */}
         <Route path="/create-event" element={<HostEvent />} />
-
         <Route path="/book-event/:id" element={<BookEvent />} />
         <Route path="/my-event-bookings" element={<MyEventBookings />} />
 
@@ -70,7 +67,11 @@ const App = () => {
 
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* 👇 NEW: support both /register and /signup */}
+        <Route path="/register" element={<SignupPage />} />
         <Route path="/signup" element={<SignupPage />} />
+
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link, useLocation } from "react-router-dom";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import {
   CheckCircle,
@@ -9,6 +9,7 @@ import {
   IndianRupee,
   Download,
   Users,
+  Ticket,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import API from "../utils/api";
@@ -16,28 +17,32 @@ import API from "../utils/api";
 export default function BookingSuccess() {
   const { id } = useParams();
   const location = useLocation();
-  const type = location.state?.type || "gym"; // 'event' or 'gym'
-  const name = location.state?.name || "";
+  const navigate = useNavigate();
+
+  // 'event' or 'gym' – default to gym if not passed
+  const type = location.state?.type || "gym";
+
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // 🎉 Confetti animation
+  // 🎉 Confetti animation on mount
   useEffect(() => {
     const duration = 1500;
     const end = Date.now() + duration;
+
     const frame = () => {
       confetti({
-        particleCount: 6,
-        startVelocity: 30,
+        particleCount: 10,
+        startVelocity: 28,
         spread: 70,
-        origin: { x: Math.random(), y: Math.random() - 0.2 },
-        colors: ["#2563eb", "#f97316", "#22c55e"],
+        origin: { x: Math.random(), y: Math.random() - 0.15 },
+        colors: ["#FF4B5C", "#FF9F68", "#22c55e"],
       });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
+
     frame();
-    return () => confetti.reset();
   }, []);
 
   // 🧾 Fetch booking data
@@ -58,18 +63,15 @@ export default function BookingSuccess() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        // ✅ Correct: backend returns { success, booking }
-       // ✅ Handle both response formats
-if (res.data?.booking) {
-  setBooking(res.data.booking);
-} else if (res.data?._id) {
-  // Direct booking object returned
-  setBooking(res.data);
-} else {
-  console.warn("⚠️ Unexpected booking response:", res.data);
-  setError("Booking data not found.");
-}
-
+        // Handle both shapes: { booking } or direct booking
+        if (res.data?.booking) {
+          setBooking(res.data.booking);
+        } else if (res.data?._id) {
+          setBooking(res.data);
+        } else {
+          console.warn("⚠️ Unexpected booking response:", res.data);
+          setError("Booking data not found.");
+        }
       } catch (err) {
         console.error("Error fetching booking:", err);
         setError("Could not load your booking details.");
@@ -84,54 +86,68 @@ if (res.data?.booking) {
   // 📄 Generate PDF Ticket
   const handleDownload = () => {
     if (!booking) return;
+
     const item = type === "event" ? booking.event : booking.gym;
     const doc = new jsPDF();
 
-    doc.setFillColor("#2563eb");
+    // Header bar
+    doc.setFillColor("#111827");
     doc.rect(0, 0, 210, 40, "F");
-    doc.setTextColor("#ffffff");
+    doc.setTextColor("#FFFFFF");
     doc.setFontSize(22);
     doc.text("Passiify", 15, 25);
     doc.setFontSize(10);
     doc.text(
       type === "event"
         ? "Your Adventure, Your Story — Passiify Events"
-        : "Your Fitness, Your Way — Passiify Gym",
+        : "Your Fitness, Your Way — Passiify One-Day Pass",
       15,
       32
     );
 
-    doc.setFillColor("#ffffff");
+    // Card
+    doc.setFillColor("#FFFFFF");
     doc.roundedRect(10, 50, 190, 120, 5, 5, "F");
-    doc.setFontSize(18);
-    doc.setTextColor("#2563eb");
+    doc.setFontSize(17);
+    doc.setTextColor("#111827");
     doc.text(
       type === "event" ? "Event Booking Confirmation" : "Gym Booking Confirmation",
       15,
       65
     );
 
-    doc.setDrawColor("#e5e7eb");
+    doc.setDrawColor("#E5E7EB");
     doc.line(15, 70, 195, 70);
 
-    doc.setFontSize(13);
+    doc.setFontSize(12);
     doc.setTextColor("#374151");
 
     if (type === "event") {
-      doc.text(`🎉 Event: ${item?.name || "Passiify Event"}`, 15, 85);
-      doc.text(`📍 Location: ${item?.location || "Venue"}`, 15, 95);
+      doc.text(`Event: ${item?.name || "Passiify Event"}`, 15, 85);
+      doc.text(`Location: ${item?.location || "Venue"}`, 15, 95);
       doc.text(
-        `📅 Date: ${item?.date ? new Date(item.date).toLocaleDateString("en-IN") : "TBA"}`,
+        `Date: ${
+          item?.date
+            ? new Date(item.date).toLocaleDateString("en-IN")
+            : "TBA"
+        }`,
         15,
         105
       );
-      doc.text(`🎟️ Tickets: ${booking?.tickets || 1}`, 15, 115);
-      doc.text(`💰 Price: ₹${booking?.totalPrice || item?.price || "N/A"}`, 15, 125);
-    } else {
-      doc.text(`🏋️ Gym: ${item?.name || "Fitness Centre"}`, 15, 85);
-      doc.text(`📍 City: ${item?.city || "City"}`, 15, 95);
+      doc.text(`Tickets: ${booking?.tickets || 1}`, 15, 115);
       doc.text(
-        `📅 Date: ${
+        `Total: ₹${booking?.totalPrice || item?.price || "N/A"}`,
+        15,
+        125
+      );
+      if (booking?._id) {
+        doc.text(`Booking ID: ${booking._id}`, 15, 135);
+      }
+    } else {
+      doc.text(`Gym: ${item?.name || "Fitness Centre"}`, 15, 85);
+      doc.text(`City: ${item?.city || "City"}`, 15, 95);
+      doc.text(
+        `Date: ${
           booking?.date
             ? new Date(booking.date).toLocaleDateString("en-IN")
             : "TBA"
@@ -139,145 +155,247 @@ if (res.data?.booking) {
         15,
         105
       );
-      doc.text(`💰 Price: ₹${booking?.price || "N/A"}`, 15, 115);
-      doc.text(`🔖 Booking ID: ${booking?.bookingCode || "N/A"}`, 15, 125);
+      doc.text(
+        `Pass: ${booking?.duration || 1}-Day Access`,
+        15,
+        115
+      );
+      doc.text(
+        `Price: ₹${booking?.price || item?.price || "N/A"}`,
+        15,
+        125
+      );
+      if (booking?.bookingCode || booking?._id) {
+        doc.text(
+          `Booking ID: ${booking?.bookingCode || booking._id}`,
+          15,
+          135
+        );
+      }
     }
 
-    doc.setFontSize(10);
-    doc.setTextColor("#6b7280");
+    doc.setFontSize(9);
+    doc.setTextColor("#6B7280");
     doc.text(
       "Please show this ticket at the venue. Verified via Passiify Dashboard.",
       15,
-      145,
+      152,
       { maxWidth: 180 }
     );
 
-    doc.setFontSize(10);
-    doc.setTextColor("#9ca3af");
+    doc.setFontSize(9);
+    doc.setTextColor("#9CA3AF");
     doc.text(
-      "© Passiify - India's #1 Fitness & Adventure Booking Platform",
+      "© Passiify — India’s flexible fitness & event pass platform.",
       15,
       190
     );
 
-    doc.save(`Passiify_${type}_Ticket_${booking?._id || "Booking"}.pdf`);
+    doc.save(
+      `Passiify_${type}_Ticket_${booking?._id || "Booking"}.pdf`
+    );
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-600 text-lg font-medium">
+      <div
+        className="min-h-screen flex items-center justify-center text-sm sm:text-base text-gray-200"
+        style={{
+          backgroundColor: "#050308",
+          backgroundImage:
+            "radial-gradient(circle at top, rgba(248,216,181,0.18), transparent 55%)",
+        }}
+      >
         Fetching your booking details...
       </div>
     );
+  }
 
-  if (error || !booking)
+  if (error || !booking) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-gray-600 text-center px-4">
-        <p className="mb-4 text-lg">⚠️ {error || "Booking not found."}</p>
-        <Link
-          to={type === "event" ? "/events" : "/explore"}
-          className="bg-gradient-to-r from-blue-600 to-orange-500 text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition"
-        >
-          Go Back
-        </Link>
+      <div
+        className="min-h-screen flex flex-col items-center justify-center text-center px-4 text-gray-100"
+        style={{
+          backgroundColor: "#050308",
+          backgroundImage:
+            "radial-gradient(circle at top, rgba(248,216,181,0.18), transparent 55%)",
+        }}
+      >
+        <p className="mb-3 text-base sm:text-lg">⚠️ {error || "Booking not found."}</p>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <button
+            onClick={() => navigate(-1)}
+            className="px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-white/5 border border-white/25 hover:border-white/60 transition"
+          >
+            Go Back
+          </button>
+          <Link
+            to={type === "event" ? "/events" : "/explore"}
+            className="px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-gradient-to-r from-[#FF4B5C] to-[#FF9F68] text-gray-950 shadow-[0_18px_60px_rgba(0,0,0,0.9)] hover:opacity-95"
+          >
+            Browse {type === "event" ? "Events" : "Gyms"}
+          </Link>
+        </div>
       </div>
     );
+  }
 
   const item = type === "event" ? booking.event : booking.gym;
-  const formattedDate = new Date(
-    type === "event" ? item?.date : booking?.date
-  ).toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+
+  const formattedDate = (() => {
+    const rawDate = type === "event" ? item?.date : booking?.date;
+    if (!rawDate) return "Date not available";
+    return new Date(rawDate).toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  })();
+
+  const displayAmount =
+    booking?.totalPrice || booking?.price || item?.price || "—";
+
+  const shortId = (booking?._id || "").slice(-6).toUpperCase() || "N/A";
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-16 bg-gradient-to-b from-white via-orange-50 to-white text-gray-800">
-      <div className="relative bg-white rounded-[28px] shadow-[0_8px_40px_rgba(0,0,0,0.08)] max-w-lg w-full border border-gray-100 overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-orange-500 text-white py-10 px-8 text-center relative flex flex-col items-center">
-          <CheckCircle className="w-16 h-16 text-yellow-300 drop-shadow-lg animate-bounce mb-4" />
-          <h1 className="text-3xl font-extrabold tracking-wide mb-2">
-            {type === "event" ? "Event Booked 🎉" : "Booking Confirmed 🎉"}
-          </h1>
-          <p className="text-blue-100 text-md font-medium mb-4">
-            {type === "event"
-              ? "Your spot has been reserved for this amazing experience!"
-              : "Your 1-Day Fitness Pass is successfully booked!"}
-          </p>
-          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 bg-white text-blue-700 font-semibold text-sm px-6 py-2 rounded-full shadow-md border border-blue-100">
-            {type === "event" ? "Event Booking" : "Booking ID"}:{" "}
-            {booking?._id?.slice(-6).toUpperCase() || "N/A"}
-          </div>
-        </div>
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-10 sm:py-16"
+      style={{
+        backgroundColor: "#050308",
+        backgroundImage:
+          "radial-gradient(circle at top, rgba(248,216,181,0.16), transparent 55%)",
+      }}
+    >
+      {/* Ticket wrapper */}
+      <div className="relative max-w-xl w-full">
+        {/* Glow behind */}
+        <div className="absolute inset-0 -z-10 blur-3xl opacity-60 bg-[radial-gradient(circle_at_top,_rgba(255,159,104,0.45),_transparent_55%)]" />
 
-        {/* Booking Summary */}
-        <div className="p-8 mt-8">
-          <div className="bg-gradient-to-br from-white to-orange-50 rounded-2xl p-6 border border-gray-200 shadow-inner space-y-3">
-            <h3 className="text-2xl font-bold text-blue-700 mb-2 tracking-tight">
-              {item?.name || (type === "event" ? "Event" : "Fitness Centre")}
-            </h3>
+        <div className="relative bg-black/70 border border-white/15 rounded-[28px] shadow-[0_24px_90px_rgba(0,0,0,0.95)] overflow-hidden">
+          {/* HEADER band */}
+          <div className="relative px-6 sm:px-8 pt-8 pb-10 bg-[radial-gradient(circle_at_top,_#111827,_#030712)] border-b border-white/10">
+            <div className="flex flex-col items-center text-center">
+              <CheckCircle className="w-14 h-14 text-emerald-400 drop-shadow-[0_0_22px_rgba(16,185,129,0.7)] mb-3" />
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-wide">
+                {type === "event" ? "Event Booked" : "Pass Confirmed"}
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-400 mt-2 max-w-sm">
+                {type === "event"
+                  ? "Your spot is locked in. See you at the event."
+                  : "Your one-day pass is live. Show up, scan in and train."}
+              </p>
 
-            <div className="space-y-2 text-gray-700 text-md">
-              <p className="flex items-center">
-                <MapPin className="w-4 h-4 mr-2 text-orange-500" />{" "}
-                {item?.location || item?.city || "Location"}
-              </p>
-              <p className="flex items-center">
-                <CalendarDays className="w-4 h-4 mr-2 text-blue-600" />{" "}
-                {formattedDate}
-              </p>
-              {type === "event" ? (
-                <p className="flex items-center">
-                  <Users className="w-4 h-4 mr-2 text-orange-500" />{" "}
-                  {booking?.tickets || 1} Ticket(s)
-                </p>
-              ) : (
-                <p className="flex items-center">
-                  <Dumbbell className="w-4 h-4 mr-2 text-orange-500" /> 1-Day
-                  Pass
-                </p>
-              )}
-              <p className="flex items-center font-semibold text-gray-900">
-                <IndianRupee className="w-4 h-4 mr-1 text-green-600" />{" "}
-                {booking?.totalPrice || booking?.price || item?.price || "—"}
-              </p>
+              {/* Mini ticket label */}
+              <div className="mt-5 inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-white/5 border border-white/20 text-[11px] font-medium text-gray-100">
+                <Ticket className="w-3.5 h-3.5 text-orange-300" />
+                <span>
+                  {type === "event" ? "Event Booking" : "Gym Booking"} ·{" "}
+                  <span className="text-orange-300">#{shortId}</span>
+                </span>
+              </div>
             </div>
+
+            {/* Decorative perforation circle */}
+            <div className="absolute -bottom-3 left-10 w-6 h-6 rounded-full bg-[#050308] border border-white/10" />
+            <div className="absolute -bottom-3 right-10 w-6 h-6 rounded-full bg-[#050308] border border-white/10" />
           </div>
 
-          {/* Buttons */}
-          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={handleDownload}
-              className="bg-gradient-to-r from-green-500 to-lime-500 text-white font-semibold py-3 px-8 rounded-xl shadow-md hover:scale-105 hover:shadow-lg transition-all text-center flex items-center justify-center gap-2"
-            >
-              <Download className="w-5 h-5" /> Download Ticket
-            </button>
-            <Link
-              to={type === "event" ? "/my-event-bookings" : "/my-bookings"}
-              className="bg-gradient-to-r from-blue-600 to-orange-500 text-white font-semibold py-3 px-8 rounded-xl shadow-lg hover:scale-105 hover:shadow-xl transition-all text-center"
-            >
-              View My {type === "event" ? "Event" : "Gym"} Bookings
-            </Link>
-          </div>
+          {/* BODY / TICKET CONTENT */}
+          <div className="px-6 sm:px-8 py-7 bg-gradient-to-b from-black/70 via-black/80 to-black/90 text-gray-100">
+            {/* Main card */}
+            <div className="bg-white/5 border border-white/12 rounded-2xl px-5 py-4 sm:px-6 sm:py-5 shadow-[0_16px_60px_rgba(0,0,0,0.9)]">
+              <h2 className="text-lg sm:text-xl font-semibold mb-1 truncate">
+                {item?.name ||
+                  (type === "event" ? "Passiify Event" : "Fitness Centre")}
+              </h2>
 
-          <p className="text-center text-gray-500 text-sm mt-8">
-            {type === "event" ? (
-              <>
-                ✨ Thank you for trusting{" "}
-                <span className="text-blue-700 font-semibold">Passiify</span> — 
-                your home for fitness & adventures.
-              </>
-            ) : (
-              <>
-                💪 Thank you for choosing{" "}
-                <span className="text-blue-700 font-semibold">Passiify</span> — 
-                your one-day fitness freedom.
-              </>
-            )}
-          </p>
+              <p className="text-[11px] sm:text-xs text-gray-400 mb-4">
+                {type === "event"
+                  ? "Hosted via Passiify Events"
+                  : "Verified one-day access via Passiify"}
+              </p>
+
+              <div className="grid grid-cols-2 gap-4 text-[11px] sm:text-xs">
+                {/* Location */}
+                <div className="space-y-1.5">
+                  <p className="text-gray-400 uppercase tracking-wide text-[10px]">
+                    Location
+                  </p>
+                  <p className="flex items-center text-gray-100">
+                    <MapPin className="w-3.5 h-3.5 mr-1.5 text-orange-300" />
+                    {item?.location || item?.city || "TBA"}
+                  </p>
+                </div>
+
+                {/* Date */}
+                <div className="space-y-1.5">
+                  <p className="text-gray-400 uppercase tracking-wide text-[10px]">
+                    Date
+                  </p>
+                  <p className="flex items-center text-gray-100">
+                    <CalendarDays className="w-3.5 h-3.5 mr-1.5 text-sky-300" />
+                    {formattedDate}
+                  </p>
+                </div>
+
+                {/* Pass / Tickets */}
+                <div className="space-y-1.5">
+                  <p className="text-gray-400 uppercase tracking-wide text-[10px]">
+                    {type === "event" ? "Tickets" : "Pass Type"}
+                  </p>
+                  {type === "event" ? (
+                    <p className="flex items-center text-gray-100">
+                      <Users className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
+                      {booking?.tickets || 1} ticket
+                      {booking?.tickets > 1 ? "s" : ""}
+                    </p>
+                  ) : (
+                    <p className="flex items-center text-gray-100">
+                      <Dumbbell className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
+                      {booking?.duration || 1}-Day pass
+                    </p>
+                  )}
+                </div>
+
+                {/* Amount */}
+                <div className="space-y-1.5">
+                  <p className="text-gray-400 uppercase tracking-wide text-[10px]">
+                    Amount
+                  </p>
+                  <p className="flex items-center text-gray-100 font-semibold">
+                    <IndianRupee className="w-3.5 h-3.5 mr-1.5 text-lime-300" />
+                    {displayAmount}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleDownload}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 text-gray-950 text-xs sm:text-sm font-semibold py-3 shadow-[0_18px_60px_rgba(0,0,0,0.95)] hover:scale-[1.01] hover:shadow-[0_22px_70px_rgba(0,0,0,1)] transition-transform"
+              >
+                <Download className="w-4 h-4" />
+                Download Ticket
+              </button>
+
+              <Link
+                to={type === "event" ? "/my-event-bookings" : "/my-bookings"}
+                className="flex-1 inline-flex items-center justify-center rounded-xl bg-white/5 border border-white/20 text-xs sm:text-sm font-semibold py-3 text-gray-100 hover:border-white/60 transition"
+              >
+                View my {type === "event" ? "event" : "gym"} bookings
+              </Link>
+            </div>
+
+            {/* Subtext */}
+            <p className="mt-6 text-[11px] sm:text-xs text-gray-500 text-center leading-relaxed">
+              Show this ticket at the venue along with a valid ID. Your booking is
+              securely stored in your{" "}
+              <span className="text-gray-200 font-medium">Passiify dashboard</span>.
+            </p>
+          </div>
         </div>
       </div>
     </div>
