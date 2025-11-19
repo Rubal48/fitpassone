@@ -1,45 +1,56 @@
+// routes/userRoutes.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
-import { updateUserProfile } from "../controllers/userController.js";
 import verifyToken from "../middleware/authMiddleware.js";
+import { updateUserProfile } from "../controllers/userController.js";
 
 const router = express.Router();
-// ✅ Update user profile (name/email)
-router.put("/update-profile/:id", verifyToken, updateUserProfile);
 
-// ✅ Token Generator
+/* ========================
+   🔐 TOKEN GENERATOR
+========================= */
 const generateToken = (id, expiresIn = "7d") =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn });
 
+const generateCode = () =>
+  Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+
 /* ========================
-   🟢 REGISTER ROUTE (Fixed)
-   ======================== */
+   🟢 REGISTER USER + SEND EMAIL OTP
+========================= */
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
     const emailLower = email.trim().toLowerCase();
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email: emailLower });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // ⚙️ DO NOT HASH HERE — User model pre('save') handles hashing
+    // Create user
+    const verificationCode = generateCode();
     const user = await User.create({
       name,
       email: emailLower,
-      password: password.trim(), // plain text; will be hashed automatically
+      password: password.trim(),
+      verificationCode,
+      verificationCodeExpiresAt: Date.now() + 15 * 60 * 1000, // 15 mins
     });
 
+    // Send OTP email
+    await sendEmail(
+      user.email,
+      "Verify your Passiify account",
+      `<p>Your verification code is <b>${verificationCode}</b></p>`
+    );
+
     res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      token: generateToken(user._id),
+      message: "User registered. Verification code sent to email.",
+      userId: user._id,
     });
   } catch (error) {
     console.error("Register Error:", error);
@@ -48,28 +59,98 @@ router.post("/register", async (req, res) => {
 });
 
 /* ========================
-   🟣 LOGIN ROUTE (Cleaned)
-   ======================== */
+   🔵 VERIFY EMAIL (OTP)
+========================= */
+router.post("/verify-email", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isVerified)
+      return res.json({ message: "User already verified" });
+
+    if (user.verificationCode !== code)
+      return res.status(400).json({ message: "Invalid verification code" });
+
+    if (user.verificationCodeExpiresAt < Date.now())
+      return res.status(400).json({ message: "Verification code expired" });
+
+    user.isVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpiresAt = null;
+
+    await user.save();
+
+    res.json({ message: "Email verified successfully!" });
+  } catch (err) {
+    console.error("Email Verify Error:", err);
+    res.status(500).json({ message: "Server error verifying email" });
+  }
+});
+
+/* ========================
+   🔄 RESEND VERIFICATION CODE
+========================= */
+router.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isVerified)
+      return res
+        .status(400)
+        .json({ message: "Account already verified" });
+
+    const newCode = generateCode();
+    user.verificationCode = newCode;
+    user.verificationCodeExpiresAt = Date.now() + 15 * 60 * 1000;
+    await user.save();
+
+    await sendEmail(
+      user.email,
+      "Your new Passiify verification code",
+      `<p>Your new code is <b>${newCode}</b></p>`
+    );
+
+    res.json({ message: "Verification code resent to email" });
+  } catch (error) {
+    console.error("Resend Code Error:", error);
+    res.status(500).json({ message: "Server error sending code" });
+  }
+});
+
+/* ========================
+   🟣 LOGIN (NOW TRACKS LAST LOGIN)
+========================= */
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     const emailLower = email.trim().toLowerCase();
 
     const user = await User.findOne({ email: emailLower });
-    if (!user) {
+    if (!user)
       return res.status(400).json({ message: "Invalid email or password" });
-    }
 
-    // use model's matchPassword method (simpler & safer)
+    // Check password
     const isMatch = await user.matchPassword(password.trim());
-    if (!isMatch) {
+    if (!isMatch)
       return res.status(400).json({ message: "Invalid email or password" });
-    }
+
+    // Optional: Block login if email not verified ❗
+    // if (!user.isVerified)
+    //   return res.status(401).json({ message: "Verify your email first" });
+
+    await user.markLogin(); // Track last login
 
     res.json({
       _id: user._id,
       name: user.name,
       email: user.email,
+      role: user.role,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -80,71 +161,75 @@ router.post("/login", async (req, res) => {
 
 /* ========================
    🔵 FORGOT PASSWORD
-   ======================== */
+========================= */
 router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
     const emailLower = email.trim().toLowerCase();
 
     const user = await User.findOne({ email: emailLower });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Generate reset token valid for 15 minutes
-    const resetToken = generateToken(user._id, "15m");
+    const resetToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpiresAt = Date.now() + 15 * 60 * 1000;
+    await user.save();
+
     const resetURL = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
 
-    const message = `
-      <h2 style="color:#1e3a8a;">Hey ${user.name || "Fitness Champ"},</h2>
-      <p style="font-size:16px; color:#475569;">
-        We received a request to reset your password for your Passiify account.<br/>
-        Click below to set a new one.
-      </p>
-      <div style="text-align:center; margin:30px 0;">
-        <a href="${resetURL}" 
-           style="background:linear-gradient(90deg,#2563eb,#f97316);
-           color:white;padding:12px 24px;border-radius:6px;
-           text-decoration:none;font-weight:bold;font-size:16px;">
-          🔐 Reset My Password
-        </a>
-      </div>
-      <p style="font-size:14px; color:#64748b;">
-        This link expires in <strong>15 minutes</strong>.
-      </p>
-    `;
+    await sendEmail(
+      user.email,
+      "Reset your Passiify password",
+      `<p>Click to reset: <a href="${resetURL}">${resetURL}</a></p>`
+    );
 
-    await sendEmail(user.email, "🔐 Reset your Passiify password", message);
-
-    res.json({ message: "Reset link sent to your email address" });
+    res.json({ message: "Reset link sent to email" });
   } catch (error) {
-    console.error("Forgot Password Error:", error.message);
-    res.status(500).json({ message: "Server error while sending reset link" });
+    console.error("Forgot Password Error:", error);
+    res.status(500).json({ message: "Server error sending reset link" });
   }
 });
 
 /* ========================
    🟠 RESET PASSWORD
-   ======================== */
+========================= */
 router.post("/reset-password/:token", async (req, res) => {
   try {
     const { token } = req.params;
     const { password } = req.body;
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
 
-    if (!user) return res.status(404).json({ message: "Invalid token" });
+    const user = await User.findOne({
+      _id: decoded.id,
+      resetPasswordToken: token,
+      resetPasswordExpiresAt: { $gt: Date.now() },
+    });
 
-    // 🔒 Automatically re-hashed by model pre('save')
+    if (!user)
+      return res.status(400).json({ message: "Invalid or expired token" });
+
     user.password = password.trim();
+    user.resetPasswordToken = null;
+    user.resetPasswordExpiresAt = null;
+
     await user.save();
 
-    res.json({ message: "Password reset successful!" });
+    res.json({ message: "Password reset successfully" });
   } catch (err) {
-    console.error("Reset Password Error:", err.message);
-    res.status(400).json({ message: "Invalid or expired token" });
+    console.error("Reset Password Error:", err);
+    res.status(500).json({ message: "Server error resetting password" });
   }
 });
+
+/* ========================
+   🟣 UPDATE PROFILE
+========================= */
+router.put("/update-profile/:id", verifyToken, updateUserProfile);
 
 export default router;

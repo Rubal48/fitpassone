@@ -1,16 +1,29 @@
+// controllers/eventBookingController.js
 import EventBooking from "../models/EventBooking.js";
 import Event from "../models/Event.js";
 import User from "../models/User.js";
-import { sendEventBookingEmail } from "../utils/sendEmail.js";
+// import { sendEventBookingEmail } from "../utils/sendEmail.js"; // (optional for later)
 
-// ✅ Create Event Booking after successful payment
+/**
+ * 🧾 Create a new event booking
+ * Body: { eventId, tickets, userId? }
+ * User: from req.user (preferred) or fallback to body.userId
+ */
 export const createEventBooking = async (req, res) => {
   try {
-    const { eventId, userId: bodyUserId, price, date } = req.body;
+    const { eventId, tickets = 1, userId: bodyUserId } = req.body;
+
+    if (!eventId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Event ID is required" });
+    }
 
     const userId = req.user?._id || bodyUserId;
-    if (!userId || !eventId) {
-      return res.status(400).json({ message: "User ID and Event ID are required" });
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User not authenticated" });
     }
 
     const [event, user] = await Promise.all([
@@ -18,90 +31,463 @@ export const createEventBooking = async (req, res) => {
       User.findById(userId),
     ]);
 
-    if (!event) return res.status(404).json({ message: "Event not found" });
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    const eventBooking = new EventBooking({
-      user: userId,
-      event: eventId,
-      price: price || event.price || 0,
-      date: date || event.date,
-      status: "confirmed",
-      paymentStatus: "paid",
-    });
-
-    await eventBooking.save();
-
-    // Optional: send confirmation email
-    if (user?.email) {
-      try {
-        await sendEventBookingEmail(user.email, {
-          eventName: event.name,
-          location: event.location,
-          date: event.date,
-          price: price || event.price,
-        });
-        console.log("✅ Event booking email sent to:", user.email);
-      } catch (emailErr) {
-        console.error("❌ Failed to send event booking email:", emailErr.message);
-      }
+    if (!event) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Event not found" });
     }
 
-    res.status(201).json({
-      message: "Event booked successfully ✅",
-      booking: {
-        _id: eventBooking._id,
-        event: {
-          _id: event._id,
-          name: event.name,
-          location: event.location,
-          date: event.date,
-        },
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-        },
-        status: eventBooking.status,
-        paymentStatus: eventBooking.paymentStatus,
-        price: eventBooking.price,
-      },
+    // ✅ LEGACY-SAFE STATUS CHECK
+    // For old events that don't have status stored in DB, allow booking.
+    if (event.status && event.status !== "approved") {
+      return res.status(400).json({
+        success: false,
+        message: "This event is not open for bookings yet",
+      });
+    }
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const qty = Number(tickets) || 1;
+
+    // ✅ capacity check (legacy-safe)
+    const remaining =
+      typeof event.remainingSeats === "number"
+        ? event.remainingSeats
+        : event.capacity;
+
+    if (typeof remaining === "number" && qty > remaining) {
+      return res.status(400).json({
+        success: false,
+        message: `Only ${remaining} spots left`,
+      });
+    }
+
+    // ✅ prevent duplicate active booking (soft check)
+    const existingActive = await EventBooking.findOne({
+      user: userId,
+      event: eventId,
+      status: { $in: ["active", "checked-in"] },
+    });
+
+    if (existingActive) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active booking for this event",
+      });
+    }
+
+    const pricePerTicket = event.price;
+    const grossTotal = pricePerTicket * qty;
+
+    // simple platform economics (10% fee as placeholder)
+    const platformFee = Math.round(grossTotal * 0.1);
+    const hostPayout = grossTotal - platformFee;
+
+    const booking = new EventBooking({
+      user: userId,
+      event: eventId,
+      eventDate: event.date,
+      tickets: qty,
+      totalPrice: grossTotal,
+      currency: "INR",
+      paymentStatus: "paid",
+      platformFee,
+      hostPayout,
+      source: "web",
+    });
+
+    await booking.save();
+
+    // ✅ update event stats & capacity (LEGACY SAFE)
+    // capacity
+    if (typeof event.decrementSeats === "function") {
+      event.decrementSeats(qty);
+    } else {
+      // fallback for any weird legacy cases
+      const currentRemaining =
+        typeof event.remainingSeats === "number"
+          ? event.remainingSeats
+          : event.capacity;
+      event.remainingSeats = Math.max(0, currentRemaining - qty);
+      event.ticketsSold = (event.ticketsSold || 0) + qty;
+    }
+
+    // revenue
+    event.totalRevenue = (event.totalRevenue || 0) + grossTotal;
+
+    // stats (defensive)
+    if (!event.stats) {
+      event.stats = {
+        totalBookings: 0,
+        totalAttendees: 0,
+        totalCancellations: 0,
+      };
+    }
+    event.stats.totalBookings =
+      (event.stats.totalBookings || 0) + 1;
+    event.stats.totalAttendees =
+      (event.stats.totalAttendees || 0) + qty;
+
+    await event.save();
+
+    // (optional) send confirmation email
+    // if (user.email) {
+    //   await sendEventBookingEmail(user.email, { event, booking });
+    // }
+
+    return res.status(201).json({
+      success: true,
+      message: "Event booked successfully",
+      booking,
     });
   } catch (error) {
-    console.error("❌ Event booking creation failed:", error);
-    res.status(500).json({ message: "Failed to create event booking" });
+    console.error("❌ Error creating event booking:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create event booking",
+    });
   }
 };
 
-// ✅ Get all event bookings by user
-export const getEventBookingsByUser = async (req, res) => {
+/**
+ * 📜 Get bookings for logged-in user
+ * GET /api/event-bookings/me
+ */
+export const getMyEventBookings = async (req, res) => {
   try {
-    const { id } = req.params;
-    const bookings = await EventBooking.find({ user: id })
-      .populate("event", "name location date")
-      .populate("user", "name email");
+    const userId = req.user?._id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
 
-    res.json({ bookings });
+    const bookings = await EventBooking.find({ user: userId })
+      .populate(
+        "event",
+        "name image location date price organizer rating ratingCount"
+      )
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, bookings });
   } catch (error) {
-    console.error("❌ Error fetching event bookings:", error);
-    res.status(500).json({ message: "Failed to fetch event bookings" });
+    console.error("❌ Error fetching my event bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch your bookings",
+    });
   }
 };
 
-// ✅ Get single event booking by ID (for booking success page)
+/**
+ * 📜 Get bookings by user ID (admin use)
+ * GET /api/event-bookings/user/:userId
+ */
+export const getEventBookingsByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const bookings = await EventBooking.find({ user: userId })
+      .populate(
+        "event",
+        "name image location date price organizer rating ratingCount"
+      )
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, bookings });
+  } catch (error) {
+    console.error("❌ Error fetching user event bookings:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch bookings" });
+  }
+};
+
+/**
+ * 📄 Get a single booking
+ * GET /api/event-bookings/:id
+ */
 export const getEventBookingById = async (req, res) => {
   try {
     const booking = await EventBooking.findById(req.params.id)
-      .populate("event", "name location date images")
+      .populate(
+        "event",
+        "name image location date price organizer personalNote meetingPoint meetingInstructions cancellationPolicy"
+      )
       .populate("user", "name email");
 
     if (!booking) {
-      return res.status(404).json({ message: "Event booking not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Booking not found" });
     }
 
-    res.json(booking);
+    res.status(200).json({ success: true, booking });
   } catch (error) {
-    console.error("❌ Error fetching event booking by ID:", error);
-    res.status(500).json({ message: "Failed to fetch event booking" });
+    console.error("❌ Error fetching event booking:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch booking" });
+  }
+};
+
+/**
+ * ✅ Verify ticket / check-in via bookingCode
+ * GET /api/event-bookings/verify/:bookingCode
+ */
+export const verifyEventBooking = async (req, res) => {
+  try {
+    const { bookingCode } = req.params;
+
+    const booking = await EventBooking.findOne({ bookingCode })
+      .populate("event", "name location date")
+      .populate("user", "name email");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        valid: false,
+        message: "Booking not found",
+      });
+    }
+
+    if (booking.status !== "active") {
+      return res.status(400).json({
+        success: false,
+        valid: false,
+        message: "Ticket already used, cancelled or expired",
+      });
+    }
+
+    booking.status = "checked-in";
+    booking.checkInAt = new Date();
+    await booking.save();
+
+    return res.json({
+      success: true,
+      valid: true,
+      message: "Valid ticket. Check-in successful ✅",
+      booking: {
+        bookingCode: booking.bookingCode,
+        user: booking.user.name,
+        event: booking.event.name,
+        location: booking.event.location,
+        date: booking.event.date,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error verifying event booking:", error);
+    res.status(500).json({
+      success: false,
+      valid: false,
+      message: "Failed to verify ticket",
+    });
+  }
+};
+
+/**
+ * ❌ Cancel booking with basic policy
+ * POST /api/event-bookings/:id/cancel
+ */
+export const cancelEventBooking = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const userId = req.user?._id; // user who is cancelling
+
+    const booking = await EventBooking.findById(bookingId).populate(
+      "event"
+    );
+    if (!booking) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Booking not found" });
+    }
+
+    // Optional: ensure user owns this booking (unless admin)
+    if (userId && booking.user.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Not allowed to cancel this booking",
+      });
+    }
+
+    if (booking.status !== "active") {
+      return res.status(400).json({
+        success: false,
+        message: "Only active bookings can be cancelled",
+      });
+    }
+
+    const event = booking.event;
+    const now = new Date();
+    const eventDate = new Date(event.date);
+
+    const diffHours = (eventDate - now) / (1000 * 60 * 60);
+
+    // basic policy from event.cancellationPolicy
+    const policy = event.cancellationPolicy || {};
+    const freeHours = policy.freeCancellationHours ?? 24;
+    const refundBefore = policy.refundPercentBefore ?? 100;
+    const refundAfter = policy.refundPercentAfter ?? 0;
+
+    let refundPercent = 0;
+    if (policy.type === "none") {
+      refundPercent = 0;
+    } else if (diffHours >= freeHours) {
+      refundPercent = refundBefore;
+    } else if (diffHours > 0) {
+      refundPercent = refundAfter;
+    } else {
+      // event already started/past
+      refundPercent = 0;
+    }
+
+    const refundAmount = Math.round(
+      (booking.totalPrice * refundPercent) / 100
+    );
+
+    booking.status = "cancelled";
+    booking.cancelledAt = now;
+    booking.cancelReason = req.body.reason || "";
+    booking.refundStatus = refundAmount > 0 ? "requested" : "none";
+    booking.refundAmount = refundAmount;
+
+    await booking.save();
+
+    // update event stats & capacity back (LEGACY SAFE)
+    if (typeof event.incrementSeats === "function") {
+      event.incrementSeats(booking.tickets);
+    } else {
+      const currentRemaining =
+        typeof event.remainingSeats === "number"
+          ? event.remainingSeats
+          : event.capacity;
+      event.remainingSeats = Math.min(
+        event.capacity,
+        currentRemaining + booking.tickets
+      );
+      event.ticketsSold = Math.max(
+        0,
+        (event.ticketsSold || 0) - booking.tickets
+      );
+    }
+
+    if (!event.stats) {
+      event.stats = {
+        totalBookings: 0,
+        totalAttendees: 0,
+        totalCancellations: 0,
+      };
+    }
+    event.stats.totalCancellations =
+      (event.stats.totalCancellations || 0) + 1;
+
+    event.totalRevenue = Math.max(
+      0,
+      (event.totalRevenue || 0) - refundAmount
+    );
+    await event.save();
+
+    return res.json({
+      success: true,
+      message: "Booking cancelled",
+      refundAmount,
+      refundPercent,
+    });
+  } catch (error) {
+    console.error("❌ Error cancelling event booking:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel booking",
+    });
+  }
+};
+
+/**
+ * 👥 Attendance list for an event (host/admin)
+ * GET /api/event-bookings/event/:eventId/attendance
+ */
+export const getEventAttendanceList = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const bookings = await EventBooking.find({ event: eventId })
+      .populate("user", "name email")
+      .sort({ createdAt: 1 });
+
+    res.status(200).json({
+      success: true,
+      attendees: bookings.map((b) => ({
+        id: b._id,
+        bookingCode: b.bookingCode,
+        userName: b.user?.name,
+        userEmail: b.user?.email,
+        tickets: b.tickets,
+        status: b.status,
+        checkInAt: b.checkInAt,
+      })),
+    });
+  } catch (error) {
+    console.error("❌ Error fetching attendance list:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch attendance list",
+    });
+  }
+};
+
+/**
+ * 📊 Event-level analytics snapshot
+ * GET /api/event-bookings/event/:eventId/analytics
+ */
+export const getEventAnalytics = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const [event, bookings] = await Promise.all([
+      Event.findById(eventId),
+      EventBooking.find({ event: eventId }),
+    ]);
+
+    if (!event) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Event not found" });
+    }
+
+    const totalBookings = bookings.length;
+    const totalTickets = bookings.reduce(
+      (sum, b) => sum + (b.tickets || 0),
+      0
+    );
+    const checkedIn = bookings.filter(
+      (b) => b.status === "checked-in"
+    ).length;
+    const cancelled = bookings.filter(
+      (b) => b.status === "cancelled"
+    ).length;
+
+    const analytics = {
+      totalBookings,
+      totalTickets,
+      checkedIn,
+      cancelled,
+      capacity: event.capacity,
+      remainingSeats: event.remainingSeats,
+      revenueTracked: event.totalRevenue,
+    };
+
+    res.status(200).json({ success: true, analytics });
+  } catch (error) {
+    console.error("❌ Error fetching event analytics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch analytics",
+    });
   }
 };

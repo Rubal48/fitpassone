@@ -1,8 +1,8 @@
-// src/pages/Partner.jsx (or PartnerWithUs, wherever you use it)
-import React, { useState } from "react";
+// src/pages/PartnerWithUs.jsx
+import React, { useState, useMemo } from "react";
 import {
   Loader2,
-  CheckCircle,
+  CheckCircle2,
   DollarSign,
   Phone,
   Plus,
@@ -11,13 +11,44 @@ import {
   Users,
   Sparkles,
   MapPin,
+  ChevronRight,
+  ChevronLeft,
+  ImageIcon,
+  Info,
 } from "lucide-react";
 import API from "../utils/api";
 
-export default function Partner() {
+const AMENITIES = [
+  "WiFi",
+  "Parking",
+  "Showers",
+  "Lockers",
+  "Steam Room",
+  "AC",
+  "Cafeteria",
+  "Women-Only Section",
+];
+
+const BUSINESS_TYPES = [
+  { value: "gym", label: "Gym / Fitness Centre" },
+  { value: "mma", label: "MMA / Combat Academy" },
+  { value: "yoga", label: "Yoga / Meditation Studio" },
+  { value: "event", label: "Event / Workshop Organizer" },
+];
+
+const STEPS = [
+  { id: 0, label: "Business", sub: "Basics & contact" },
+  { id: 1, label: "Passes", sub: "Pricing you control" },
+  { id: 2, label: "Facilities", sub: "Trust & amenities" },
+  { id: 3, label: "Media", sub: "Visuals & submit" },
+];
+
+export default function PartnerWithUs() {
   /* -------------------------------------------------------
-     STATE & CONSTANTS (same logic as before)
+     STATE
   -------------------------------------------------------- */
+  const [step, setStep] = useState(0);
+
   const [formData, setFormData] = useState({
     name: "",
     businessType: "gym",
@@ -37,38 +68,55 @@ export default function Partner() {
   const [ownerIdProof, setOwnerIdProof] = useState(null);
   const [video, setVideo] = useState(null);
   const [facilities, setFacilities] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
 
-  const amenitiesList = [
-    "WiFi",
-    "Parking",
-    "Showers",
-    "Lockers",
-    "Steam Room",
-    "AC",
-    "Cafeteria",
-    "Women-Only Section",
-  ];
+  const [loading, setLoading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [globalError, setGlobalError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   /* -------------------------------------------------------
-     HANDLERS (same backend behavior)
+     DERIVED – ESTIMATED EARNINGS PREVIEW
   -------------------------------------------------------- */
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const pricingPreview = useMemo(() => {
+    if (!passes.length) return { min: 0, max: 0, avg: 0 };
+    const numeric = passes
+      .map((p) => Number(p.price) || 0)
+      .filter((v) => v > 0);
+    if (!numeric.length) return { min: 0, max: 0, avg: 0 };
+    const min = Math.min(...numeric);
+    const max = Math.max(...numeric);
+    const avg = Math.round(
+      numeric.reduce((a, b) => a + b, 0) / numeric.length
+    );
+    return { min, max, avg };
+  }, [passes]);
+
+  /* -------------------------------------------------------
+     HANDLERS
+  -------------------------------------------------------- */
+  const updateField = (key, value) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setGlobalError("");
   };
 
   const handlePassChange = (index, field, value) => {
     const updated = [...passes];
     updated[index][field] = value;
     setPasses(updated);
+    setFieldErrors((prev) => ({ ...prev, passes: "" }));
+    setGlobalError("");
   };
 
-  const addPass = () => setPasses([...passes, { duration: "", price: "" }]);
-  const removePass = (index) =>
-    setPasses(passes.filter((_, i) => i !== index));
+  const addPass = () => {
+    setPasses((prev) => [...prev, { duration: 1, price: "" }]);
+  };
+
+  const removePass = (index) => {
+    setPasses((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleFacilityChange = (e) => {
     const { value, checked } = e.target;
@@ -77,70 +125,141 @@ export default function Partner() {
     );
   };
 
+  // 📸 Main centre images (uses /upload with field "images")
   const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files);
+    const files = e.target.files ? Array.from(e.target.files) : [];
     if (!files.length) return;
 
     const formDataUpload = new FormData();
     files.forEach((file) => formDataUpload.append("images", file));
 
     try {
-      setUploading(true);
+      setUploadingImages(true);
+      setGlobalError("");
       const res = await API.post("/upload", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setImages(res.data.images);
-      setError("");
-    } catch {
-      setError("Image upload failed.");
+      setImages(res.data.images || []);
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      setGlobalError("Image upload failed. Please try again.");
     } finally {
-      setUploading(false);
+      setUploadingImages(false);
     }
   };
 
+  // 📄 Proofs / video – also via /upload with "images" (single file)
   const handleProofUpload = async (e, type) => {
-    const file = e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
 
     const formDataUpload = new FormData();
-    formDataUpload.append("file", file);
+    formDataUpload.append("images", file);
 
     try {
+      setUploadingDocs(true);
+      setGlobalError("");
       const res = await API.post("/upload", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (type === "business") setBusinessProof(res.data.images[0]);
-      if (type === "owner") setOwnerIdProof(res.data.images[0]);
-      if (type === "video") setVideo(res.data.images[0]);
-      setError("");
-    } catch {
-      setError("Document upload failed.");
+      const uploaded = (res.data.images && res.data.images[0]) || null;
+      if (!uploaded) throw new Error("No file returned");
+
+      if (type === "business") setBusinessProof(uploaded);
+      if (type === "owner") setOwnerIdProof(uploaded);
+      if (type === "video") setVideo(uploaded);
+    } catch (err) {
+      console.error("Document upload failed:", err);
+      setGlobalError("Document upload failed. Please try again.");
+    } finally {
+      setUploadingDocs(false);
     }
   };
 
+  /* -------------------------------------------------------
+     VALIDATION
+  -------------------------------------------------------- */
+  const validateStep = (targetStep = step) => {
+    const errors = {};
+
+    if (targetStep === 0) {
+      if (!formData.businessType) errors.businessType = "Select a business type";
+      if (!formData.name.trim()) errors.name = "Centre name is required";
+      if (!formData.city.trim()) errors.city = "City is required";
+      if (!formData.phone.trim()) errors.phone = "Business phone is required";
+    }
+
+    if (targetStep === 1) {
+      if (!passes.length) {
+        errors.passes = "Add at least one pass";
+      } else if (
+        passes.some(
+          (p) => !p.duration || Number(p.duration) <= 0 || !p.price || Number(p.price) <= 0
+        )
+      ) {
+        errors.passes = "Each pass needs a valid duration (days) and price";
+      }
+    }
+
+    if (targetStep === 3) {
+      if (!images.length) errors.images = "Upload at least one centre image";
+      if (!businessProof) errors.businessProof = "Business proof is required";
+      if (!ownerIdProof) errors.ownerIdProof = "Owner ID proof is required";
+    }
+
+    setFieldErrors((prev) => ({ ...prev, ...errors }));
+    if (Object.keys(errors).length) {
+      setGlobalError("Please complete the highlighted fields.");
+      return false;
+    }
+    setGlobalError("");
+    return true;
+  };
+
+  const goNext = () => {
+    if (!validateStep(step)) return;
+    setStep((prev) => Math.min(prev + 1, STEPS.length - 1));
+  };
+
+  const goBack = () => {
+    setStep((prev) => Math.max(prev - 1, 0));
+  };
+
+  /* -------------------------------------------------------
+     SUBMIT
+  -------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess(false);
 
-    if (!formData.name || !formData.city || !formData.phone) {
-      setError("Please fill all required fields.");
-      return;
-    }
-
-    if (passes.some((p) => !p.duration || !p.price)) {
-      setError("Please fill duration and price for all passes.");
-      return;
-    }
-
-    if (images.length === 0) {
-      setError("Please upload at least one image.");
+    const valid0 = validateStep(0);
+    const valid1 = validateStep(1);
+    const valid3 = validateStep(3);
+    if (!valid0 || !valid1 || !valid3) {
+      if (
+        fieldErrors.businessType ||
+        fieldErrors.name ||
+        fieldErrors.city ||
+        fieldErrors.phone
+      ) {
+        setStep(0);
+      } else if (fieldErrors.passes) {
+        setStep(1);
+      } else if (
+        fieldErrors.images ||
+        fieldErrors.businessProof ||
+        fieldErrors.ownerIdProof
+      ) {
+        setStep(3);
+      }
       return;
     }
 
     try {
       setLoading(true);
+      setGlobalError("");
+      setSuccess(false);
+
       const payload = {
         ...formData,
         passes: passes.map((p) => ({
@@ -179,49 +298,51 @@ export default function Partner() {
         setOwnerIdProof(null);
         setVideo(null);
         setPasses([{ duration: 1, price: "" }]);
+        setStep(0);
+        setFieldErrors({});
+      } else {
+        setGlobalError("Something went wrong. Please try again.");
       }
     } catch (err) {
-      console.error(err);
-      setError("Something went wrong. Try again.");
+      console.error("Partner submit error:", err);
+      setGlobalError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   /* -------------------------------------------------------
-     UI
+     UI – LAYOUT & THEME
   -------------------------------------------------------- */
   return (
     <div
-      className="min-h-screen text-gray-100"
+      className="min-h-screen text-slate-50 pb-16"
       style={{
-        backgroundColor: "#050308",
+        backgroundColor: "#020618",
         backgroundImage:
-          "radial-gradient(circle at top, rgba(248,216,181,0.18), transparent 55%)",
+          "radial-gradient(circle at top, rgba(56,189,248,0.18), transparent 55%), radial-gradient(circle at 120% 0, rgba(249,115,22,0.16), transparent 55%)",
       }}
     >
-      {/* ===========================
-          HERO — pitch to partners
-      ============================ */}
+      {/* HERO / PITCH */}
       <section className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-gradient-to-r from-[#050308] via-[#13071A] to-[#2B0A18]" />
-        <div className="absolute inset-0 opacity-25 bg-[url('https://images.pexels.com/photos/4162443/pexels-photo-4162443.jpeg?auto=compress&cs=tinysrgb&w=1600')] bg-cover bg-center mix-blend-soft-light" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#020617] via-[#020617] to-[#020617]" />
+        <div className="absolute inset-0 opacity-[0.22] bg-[url('https://images.pexels.com/photos/1552104/pexels-photo-1552104.jpeg?auto=compress&cs=tinysrgb&w=1600')] bg-cover bg-center mix-blend-soft-light" />
 
-        <div className="relative max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-[1.1fr,0.9fr] gap-10 items-center">
-          {/* LEFT: copy + benefits */}
+        <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-10 md:pt-28 md:pb-16 grid md:grid-cols-[1.1fr,0.9fr] gap-10 items-center">
+          {/* LEFT TEXT */}
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/20 text-[11px] uppercase tracking-[0.25em] text-gray-200 mb-5">
-              <Sparkles className="w-3.5 h-3.5 text-orange-200" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/25 text-[11px] uppercase tracking-[0.25em] text-slate-100 mb-5 shadow-[0_15px_50px_rgba(15,23,42,0.9)]">
+              <Sparkles className="w-3.5 h-3.5 text-orange-300" />
               <span>For gyms · studios · event hosts</span>
             </div>
 
-            <h1 className="text-3xl md:text-4xl lg:text-[2.7rem] font-black tracking-tight text-white leading-tight">
+            <h1 className="text-3xl md:text-4xl lg:text-[2.75rem] font-black tracking-tight text-slate-50 leading-tight">
               Turn your{" "}
-              <span className="text-orange-300">space</span> into a{" "}
+              <span className="text-sky-300">fitness space</span> into a{" "}
               <span
+                className="font-extrabold"
                 style={{
-                  backgroundImage:
-                    "linear-gradient(120deg,#FF4B5C,#FF9F68)",
+                  backgroundImage: "linear-gradient(120deg,#0EA5E9,#FB923C)",
                   WebkitBackgroundClip: "text",
                   color: "transparent",
                 }}
@@ -231,484 +352,803 @@ export default function Partner() {
               .
             </h1>
 
-            <p className="mt-4 text-sm md:text-base text-gray-200 max-w-xl leading-relaxed">
+            <p className="mt-4 text-sm md:text-base text-slate-200 max-w-xl leading-relaxed">
               List your gym, yoga studio, MMA academy or fitness event on{" "}
-              <span className="font-semibold text-orange-200">
-                Passiify
-              </span>{" "}
-              and start getting high-intent one-day visitors — travelers,
-              GenZ, remote workers and movers who want to train without the
-              long-term commitment.
+              <span className="font-semibold text-orange-300">Passiify</span> and
+              start getting high-intent one-day visitors — travelers, GenZ, remote
+              workers and movers who want to train without long-term contracts.
             </p>
 
             <div className="mt-6 grid sm:grid-cols-3 gap-4 text-xs md:text-sm">
-              <div className="rounded-2xl bg-white/5 border border-white/15 px-4 py-3">
-                <div className="flex items-center gap-2 text-orange-200 mb-1">
+              <div className="rounded-2xl bg-slate-900/70 backdrop-blur-xl border border-white/10 px-4 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.95)]">
+                <div className="flex items-center gap-2 text-sky-200 mb-1">
                   <Users className="w-4 h-4" />
-                  <span className="font-semibold text-gray-100">
+                  <span className="font-semibold text-slate-50">
                     New Footfall
                   </span>
                 </div>
-                <p className="text-gray-300">
-                  Attract travelers & nearby users who normally never discover
-                  your space.
+                <p className="text-slate-300">
+                  Attract travelers & nearby users who normally never discover your
+                  space.
                 </p>
               </div>
-              <div className="rounded-2xl bg-white/5 border border-white/15 px-4 py-3">
+              <div className="rounded-2xl bg-slate-900/70 backdrop-blur-xl border border-white/10 px-4 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.95)]">
                 <div className="flex items-center gap-2 text-emerald-200 mb-1">
                   <DollarSign className="w-4 h-4" />
-                  <span className="font-semibold text-gray-100">
+                  <span className="font-semibold text-slate-50">
                     Extra Revenue
                   </span>
                 </div>
-                <p className="text-gray-300">
-                  Monetise empty slots & off-peak hours with one-day passes.
+                <p className="text-slate-300">
+                  Monetise empty slots & off-peak hours with one-day and short
+                  passes.
                 </p>
               </div>
-              <div className="rounded-2xl bg-white/5 border border-white/15 px-4 py-3">
-                <div className="flex items-center gap-2 text-blue-200 mb-1">
+              <div className="rounded-2xl bg-slate-900/70 backdrop-blur-xl border border-white/10 px-4 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.95)]">
+                <div className="flex items-center gap-2 text-orange-200 mb-1">
                   <Shield className="w-4 h-4" />
-                  <span className="font-semibold text-gray-100">
+                  <span className="font-semibold text-slate-50">
                     Verified Network
                   </span>
                 </div>
-                <p className="text-gray-300">
-                  Become part of a curated, quality-first fitness ecosystem.
+                <p className="text-slate-300">
+                  Join a curated, quality-first fitness ecosystem across cities.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* RIGHT: compact highlight card */}
+          {/* RIGHT HIGHLIGHT CARD */}
           <div className="hidden md:block">
-            <div className="rounded-3xl bg-black/60 border border-white/18 shadow-[0_24px_80px_rgba(0,0,0,0.95)] px-6 py-7 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-50 mb-2">
+            <div className="rounded-3xl bg-slate-900/80 backdrop-blur-2xl border border-sky-200/15 shadow-[0_26px_90px_rgba(15,23,42,1)] px-6 py-7 space-y-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">
                 Why hosts love Passiify
               </h2>
-              <ul className="space-y-3 text-xs text-gray-200">
+              <ul className="space-y-3 text-xs text-slate-200">
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-orange-300" />
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-300" />
                   <span>
-                    <span className="font-semibold">
-                      Flexible pricing:
-                    </span>{" "}
-                    you fully control your one-day pass durations & rates.
+                    <span className="font-semibold">Flexible pricing:</span>{" "}
+                    you fully control your one-day & multi-day pass durations and
+                    rates.
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-orange-300" />
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-300" />
                   <span>
                     <span className="font-semibold">
-                      Zero long-term lock-in:
+                      Transparent payouts:
                     </span>{" "}
-                    list, test performance, and adjust anytime.
+                    we show your estimated earnings per pass (after platform fee).
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-orange-300" />
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-300" />
                   <span>
-                    <span className="font-semibold">
-                      Smart discovery:
-                    </span>{" "}
-                    your listing appears in relevant city, category &
-                    experience searches.
+                    <span className="font-semibold">Smart discovery:</span>{" "}
+                    appear in city, category & experience searches in the app.
                   </span>
                 </li>
               </ul>
-              <p className="text-[11px] text-gray-400 pt-1 border-t border-white/10">
-                Fill out the partner form below — our team reviews new
-                listings to keep the network high quality.
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-white/10">
+                Fill out the partner flow below — our team reviews new listings to
+                keep the network high quality.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===========================
-          MAIN SECTION — form + copy
-      ============================ */}
-      <section className="max-w-6xl mx-auto px-6 py-12 md:py-16 grid lg:grid-cols-[1.1fr,1.2fr] gap-10">
-        {/* LEFT: small reassurance / guidelines (mobile) */}
-        <div className="lg:hidden mb-2">
-          <div className="rounded-2xl bg-black/60 border border-white/15 px-4 py-4 text-xs text-gray-200 space-y-2">
-            <h3 className="text-sm font-semibold text-gray-50 mb-1">
-              What we look for in partners
-            </h3>
-            <p>
-              Clean, safe, professionally-run gyms, studios, boxes or
-              academies that welcome day-pass users and travelers.
-            </p>
-            <p className="flex items-center gap-1 text-[11px] text-gray-400">
-              <MapPin className="w-3.5 h-3.5 text-orange-200" />
-              Priority to centrally located or easily accessible spaces.
-            </p>
-          </div>
-        </div>
-
-        {/* LEFT DESKTOP: guidelines / expectations */}
-        <div className="hidden lg:flex flex-col gap-4">
-          <div className="rounded-2xl bg-black/60 border border-white/15 px-5 py-5 text-xs md:text-sm text-gray-200 space-y-3">
-            <h3 className="text-sm md:text-base font-semibold text-gray-50 mb-1">
-              What makes a great Passiify listing
-            </h3>
-            <p>
-              We highlight hosts who care about community, safety and
-              experience. If you maintain a respectful environment, clean
-              equipment and clear communication — you&apos;re exactly who
-              we want.
-            </p>
-            <ul className="space-y-1.5 text-[11px] text-gray-300">
-              <li>• Clear signage & dedicated check-in process.</li>
-              <li>• Transparent rules around footwear, clothing & filming.</li>
-              <li>• Staff present during peak hours for support.</li>
-              <li>• Open to travelers & new movers, not just regular members.</li>
-            </ul>
-          </div>
-
-          <div className="rounded-2xl bg-black/60 border border-white/15 px-5 py-4 text-[11px] text-gray-300 space-y-1.5">
-            <p>
-              Once submitted, our team reviews your details, may ask for
-              extra info, and then your space goes live on{" "}
-              <span className="font-semibold text-orange-200">Passiify</span>.
-            </p>
-            <p className="text-[10px] text-gray-500">
-              You&apos;ll always have control over pricing, availability
-              and how you want to present your brand.
-            </p>
-          </div>
-        </div>
-
-        {/* RIGHT: FORM CARD */}
-        <div className="bg-black/70 border border-white/14 rounded-3xl shadow-[0_26px_90px_rgba(0,0,0,0.95)] px-5 py-6 md:px-7 md:py-8">
-          {success ? (
-            /* -------------------------
-               SUCCESS STATE
-            -------------------------- */
-            <div className="text-center flex flex-col items-center py-6">
-              <CheckCircle className="w-14 h-14 mb-3 text-emerald-400" />
-              <h2 className="text-xl md:text-2xl font-bold mb-2 text-gray-50">
-                Centre submitted for review
-              </h2>
-              <p className="text-xs md:text-sm text-gray-300 mb-5 max-w-md">
-                Thank you for partnering with{" "}
-                <span className="text-orange-300 font-semibold">
-                  Passiify
-                </span>
-                . Our team will review and verify your details before your
-                listing goes live.
+      {/* MAIN SECTION – MULTI STEP WIZARD */}
+      <section className="max-w-6xl mx-auto px-6 py-12 md:py-16">
+        <div className="grid lg:grid-cols-[0.9fr,1.4fr] gap-10 items-start">
+          {/* LEFT GUIDELINES – DESKTOP */}
+          <div className="hidden lg:flex flex-col gap-4">
+            <div className="rounded-2xl bg-slate-900/80 backdrop-blur-2xl border border-slate-100/15 px-5 py-5 text-xs md:text-sm text-slate-200 space-y-3 shadow-[0_24px_80px_rgba(15,23,42,1)]">
+              <h3 className="text-sm md:text-base font-semibold text-slate-50 mb-1">
+                What makes a great Passiify listing
+              </h3>
+              <p>
+                We highlight hosts who care about community, safety and experience.
+                If you maintain a respectful environment, clean equipment and clear
+                communication — you&apos;re exactly who we want.
               </p>
-              <button
-                onClick={() => setSuccess(false)}
-                className="px-6 py-2.5 rounded-full text-xs md:text-sm font-semibold bg-white text-gray-900 hover:scale-[1.02] transition shadow-[0_18px_60px_rgba(0,0,0,0.95)]"
-              >
-                Add another centre
-              </button>
+              <ul className="space-y-1.5 text-[11px] text-slate-300">
+                <li>• Clear signage & a simple check-in process for day passes.</li>
+                <li>• Transparent rules around footwear, clothing & filming.</li>
+                <li>• Staff present during peak hours for support.</li>
+                <li>• Open to travelers & new movers, not just regular members.</li>
+              </ul>
             </div>
-          ) : (
-            <>
-              {/* -------------------------
-                 FORM HEADER
-              -------------------------- */}
-              <div className="mb-5 text-center md:text-left">
-                <h2 className="text-xl md:text-2xl font-bold text-gray-50">
-                  List your gym / studio / academy
+
+            <div className="rounded-2xl bg-slate-900/80 backdrop-blur-2xl border border-slate-100/15 px-5 py-4 text-[11px] text-slate-300 space-y-1.5">
+              <p>
+                Once submitted, our team reviews your details, may ask for extra
+                info, and then your space goes live on{" "}
+                <span className="font-semibold text-sky-300">Passiify</span>.
+              </p>
+              <p className="text-[10px] text-slate-500">
+                You&apos;ll always have control over pricing, availability and how
+                you want to present your brand in the app.
+              </p>
+            </div>
+          </div>
+
+          {/* MOBILE MINI GUIDELINES */}
+          <div className="lg:hidden mb-4">
+            <div className="rounded-2xl bg-slate-900/80 backdrop-blur-2xl border border-slate-100/15 px-4 py-4 text-xs text-slate-200 space-y-2">
+              <h3 className="text-sm font-semibold text-slate-50 mb-1">
+                What we look for in partners
+              </h3>
+              <p>
+                Clean, safe, professionally-run gyms, studios, boxes or academies
+                that welcome day-pass users and travelers.
+              </p>
+              <p className="flex items-center gap-1 text-[11px] text-slate-400">
+                <MapPin className="w-3.5 h-3.5 text-sky-300" />
+                Priority to centrally located or easily accessible spaces.
+              </p>
+            </div>
+          </div>
+
+          {/* RIGHT – WIZARD CARD */}
+          <div className="rounded-3xl bg-slate-950/80 backdrop-blur-2xl border border-slate-100/15 shadow-[0_26px_90px_rgba(15,23,42,1)] px-5 py-6 md:px-7 md:py-8">
+            {success ? (
+              <div className="text-center flex flex-col items-center py-6">
+                <CheckCircle2 className="w-14 h-14 mb-3 text-emerald-400" />
+                <h2 className="text-xl md:text-2xl font-bold mb-2 text-slate-50">
+                  Centre submitted for review
                 </h2>
-                <p className="text-xs md:text-sm text-gray-400 mt-1.5">
-                  Fill in a few details about your space. You can always
-                  update information later after approval.
+                <p className="text-xs md:text-sm text-slate-300 mb-5 max-w-md">
+                  Thank you for partnering with{" "}
+                  <span className="text-sky-300 font-semibold">Passiify</span>. Our
+                  team will review and verify your details before your listing
+                  goes live in the app.
                 </p>
+                <button
+                  onClick={() => setSuccess(false)}
+                  className="px-6 py-2.5 rounded-full text-xs md:text-sm font-semibold bg-white text-slate-900 hover:scale-[1.02] transition shadow-[0_18px_60px_rgba(15,23,42,1)]"
+                >
+                  Add another centre
+                </button>
               </div>
-
-              {error && (
-                <p className="text-red-400 bg-red-500/10 border border-red-500/40 rounded-xl px-3 py-2 text-xs mb-4 text-center">
-                  {error}
-                </p>
-              )}
-
-              {/* -------------------------
-                 FORM
-              -------------------------- */}
-              <form onSubmit={handleSubmit} className="space-y-6 text-xs md:text-sm">
-                {/* Business Type */}
-                <div>
-                  <label className="block font-semibold mb-1.5 text-gray-100">
-                    Business type *
-                  </label>
-                  <select
-                    name="businessType"
-                    value={formData.businessType}
-                    onChange={handleChange}
-                    className="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-gray-100 focus:outline-none focus:border-white/50"
-                  >
-                    <option value="gym">Gym / Fitness Centre</option>
-                    <option value="mma">MMA / Combat Academy</option>
-                    <option value="yoga">Yoga / Meditation Studio</option>
-                    <option value="event">Event / Workshop Organizer</option>
-                  </select>
-                </div>
-
-                {/* Name & Phone */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold mb-1.5 text-gray-100">
-                      Centre name *
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      placeholder="Example: Iron Pulse Fitness"
-                      className="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold mb-1.5 text-gray-100">
-                      Business phone *
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <Phone className="text-orange-300 w-4 h-4" />
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="Owner / front desk number"
-                        className="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50"
-                      />
+            ) : (
+              <>
+                {/* STEP HEADER + PROGRESS */}
+                <div className="mb-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400 mb-1">
+                        Partner onboarding
+                      </p>
+                      <h2 className="text-xl md:text-2xl font-bold text-slate-50">
+                        List your gym / studio / academy
+                      </h2>
+                      <p className="text-xs md:text-sm text-slate-400 mt-1.5">
+                        A guided flow to get your space live on Passiify. You can
+                        always update details later.
+                      </p>
+                    </div>
+                    <div className="hidden md:flex flex-col items-end">
+                      <span className="text-xs font-semibold text-slate-200">
+                        Step {step + 1} of {STEPS.length}
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {STEPS[step].label} · {STEPS[step].sub}
+                      </span>
                     </div>
                   </div>
-                </div>
 
-                {/* City & Address */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold mb-1.5 text-gray-100">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      placeholder="e.g. Delhi, Mumbai, Goa"
-                      className="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold mb-1.5 text-gray-100">
-                      Address
-                    </label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      placeholder="Street, building, nearby landmark"
-                      className="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50"
-                    />
-                  </div>
-                </div>
-
-                {/* Passes */}
-                <div>
-                  <label className="block font-semibold mb-1.5 text-gray-100">
-                    Custom passes (duration & price) *
-                  </label>
-                  <p className="text-[11px] text-gray-500 mb-2">
-                    Add one-day, 3-day, 7-day or any short-term passes you want
-                    to offer.
-                  </p>
-                  {passes.map((pass, index) => (
+                  <div className="mt-4 h-1.5 rounded-full bg-slate-800 overflow-hidden">
                     <div
-                      key={index}
-                      className="flex items-center gap-2 mb-2 bg-black/40 border border-white/18 rounded-2xl px-3 py-2.5"
-                    >
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Duration (days)"
-                        value={pass.duration}
-                        onChange={(e) =>
-                          handlePassChange(index, "duration", e.target.value)
-                        }
-                        className="w-1/2 bg-transparent border border-white/20 rounded-xl px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50"
-                      />
-                      <div className="relative w-1/2">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">
-                          ₹
-                        </span>
-                        <input
-                          type="number"
-                          placeholder="Price"
-                          value={pass.price}
+                      className="h-full rounded-full bg-gradient-to-r from-sky-400 to-orange-400 transition-all"
+                      style={{
+                        width: `${((step + 1) / STEPS.length) * 100}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                    {STEPS.map((s, idx) => {
+                      const active = idx === step;
+                      const done = idx < step;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            if (idx <= step) setStep(idx);
+                          }}
+                          className="flex-1 flex flex-col items-center gap-1"
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              done
+                                ? "bg-sky-400"
+                                : active
+                                ? "bg-orange-400"
+                                : "bg-slate-600"
+                            }`}
+                          />
+                          <span
+                            className={
+                              active
+                                ? "text-slate-100 font-medium"
+                                : "text-slate-500"
+                            }
+                          >
+                            {s.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {globalError && (
+                  <p className="text-red-400 bg-red-500/10 border border-red-500/40 rounded-xl px-3 py-2 text-xs mb-4 flex items-center gap-2">
+                    <Info className="w-3.5 h-3.5" /> {globalError}
+                  </p>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-6 text-xs md:text-sm">
+                  {/* STEP 0 – BUSINESS DETAILS */}
+                  {step === 0 && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Business type *
+                        </label>
+                        <select
+                          name="businessType"
+                          value={formData.businessType}
                           onChange={(e) =>
-                            handlePassChange(index, "price", e.target.value)
+                            updateField("businessType", e.target.value)
                           }
-                          className="w-full bg-transparent border border-white/20 rounded-xl pl-6 pr-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50"
-                        />
+                          className={`w-full bg-slate-950/70 border ${
+                            fieldErrors.businessType
+                              ? "border-red-400/70"
+                              : "border-slate-500/40"
+                          } rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-400/70`}
+                        >
+                          {BUSINESS_TYPES.map((bt) => (
+                            <option key={bt.value} value={bt.value}>
+                              {bt.label}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.businessType && (
+                          <p className="text-[11px] text-red-400 mt-1">
+                            {fieldErrors.businessType}
+                          </p>
+                        )}
                       </div>
-                      {passes.length > 1 && (
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            Centre name *
+                          </label>
+                          <input
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={(e) => updateField("name", e.target.value)}
+                            placeholder="Example: Iron Pulse Fitness"
+                            className={`w-full bg-slate-950/70 border ${
+                              fieldErrors.name
+                                ? "border-red-400/70"
+                                : "border-slate-500/40"
+                            } rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70`}
+                          />
+                          {fieldErrors.name && (
+                            <p className="text-[11px] text-red-400 mt-1">
+                              {fieldErrors.name}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            Business phone *
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Phone className="text-sky-300 w-4 h-4" />
+                            <input
+                              type="tel"
+                              name="phone"
+                              value={formData.phone}
+                              onChange={(e) =>
+                                updateField("phone", e.target.value)
+                              }
+                              placeholder="Owner / front desk number"
+                              className={`w-full bg-slate-950/70 border ${
+                                fieldErrors.phone
+                                  ? "border-red-400/70"
+                                  : "border-slate-500/40"
+                              } rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70`}
+                            />
+                          </div>
+                          {fieldErrors.phone && (
+                            <p className="text-[11px] text-red-400 mt-1">
+                              {fieldErrors.phone}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            City *
+                          </label>
+                          <input
+                            type="text"
+                            name="city"
+                            value={formData.city}
+                            onChange={(e) => updateField("city", e.target.value)}
+                            placeholder="e.g. Delhi, Mumbai, Goa"
+                            className={`w-full bg-slate-950/70 border ${
+                              fieldErrors.city
+                                ? "border-red-400/70"
+                                : "border-slate-500/40"
+                            } rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70`}
+                          />
+                          {fieldErrors.city && (
+                            <p className="text-[11px] text-red-400 mt-1">
+                              {fieldErrors.city}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            Address
+                          </label>
+                          <input
+                            type="text"
+                            name="address"
+                            value={formData.address}
+                            onChange={(e) =>
+                              updateField("address", e.target.value)
+                            }
+                            placeholder="Street, building, nearby landmark"
+                            className="w-full bg-slate-950/70 border border-slate-500/40 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            Website
+                          </label>
+                          <input
+                            type="url"
+                            name="website"
+                            value={formData.website}
+                            onChange={(e) =>
+                              updateField("website", e.target.value)
+                            }
+                            placeholder="https://"
+                            className="w-full bg-slate-950/70 border border-slate-500/40 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            Instagram
+                          </label>
+                          <input
+                            type="url"
+                            name="instagram"
+                            value={formData.instagram}
+                            onChange={(e) =>
+                              updateField("instagram", e.target.value)
+                            }
+                            placeholder="https://instagram.com/yourhandle"
+                            className="w-full bg-slate-950/70 border border-slate-500/40 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold mb-1.5 text-slate-100">
+                            Google Maps link
+                          </label>
+                          <input
+                            type="url"
+                            name="googleMapLink"
+                            value={formData.googleMapLink}
+                            onChange={(e) =>
+                              updateField("googleMapLink", e.target.value)
+                            }
+                            placeholder="Share location link"
+                            className="w-full bg-slate-950/70 border border-slate-500/40 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 1 – PASSES */}
+                  {step === 1 && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Custom passes (duration & price) *
+                        </label>
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Add one-day, 3-day, 7-day or any short-term passes you
+                          want to offer. You stay in control.
+                        </p>
+                        {passes.map((pass, index) => (
+                          <div
+                            key={index}
+                            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2 bg-slate-950/70 border border-slate-600/50 rounded-2xl px-3 py-2.5"
+                          >
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Duration (days)"
+                              value={pass.duration}
+                              onChange={(e) =>
+                                handlePassChange(index, "duration", e.target.value)
+                              }
+                              className="w-full sm:w-1/3 bg-transparent border border-slate-600/60 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                            />
+                            <div className="relative w-full sm:w-1/3">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">
+                                ₹
+                              </span>
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="Price"
+                                value={pass.price}
+                                onChange={(e) =>
+                                  handlePassChange(index, "price", e.target.value)
+                                }
+                                className="w-full bg-transparent border border-slate-600/60 rounded-xl pl-6 pr-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                              />
+                            </div>
+                            {passes.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removePass(index)}
+                                className="text-red-400 hover:text-red-300 self-start sm:self-center"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {fieldErrors.passes && (
+                          <p className="text-[11px] text-red-400 mt-1">
+                            {fieldErrors.passes}
+                          </p>
+                        )}
                         <button
                           type="button"
-                          onClick={() => removePass(index)}
-                          className="text-red-400 hover:text-red-300"
+                          onClick={addPass}
+                          className="mt-1 inline-flex items-center text-[11px] text-sky-300 hover:text-sky-200 font-semibold"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Plus className="w-3.5 h-3.5 mr-1" /> Add another pass
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-950/80 border border-slate-600/60 px-4 py-3 text-[11px] text-slate-300 flex flex-col gap-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-slate-100">
+                            Earnings preview (example)
+                          </span>
+                          <DollarSign className="w-3.5 h-3.5 text-sky-300" />
+                        </div>
+                        {pricingPreview.avg > 0 ? (
+                          <>
+                            <p>
+                              If you sell{" "}
+                              <span className="font-semibold">
+                                30 passes / month
+                              </span>{" "}
+                              at an average of{" "}
+                              <span className="font-semibold">
+                                ₹{pricingPreview.avg}
+                              </span>
+                              , you earn ~
+                              <span className="font-semibold">
+                                {" "}
+                                ₹
+                                {Math.round(
+                                  pricingPreview.avg * 30 * 0.9
+                                ).toLocaleString("en-IN")}
+                              </span>{" "}
+                              after a 10% platform fee.
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              This is a rough example — you always set final prices
+                              and we show clear payouts.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-slate-500">
+                            Add at least one pass with a price to see a quick
+                            earnings example.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Description
+                        </label>
+                        <textarea
+                          name="description"
+                          value={formData.description}
+                          onChange={(e) =>
+                            updateField("description", e.target.value)
+                          }
+                          placeholder="Tell us about your vibe, coaching, community, peak hours, etc."
+                          rows={3}
+                          className="w-full bg-slate-950/70 border border-slate-500/40 rounded-2xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70 resize-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Tags (comma separated)
+                        </label>
+                        <input
+                          type="text"
+                          name="tags"
+                          value={formData.tags}
+                          onChange={(e) => updateField("tags", e.target.value)}
+                          placeholder="Example: CrossFit, Open Gym, Powerlifting"
+                          className="w-full bg-slate-950/70 border border-slate-500/40 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 2 – FACILITIES & TRUST */}
+                  {step === 2 && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Available facilities
+                        </label>
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Select whatever is consistently available for day-pass
+                          users.
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {AMENITIES.map((item) => (
+                            <label
+                              key={item}
+                              className="flex items-center space-x-2 text-[11px] md:text-xs text-slate-200 bg-slate-950/70 border border-slate-600/60 rounded-xl px-2.5 py-2 cursor-pointer hover:border-sky-400/70"
+                            >
+                              <input
+                                type="checkbox"
+                                value={item}
+                                onChange={handleFacilityChange}
+                                checked={facilities.includes(item)}
+                                className="accent-sky-400"
+                              />
+                              <span>{item}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-950/80 border border-slate-600/70 px-4 py-3 text-[11px] text-slate-300 flex gap-2">
+                        <Shield className="w-4 h-4 text-sky-300 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-slate-100 mb-0.5">
+                            Trust & safety first
+                          </p>
+                          <p>
+                            Verification documents are kept private and used only
+                            for checks. Users see your rating, photos and passes —
+                            not your internal paperwork.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-[11px] text-slate-300 mb-1">
+                            Business proof (GST / registration) *
+                          </p>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(e) => handleProofUpload(e, "business")}
+                            className="w-full text-[11px] bg-slate-950/70 border border-slate-600/60 rounded-xl px-2 py-2 text-slate-200 file:text-slate-300"
+                          />
+                          {fieldErrors.businessProof && (
+                            <p className="text-[11px] text-red-400 mt-1">
+                              {fieldErrors.businessProof}
+                            </p>
+                          )}
+                          {businessProof && (
+                            <p className="text-[11px] text-emerald-300 mt-1">
+                              Business proof uploaded.
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-slate-300 mb-1">
+                            Owner ID (Aadhaar / PAN) *
+                          </p>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(e) => handleProofUpload(e, "owner")}
+                            className="w-full text-[11px] bg-slate-950/70 border border-slate-600/60 rounded-xl px-2 py-2 text-slate-200 file:text-slate-300"
+                          />
+                          {fieldErrors.ownerIdProof && (
+                            <p className="text-[11px] text-red-400 mt-1">
+                              {fieldErrors.ownerIdProof}
+                            </p>
+                          )}
+                          {ownerIdProof && (
+                            <p className="text-[11px] text-emerald-300 mt-1">
+                              Owner ID uploaded.
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-slate-300 mb-1">
+                            Intro video (optional)
+                          </p>
+                          <input
+                            type="file"
+                            accept="video/*"
+                            onChange={(e) => handleProofUpload(e, "video")}
+                            className="w-full text-[11px] bg-slate-950/70 border border-slate-600/60 rounded-xl px-2 py-2 text-slate-200 file:text-slate-300"
+                          />
+                          {video && (
+                            <p className="text-[11px] text-emerald-300 mt-1">
+                              Intro video uploaded.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {uploadingDocs && (
+                        <p className="text-sky-200 text-[11px] mt-1 flex items-center gap-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading
+                          document(s)...
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* STEP 3 – IMAGES & SUBMIT */}
+                  {step === 3 && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Upload centre images *
+                        </label>
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Add your best angles: exterior, floor, equipment,
+                          classes. These appear on your public listing.
+                        </p>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="w-full text-[11px] bg-slate-950/70 border border-slate-600/60 rounded-xl px-2 py-2 text-slate-200 file:text-slate-300"
+                        />
+                        {fieldErrors.images && (
+                          <p className="text-[11px] text-red-400 mt-1">
+                            {fieldErrors.images}
+                          </p>
+                        )}
+                        {uploadingImages && (
+                          <p className="text-sky-200 text-[11px] mt-1 flex items-center gap-2">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading
+                            images...
+                          </p>
+                        )}
+                        {images.length > 0 && (
+                          <p className="text-emerald-300 text-[11px] mt-1">
+                            {images.length} image(s) uploaded successfully.
+                          </p>
+                        )}
+                      </div>
+
+                      {images.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {images.slice(0, 3).map((img, idx) => (
+                            <div
+                              key={idx}
+                              className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 border border-slate-700/70"
+                            >
+                              <img
+                                src={img}
+                                alt={`centre-${idx}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                          {images.length > 3 && (
+                            <div className="flex items-center justify-center text-[11px] text-slate-300 bg-slate-900/70 border border-slate-700/70 rounded-xl">
+                              +{images.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="rounded-2xl bg-slate-950/80 border border-slate-600/70 px-4 py-3 text-[11px] text-slate-300 flex gap-2">
+                        <ImageIcon className="w-4 h-4 text-orange-300 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-slate-100 mb-0.5">
+                            Make your first impression count
+                          </p>
+                          <p>
+                            Bright, clear photos perform best — especially wide
+                            shots that show the full layout, equipment and vibe.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FOOTER NAV BUTTONS */}
+                  <div className="pt-4 flex items-center justify-between gap-3">
+                    <div>
+                      {step > 0 && (
+                        <button
+                          type="button"
+                          onClick={goBack}
+                          className="inline-flex items-center gap-2 text-slate-300 bg-slate-900/80 border border-slate-600/70 px-4 py-2 rounded-full text-xs font-semibold hover:border-sky-400/70 hover:text-slate-50 transition"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          Back
                         </button>
                       )}
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={addPass}
-                    className="mt-1 inline-flex items-center text-[11px] text-orange-200 hover:text-orange-100 font-semibold"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Add another pass
-                  </button>
-                </div>
 
-                {/* Description */}
-                <div>
-                  <label className="block font-semibold mb-1.5 text-gray-100">
-                    Description
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Tell us about your vibe, coaching, community, peak hours, etc."
-                    rows="3"
-                    className="w-full bg-black/50 border border-white/20 rounded-2xl px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-white/50 resize-none"
-                  />
-                </div>
+                    <div className="flex items-center gap-2">
+                      {step < STEPS.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={goNext}
+                          className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-500 to-orange-400 text-slate-950 px-6 py-2.5 rounded-full text-xs md:text-sm font-semibold shadow-[0_22px_80px_rgba(15,23,42,1)] hover:opacity-95 hover:scale-[1.02] transition"
+                        >
+                          Next step
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
-                {/* Facilities */}
-                <div>
-                  <label className="block font-semibold mb-1.5 text-gray-100">
-                    Available facilities
-                  </label>
-                  <p className="text-[11px] text-gray-500 mb-2">
-                    Select whatever is consistently available for day-pass
-                    users.
-                  </p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {amenitiesList.map((item) => (
-                      <label
-                        key={item}
-                        className="flex items-center space-x-2 text-[11px] md:text-xs text-gray-200 bg-black/40 border border-white/15 rounded-xl px-2.5 py-2 cursor-pointer hover:border-white/40"
-                      >
-                        <input
-                          type="checkbox"
-                          value={item}
-                          onChange={handleFacilityChange}
-                          checked={facilities.includes(item)}
-                          className="accent-orange-400"
-                        />
-                        <span>{item}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Verification Proofs */}
-                <div>
-                  <label className="block font-semibold mb-1.5 text-gray-100">
-                    Verification documents
-                  </label>
-                  <p className="text-[11px] text-gray-500 mb-2">
-                    These are kept private and used only for trust & safety
-                    checks.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-[11px] text-gray-300 mb-1">
-                        Business proof (GST / registration)
-                      </p>
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        onChange={(e) => handleProofUpload(e, "business")}
-                        className="w-full text-[11px] bg-black/40 border border-white/20 rounded-xl px-2 py-2 text-gray-200"
-                      />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-gray-300 mb-1">
-                        Owner ID (Aadhaar / PAN)
-                      </p>
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        onChange={(e) => handleProofUpload(e, "owner")}
-                        className="w-full text-[11px] bg-black/40 border border-white/20 rounded-xl px-2 py-2 text-gray-200"
-                      />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-gray-300 mb-1">
-                        Intro video (optional)
-                      </p>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={(e) => handleProofUpload(e, "video")}
-                        className="w-full text-[11px] bg-black/40 border border-white/20 rounded-xl px-2 py-2 text-gray-200"
-                      />
+                      {step === STEPS.length - 1 && (
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-500 to-orange-400 text-slate-950 px-6 py-2.5 rounded-full text-xs md:text-sm font-semibold shadow-[0_22px_80px_rgba(15,23,42,1)] hover:opacity-95 hover:scale-[1.02] transition disabled:opacity-60 disabled:hover:scale-100"
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              Submit partner details
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                {/* Images */}
-                <div>
-                  <label className="block font-semibold mb-1.5 text-gray-100">
-                    Upload centre images *
-                  </label>
-                  <p className="text-[11px] text-gray-500 mb-2">
-                    Add your best angle: exterior, floor, equipment, class
-                    setup etc.
+                  <p className="text-[10px] text-slate-500 text-center mt-2">
+                    By submitting, you confirm that all details are accurate and
+                    that you have the authority to represent this business.
                   </p>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="w-full text-[11px] bg-black/40 border border-white/20 rounded-xl px-2 py-2 text-gray-200"
-                  />
-                  {uploading && (
-                    <p className="text-orange-200 text-[11px] mt-1 flex items-center gap-2">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading
-                      images...
-                    </p>
-                  )}
-                  {images.length > 0 && (
-                    <p className="text-emerald-300 text-[11px] mt-1">
-                      {images.length} image(s) uploaded successfully.
-                    </p>
-                  )}
-                </div>
-
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 rounded-full font-semibold flex items-center justify-center text-xs md:text-sm bg-gradient-to-r from-[#FF4B5C] to-[#FF9F68] text-gray-900 hover:opacity-95 hover:scale-[1.01] transition shadow-[0_22px_80px_rgba(0,0,0,0.95)]"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />{" "}
-                      Submitting...
-                    </>
-                  ) : (
-                    "Submit partner details"
-                  )}
-                </button>
-
-                <p className="text-[10px] text-gray-500 text-center mt-1">
-                  By submitting, you confirm that all details are accurate and
-                  that you have the authority to represent this business.
-                </p>
-              </form>
-            </>
-          )}
+                </form>
+              </>
+            )}
+          </div>
         </div>
       </section>
     </div>

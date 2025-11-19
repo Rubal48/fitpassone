@@ -1,70 +1,49 @@
+// routes/bookingRoutes.js
 import express from "express";
+import verifyToken from "../middleware/authMiddleware.js";
 import {
   createBooking,
   verifyBooking,
   getBookingById,
-  getBookingsByUserId, // ✅ added new controller
+  getBookingsByUser,
+  getBookingsByUserId,
+  cancelBooking,
+  requestModification,
+  handleModification,
+  getAttendanceList,
+  getAnalytics,
 } from "../controllers/bookingController.js";
-import verifyToken from "../middleware/authMiddleware.js";
-import Booking from "../models/Booking.js";
 
 const router = express.Router();
 
-/**
- * 🧾 Create a new booking
- * @route POST /api/bookings
- * @access Private
- */
+/* User routes */
 router.post("/", verifyToken, createBooking);
 
-/**
- * ✅ Verify a booking via booking code (QR/scan)
- * @route GET /api/bookings/verify/:bookingCode
- * @access Private
- */
-router.get("/verify/:bookingCode", verifyToken, verifyBooking);
+// Current logged-in user's bookings (used by MyBookings)
+router.get("/user", verifyToken, getBookingsByUser);
 
-/**
- * 📜 Fetch all bookings for logged-in user (existing)
- * @route GET /api/bookings/user
- * @access Private
- */
-router.get("/user", verifyToken, async (req, res) => {
-  try {
-    const bookings = await Booking.find({ user: req.user._id })
-      .populate("gym", "name city images")
-      .sort({ createdAt: -1 });
+// By explicit userId (used by dashboards / HostEvent etc.)
+router.get("/user/:userId", getBookingsByUserId);
 
-    res.json(bookings);
-  } catch (error) {
-    console.error("❌ Fetch user bookings failed:", error);
-    res.status(500).json({ message: "Failed to fetch bookings" });
-  }
-});
+/* QR / Verification */
+router.get("/verify/:bookingCode", verifyBooking);
 
-/**
- * 🆕 Fetch bookings by user ID (for Dashboard.jsx)
- * @route GET /api/bookings/user/:id
- * @access Public (or protect if you want)
- */
-router.get("/user/:id", async (req, res) => {
-  try {
-    const bookings = await Booking.find({ user: req.params.id })
-      .populate("gym", "name city images")
-      .sort({ createdAt: -1 });
+/* Cancellation */
+router.put("/cancel/:id", verifyToken, cancelBooking);
 
-    res.status(200).json({ bookings });
-  } catch (error) {
-    console.error("❌ Error fetching user bookings by ID:", error);
-    res.status(500).json({ message: "Failed to fetch user bookings" });
-  }
-});
+/* Modification */
+router.post("/modify/:id", verifyToken, requestModification);
 
-/**
- * ✅ Fetch single booking by ID (for BookingSuccess.jsx)
- * @route GET /api/bookings/:id
- * @access Private
- */
+/* Admin approve/reject modification */
+router.put("/modify/:id/admin", handleModification);
+
+/* Attendance List (Gym Panel) */
+router.get("/attendance/:gymId", getAttendanceList);
+
+/* Analytics */
+router.get("/analytics/data", getAnalytics);
+
+/* Single booking (keep AFTER special routes) */
 router.get("/:id", verifyToken, getBookingById);
 
 export default router;

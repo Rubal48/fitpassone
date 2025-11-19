@@ -1,190 +1,279 @@
+// controllers/bookingController.js
 import Booking from "../models/Booking.js";
 import Gym from "../models/Gym.js";
 import User from "../models/User.js";
-import { sendBookingConfirmationEmail } from "../utils/sendEmail.js";
+import QRCode from "qrcode";
 
-// ✅ Create booking after successful payment
+/* ======================================================
+   1️⃣ CREATE BOOKING
+====================================================== */
 export const createBooking = async (req, res) => {
   try {
-    const { gymId, date, duration, price, passDuration, userId: bodyUserId } = req.body;
+    const { gymId, date, duration, price, paymentMethod, couponCode } = req.body;
+    const userId = req.user._id;
 
-    console.log("🟦 Incoming booking request:", {
-      gymId,
-      date,
-      duration,
-      price,
-      passDuration,
-      tokenUser: req.user?._id,
-      bodyUserId,
-    });
-
-    if (!gymId || !date) {
-      return res.status(400).json({ message: "Gym ID and date are required" });
-    }
-
-    const userId = req.user?._id || bodyUserId;
-    if (!userId) {
-      return res.status(401).json({ message: "User not authenticated" });
-    }
-
-    const [gym, user] = await Promise.all([
-      Gym.findById(gymId),
-      User.findById(userId),
-    ]);
-
+    const gym = await Gym.findById(gymId);
     if (!gym || gym.status !== "approved") {
-      return res.status(404).json({ message: "Gym not found or not approved" });
+      return res.status(404).json({ message: "Gym not found or not approved." });
     }
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    let selectedPass = null;
-
-    if (Array.isArray(gym.passes) && gym.passes.length > 0) {
-      selectedPass = gym.passes.find((p) => p.duration === (passDuration || duration));
-    }
-
-    if (!selectedPass && gym.customPrice) {
-      const d = passDuration || duration;
-      selectedPass = {
-        duration: Number(d),
-        price: Number(gym.customPrice[d]) || Number(price) || 0,
-      };
-    }
-
-    if (!selectedPass || !selectedPass.price) {
-      return res.status(400).json({ message: "Invalid pass duration or price" });
-    }
-
+    // Create booking
     const booking = new Booking({
       user: userId,
       gym: gymId,
       date,
-      duration: selectedPass.duration,
-      price: selectedPass.price,
-      status: "confirmed",
+      duration,
+      price,
+      paymentMethod,
+      couponCode,
       paymentStatus: "paid",
+      platformFee: Math.round(price * 0.1), // 10% platform cut
+      gymPayout: Math.round(price * 0.9),
+      source: "web",
     });
+
+    // Generate QR code
+    const qr = await QRCode.toDataURL(booking._id.toString());
+    booking.qrCode = qr;
 
     await booking.save();
-    console.log("✅ Booking saved successfully:", booking.bookingCode);
 
-    if (user?.email) {
-      try {
-        await sendBookingConfirmationEmail(user.email, {
-          gymName: gym.name,
-          city: gym.city,
-          date,
-          bookingCode: booking.bookingCode,
-          price: selectedPass.price,
-        });
-        console.log("✅ Confirmation email sent to:", user.email);
-      } catch (emailErr) {
-        console.error("❌ Failed to send email:", emailErr.message);
-      }
-    }
-
-    res.status(201).json({
-      _id: booking._id,
-      message: "Booking created successfully ✅",
-      booking: {
-        _id: booking._id,
-        bookingCode: booking.bookingCode,
-        price: booking.price,
-        duration: booking.duration,
-        date: booking.date,
-        status: booking.status,
-        paymentStatus: booking.paymentStatus,
-        gym: {
-          _id: gym._id,
-          name: gym.name,
-          city: gym.city,
-        },
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email || "N/A",
-        },
-      },
+    return res.status(201).json({
+      success: true,
+      message: "Booking created successfully!",
+      booking,
     });
-  } catch (error) {
-    console.error("❌ Booking creation failed:", error);
-    res.status(500).json({
-      message: error.message || "Failed to create booking",
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-    });
+  } catch (err) {
+    console.error("❌ createBooking error:", err);
+    return res.status(500).json({ message: "Booking creation failed." });
   }
 };
 
-// ✅ Verify booking (QR scan)
+/* ======================================================
+   2️⃣ VERIFY BOOKING (QR SCAN)
+====================================================== */
 export const verifyBooking = async (req, res) => {
   try {
     const { bookingCode } = req.params;
 
     const booking = await Booking.findOne({ bookingCode })
-      .populate("gym", "name city")
-      .populate("user", "name email");
+      .populate("user", "name email")
+      .populate("gym", "name city");
 
     if (!booking)
-      return res.status(404).json({ valid: false, message: "Booking not found" });
+      return res.status(404).json({ message: "Booking not found." });
 
-    if (booking.status !== "confirmed")
-      return res
-        .status(400)
-        .json({ valid: false, message: "Pass already used or expired" });
+    if (booking.expiresAt && new Date() > new Date(booking.expiresAt))
+      return res.status(400).json({ message: "Pass expired." });
 
+    // Add to check-in history
+    booking.checkInAt = new Date();
+    if (!Array.isArray(booking.checkinHistory)) {
+      booking.checkinHistory = [];
+    }
+    booking.checkinHistory.push({
+      checkinAt: new Date(),
+      verifiedBy: req.user._id,
+    });
     booking.status = "checked-in";
     booking.verifiedAt = new Date();
+
     await booking.save();
 
-    res.json({
-      valid: true,
-      message: "Valid booking. Access granted ✅",
-      booking: {
-        bookingCode: booking.bookingCode,
-        user: booking.user.name,
-        gym: booking.gym.name,
-        city: booking.gym.city,
-        date: booking.date,
-      },
+    return res.json({
+      success: true,
+      message: "Check-in successful.",
+      booking,
     });
-  } catch (error) {
-    console.error("❌ Verification failed:", error);
-    res.status(500).json({ valid: false, message: "Verification failed." });
+  } catch (err) {
+    console.error("❌ verifyBooking error:", err);
+    return res.status(500).json({ message: "Verification failed." });
   }
 };
 
-// ✅ Fetch single booking by ID (for BookingSuccess.jsx)
+/* ======================================================
+   3️⃣ GET SINGLE BOOKING 
+====================================================== */
 export const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
       .populate("gym", "name city images")
       .populate("user", "name email");
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
+    if (!booking) return res.status(404).json({ message: "Not found" });
 
-    res.json(booking);
-  } catch (error) {
-    console.error("❌ Error fetching booking by ID:", error);
-    res.status(500).json({ message: "Failed to fetch booking" });
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch booking." });
   }
 };
-// ✅ Fetch all bookings by user ID (for dashboard)
-export const getBookingsByUserId = async (req, res) => {
+
+/* ======================================================
+   4️⃣ GET BOOKINGS FOR LOGGED-IN USER
+====================================================== */
+export const getBookingsByUser = async (req, res) => {
   try {
-    const { id } = req.params;
-    const bookings = await Booking.find({ user: id })
+    const bookings = await Booking.find({ user: req.user._id })
       .populate("gym", "name city images")
-      .populate("user", "name email")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ bookings });
-  } catch (error) {
-    console.error("❌ Error fetching bookings by user ID:", error);
-    res.status(500).json({ message: "Failed to fetch user bookings" });
+    res.json({ success: true, bookings });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load bookings." });
+  }
+};
+
+/* ======================================================
+   4️⃣.b GET BOOKINGS BY USER ID (for dashboards / admin)
+   GET /api/bookings/user/:userId
+====================================================== */
+export const getBookingsByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const bookings = await Booking.find({ user: userId })
+      .populate("gym", "name city images")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, bookings });
+  } catch (err) {
+    console.error("❌ getBookingsByUserId error:", err);
+    res.status(500).json({ message: "Failed to load bookings." });
+  }
+};
+
+/* ======================================================
+   5️⃣ CANCEL BOOKING + REFUND
+====================================================== */
+export const cancelBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) return res.status(404).json({ message: "Booking not found." });
+
+    if (booking.status !== "confirmed")
+      return res.status(400).json({ message: "Cannot cancel this booking." });
+
+    booking.status = "cancelled";
+    booking.cancelledAt = new Date();
+    booking.refundStatus = "requested";
+    booking.refundAmount = Math.round(booking.price * 0.8); // 80% refund
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: "Booking cancelled. Refund requested.",
+      booking,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Cancel failed." });
+  }
+};
+
+/* ======================================================
+   6️⃣ REQUEST BOOKING MODIFICATION
+====================================================== */
+export const requestModification = async (req, res) => {
+  try {
+    const { requestedDate, requestedDuration, reason } = req.body;
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking)
+      return res.status(404).json({ message: "Booking not found." });
+
+    booking.modificationRequests.push({
+      requestedDate,
+      requestedDuration,
+      reason,
+    });
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: "Modification request submitted.",
+      booking,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to submit modification request." });
+  }
+};
+
+/* ======================================================
+   7️⃣ ADMIN APPROVES/REJECTS MODIFICATION
+====================================================== */
+export const handleModification = async (req, res) => {
+  try {
+    const { requestId, action, adminNote } = req.body;
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking)
+      return res.status(404).json({ message: "Booking not found." });
+
+    const modifyReq = booking.modificationRequests.id(requestId);
+
+    if (!modifyReq)
+      return res.status(404).json({ message: "Modification request not found." });
+
+    modifyReq.status = action;
+    modifyReq.adminNote = adminNote;
+
+    // If approved → apply changes
+    if (action === "approved") {
+      if (modifyReq.requestedDate) booking.date = modifyReq.requestedDate;
+      if (modifyReq.requestedDuration)
+        booking.duration = modifyReq.requestedDuration;
+    }
+
+    await booking.save();
+
+    res.json({ success: true, message: "Updated.", booking });
+  } catch (err) {
+    res.status(500).json({ message: "Action failed." });
+  }
+};
+
+/* ======================================================
+   8️⃣ GET ATTENDANCE LIST (Gym View)
+====================================================== */
+export const getAttendanceList = async (req, res) => {
+  try {
+    const { gymId } = req.params;
+
+    const checkins = await Booking.find({
+      gym: gymId,
+      status: "checked-in",
+    }).populate("user", "name email");
+
+    res.json({ success: true, checkins });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch attendance." });
+  }
+};
+
+/* ======================================================
+   9️⃣ ANALYTICS (Admin Dashboard)
+====================================================== */
+export const getAnalytics = async (req, res) => {
+  try {
+    const totalBookings = await Booking.countDocuments();
+    const activeBookings = await Booking.countDocuments({ status: "confirmed" });
+    const cancelled = await Booking.countDocuments({ status: "cancelled" });
+
+    const revenue = await Booking.aggregate([
+      { $match: { paymentStatus: "paid" } },
+      { $group: { _id: null, total: { $sum: "$price" } } },
+    ]);
+
+    res.json({
+      success: true,
+      totalBookings,
+      activeBookings,
+      cancelled,
+      revenue: revenue[0]?.total || 0,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Analytics failed." });
   }
 };

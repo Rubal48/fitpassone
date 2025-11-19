@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// src/pages/EventDetail.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   MapPin,
@@ -17,8 +18,7 @@ import {
   Sparkles,
   HeartHandshake,
   Info,
-  Plane,
-  Shield,
+  Share2,
 } from "lucide-react";
 import API from "../utils/api";
 
@@ -29,216 +29,312 @@ const EventDetail = () => {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // 🧠 Fetch event
+  // ─────────────────────────────────────────
+  // Fetch event details
+  // ─────────────────────────────────────────
   useEffect(() => {
     const fetchEvent = async () => {
       try {
+        setLoading(true);
+        setError("");
         const res = await API.get(`/events/${id}`);
-        setEvent(res.data.event || res.data);
-      } catch (error) {
-        console.error("Error fetching event:", error);
+        const ev = res.data?.event || res.data;
+        setEvent(ev);
+      } catch (err) {
+        console.error("Error fetching event:", err);
+        setError("We couldn’t load this experience. Please try again.");
       } finally {
         setLoading(false);
       }
     };
-    fetchEvent();
+
+    if (id) fetchEvent();
   }, [id]);
 
-  // 🎫 Handle booking
-  const handleBookEvent = async () => {
-    if (!event || bookingLoading) return;
+  // ─────────────────────────────────────────
+  // Derived values
+  // ─────────────────────────────────────────
+  const eventDate = event ? new Date(event.date) : null;
 
-    const eventDate = new Date(event.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isPast = eventDate < today;
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const diffDays =
+    eventDate && !Number.isNaN(eventDate.getTime())
+      ? Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24))
+      : null;
+
+  const isPast = eventDate ? eventDate < today : false;
+
+  const dateLabel = eventDate
+    ? eventDate.toLocaleDateString("en-IN", {
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "Date TBA";
+
+  const remainingSeats =
+    typeof event?.remainingSeats === "number"
+      ? event.remainingSeats
+      : event?.capacity ?? null;
+
+  const capacityLabel =
+    typeof event?.capacity === "number" && event.capacity > 0
+      ? `${event.capacity} spots`
+      : "Limited spots";
+
+  const ratingLabel =
+    event?.rating && Number(event.rating) > 0
+      ? Number(event.rating).toFixed(1)
+      : "4.7";
+
+  const ratingCountLabel =
+    typeof event?.ratingCount === "number" && event.ratingCount > 0
+      ? `${event.ratingCount}+ guests`
+      : "New on Passiify";
+
+  const languages =
+    event?.languages && event.languages.length
+      ? event.languages
+      : ["English", "Hindi"];
+
+  const tags =
+    event?.tags && event.tags.length
+      ? event.tags
+      : ["Outdoor", "Community", "Fitness", "Travel Friendly"];
+
+  const stats = event?.stats || {};
+  const cancellationPolicy = event?.cancellationPolicy || {};
+
+  const cancellationSummary = useMemo(() => {
+    const type = cancellationPolicy.type || "flexible";
+    const freeHours =
+      typeof cancellationPolicy.freeCancellationHours === "number"
+        ? cancellationPolicy.freeCancellationHours
+        : 24;
+    const refundBefore =
+      typeof cancellationPolicy.refundPercentBefore === "number"
+        ? cancellationPolicy.refundPercentBefore
+        : 100;
+    const refundAfter =
+      typeof cancellationPolicy.refundPercentAfter === "number"
+        ? cancellationPolicy.refundPercentAfter
+        : 0;
+
+    if (type === "none") {
+      return "This experience is non-refundable once booked.";
+    }
+
+    if (refundBefore === 100 && refundAfter === 0) {
+      return `Free cancellation until ${freeHours} hours before start. No refund after that window.`;
+    }
+
+    return `Up to ${freeHours} hours before start: ${refundBefore}% refund. Closer than that: ${refundAfter}% refund.`;
+  }, [cancellationPolicy]);
+
+  // 📝 Host special notes from meetingInstructions (split into bullets)
+  const hostNotes = useMemo(() => {
+    if (!event?.meetingInstructions) return [];
+    return event.meetingInstructions
+      .split(/\n|•|-\s/gi)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }, [event]);
+
+  const bookingDisabled =
+    isPast || remainingSeats === 0 || (remainingSeats && remainingSeats < 0);
+
+  // ─────────────────────────────────────────
+  // Booking handler – uses /event-bookings with token
+  // ─────────────────────────────────────────
+  const handleBookEvent = async () => {
+    if (!event || bookingDisabled) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please login to book this experience.");
+      navigate("/login");
+      return;
+    }
 
     if (isPast) {
-      alert("This event has already happened. Please choose another one.");
+      alert("This experience has already happened. Please pick another one.");
       return;
     }
 
     try {
-      const storedUser = localStorage.getItem("user");
-      if (!storedUser) {
-        alert("Please login to book this event.");
-        navigate("/login");
-        return;
-      }
-
-      const parsed = JSON.parse(storedUser);
-      const userData = parsed.user || parsed;
-      const userId = userData._id;
-
-      if (!userId) {
-        alert("User not found. Please log in again.");
-        navigate("/login");
-        return;
-      }
-
       setBookingLoading(true);
+      setError("");
 
       const res = await API.post("/event-bookings", {
-        userId,
         eventId: event._id,
         tickets: 1,
       });
 
-      if (res.data.success && res.data.booking) {
+      if (res.data?.success && res.data?.booking) {
         navigate(`/booking-success/${res.data.booking._id}`, {
           state: { type: "event", name: event.name },
         });
       } else {
-        alert(res.data.message || "Something went wrong!");
+        console.warn("Unexpected booking response:", res.data);
+        alert(res.data?.message || "Something went wrong while booking.");
       }
-    } catch (error) {
-      console.error("Error booking event:", error);
-      alert("Failed to book this event. Please try again.");
+    } catch (err) {
+      console.error("Error booking event:", err);
+      const msg =
+        err.response?.data?.message ||
+        "We couldn’t complete your booking. Please try again.";
+      alert(msg);
     } finally {
       setBookingLoading(false);
     }
   };
 
+  // ─────────────────────────────────────────
+  // Simple share handler (nice for Gen-Z)
+  // ─────────────────────────────────────────
+  const handleShare = async () => {
+    if (!event) return;
+
+    const shareData = {
+      title: event.name,
+      text: `Join me at "${event.name}" on Passiify 🚀`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard ✨");
+      } else {
+        alert("Share this link with your friends:\n" + window.location.href);
+      }
+    } catch {
+      // user cancelled or unsupported – silently ignore
+    }
+  };
+
+  // ─────────────────────────────────────────
+  // Loading / error states
+  // ─────────────────────────────────────────
   if (loading) {
     return (
-      <div
-        className="flex justify-center items-center min-h-[60vh]"
-        style={{
-          backgroundColor: "#050308",
-          backgroundImage:
-            "radial-gradient(circle at top, rgba(248,216,181,0.18), transparent 55%)",
-        }}
-      >
-        <Loader2 className="animate-spin text-sky-400" size={42} />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+        <Loader2 className="w-8 h-8 text-blue-600 dark:text-sky-400 animate-spin mb-3" />
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Loading this Passiify experience for you...
+        </p>
       </div>
     );
   }
 
-  if (!event) {
+  if (error || !event) {
     return (
-      <div
-        className="min-h-screen flex flex-col justify-center items-center text-gray-200 px-6 text-center"
-        style={{
-          backgroundColor: "#050308",
-          backgroundImage:
-            "radial-gradient(circle at top, rgba(248,216,181,0.18), transparent 55%)",
-        }}
-      >
-        <p className="mb-4 text-lg">❌ Event not found.</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 px-4 text-center">
+        <p className="text-lg text-slate-700 dark:text-slate-100 mb-3">
+          {error || "We couldn’t find this event."}
+        </p>
         <Link
           to="/events"
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-500 to-orange-400 text-gray-900 px-6 py-2.5 rounded-full text-sm font-semibold shadow-[0_16px_60px_rgba(0,0,0,0.9)] hover:scale-[1.02] transition-transform"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-md hover:shadow-xl hover:scale-[1.03] transition"
         >
-          Browse Events
+          Browse other experiences
         </Link>
       </div>
     );
   }
 
-  const eventDate = new Date(event.date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
-  const isPast = eventDate < today;
-
-  const dateLabel = eventDate.toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  const tags =
-    event.tags && event.tags.length
-      ? event.tags
-      : ["Outdoor", "Community", "Fitness", "Travel Friendly"];
-
-  const capacityLabel =
-    typeof event.capacity === "number" && event.capacity > 0
-      ? `Up to ${event.capacity} guests`
-      : "Small group experience";
-
-  const ratingLabel =
-    event.rating && Number(event.rating) > 0
-      ? Number(event.rating).toFixed(1)
-      : "4.7";
-
-  const isApproved = event.status?.toLowerCase() === "approved";
-
+  // ─────────────────────────────────────────
+  // Main UI
+  // ─────────────────────────────────────────
   return (
-    <div
-      className="min-h-screen text-gray-100 pb-20"
-      style={{
-        backgroundColor: "#050308",
-        backgroundImage:
-          "radial-gradient(circle at top, rgba(248,216,181,0.22), transparent 55%)",
-      }}
-    >
-      {/* Top bar with back + trust marker */}
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-50 pb-20">
+      {/* Top bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
-          className="inline-flex items-center text-sm text-gray-300 hover:text-orange-300 transition"
+          className="inline-flex items-center text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-orange-300 transition"
         >
           <ArrowLeft size={18} className="mr-1" />
           Back
         </button>
+
         <div className="flex items-center gap-3">
-          {isApproved && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/40 text-[11px] text-emerald-200">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Passiify Verified Experience
-            </span>
-          )}
-          <span className="text-[11px] uppercase tracking-[0.2em] text-gray-400">
-            Passiify / Event
+          <span className="hidden sm:inline text-[11px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+            Passiify · Experience
           </span>
+          <button
+            onClick={handleShare}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 shadow-sm hover:shadow-md hover:scale-[1.03] transition"
+          >
+            <Share2 size={14} />
+            Share
+          </button>
         </div>
       </div>
 
       {/* HERO */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 mt-4">
-        <div className="relative rounded-[30px] overflow-hidden shadow-[0_28px_120px_rgba(0,0,0,1)] border border-white/10">
+        <div className="relative rounded-[28px] overflow-hidden shadow-[0_28px_90px_rgba(15,23,42,0.35)] border border-slate-100 dark:border-slate-800 bg-slate-900">
           <div className="relative h-[320px] sm:h-[420px] md:h-[460px]">
             <img
               src={event.image || "/images/default-event.jpg"}
               alt={event.name}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/40" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-900/70 via-transparent to-slate-900/50" />
 
             {/* Hero content */}
             <div className="absolute bottom-6 sm:bottom-10 left-5 sm:left-8 right-5 sm:right-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div>
-                <div className="inline-flex items-center gap-2 text-[11px] px-3 py-1 rounded-full bg-white/10 border border-white/20 mb-3 backdrop-blur-md">
-                  <Sparkles className="w-3.5 h-3.5 text-orange-300" />
-                  <span className="uppercase tracking-[0.18em] text-gray-200">
-                    Curated Fitness Experience
+                <div className="inline-flex items-center gap-2 text-[11px] px-3 py-1 rounded-full bg-gradient-to-r from-blue-500/80 to-orange-400/80 border border-white/30 mb-3 backdrop-blur-sm">
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+                  <span className="uppercase tracking-[0.18em] text-slate-50">
+                    Move & Roam by Passiify
                   </span>
                 </div>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight mb-1 text-white">
                   {event.name}
                 </h1>
-                <p className="flex items-center gap-2 text-sm text-gray-200">
-                  <MapPin size={16} className="text-orange-300" />
-                  {event.location}
+                <p className="flex flex-wrap items-center gap-3 text-sm text-slate-100">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin size={16} className="text-orange-300" />
+                    {event.location}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-slate-900/60 border border-white/20">
+                    <CalendarDays size={14} className="text-sky-300" />
+                    {dateLabel}
+                  </span>
                 </p>
               </div>
 
               <div className="text-right space-y-2">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/25 text-xs sm:text-sm">
-                  <CalendarDays size={15} className="text-sky-300" />
-                  <span>{dateLabel}</span>
-                </div>
-                <div className="inline-flex items-baseline gap-1 px-4 py-2 rounded-2xl bg-black/60 border border-white/10">
-                  <span className="text-xs text-gray-400">from</span>
+                <div className="inline-flex items-baseline gap-1 px-4 py-2 rounded-2xl bg-slate-900/80 border border-white/15">
+                  <span className="text-xs text-slate-200">from</span>
                   <span className="text-2xl sm:text-3xl font-extrabold text-orange-300">
                     ₹{event.price}
                   </span>
-                  <span className="text-[11px] text-gray-300 ml-1">
+                  <span className="text-[11px] text-slate-300 ml-1">
                     / person
+                  </span>
+                </div>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/25 text-[11px] text-slate-50">
+                  <Star
+                    size={14}
+                    className="text-yellow-300 fill-yellow-300"
+                  />
+                  <span>
+                    {ratingLabel} · {ratingCountLabel}
                   </span>
                 </div>
               </div>
@@ -246,14 +342,26 @@ const EventDetail = () => {
 
             {/* Top-right pills */}
             <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
-              <div className="text-[11px] px-3 py-1 rounded-full bg-black/70 border border-white/20 text-gray-100 flex items-center gap-1.5">
+              <div className="text-[11px] px-3 py-1 rounded-full bg-slate-950/80 border border-white/25 text-slate-100 flex items-center gap-1.5">
                 <Users size={14} className="text-sky-300" />
                 <span>{capacityLabel}</span>
               </div>
-              <div className="text-[11px] px-3 py-1 rounded-full bg-black/70 border border-white/20 text-yellow-300 flex items-center gap-1.5">
-                <Star className="fill-yellow-300 text-yellow-300 w-3.5 h-3.5" />
-                <span>{ratingLabel} / 5.0</span>
-              </div>
+              {typeof remainingSeats === "number" && (
+                <div
+                  className={`text-[11px] px-3 py-1 rounded-full border text-slate-100 flex items-center gap-1.5 ${
+                    remainingSeats > 0
+                      ? "bg-emerald-600/70 border-emerald-300/60"
+                      : "bg-rose-600/70 border-rose-300/60"
+                  }`}
+                >
+                  <Info size={14} className="text-white" />
+                  <span>
+                    {remainingSeats > 0
+                      ? `${remainingSeats} seats left`
+                      : "Sold out"}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -263,207 +371,299 @@ const EventDetail = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-10 grid md:grid-cols-3 gap-8 lg:gap-10">
         {/* LEFT: Details */}
         <section className="md:col-span-2 space-y-8">
-          {/* Quick meta + tags */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)]">
+          {/* Quick meta + tags + social proof */}
+          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-100 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(15,23,42,0.12)]">
             <div className="grid sm:grid-cols-3 gap-4 text-xs sm:text-sm mb-4">
               <div className="flex items-start gap-2">
-                <CalendarDays className="w-4 h-4 mt-0.5 text-sky-300" />
+                <CalendarDays className="w-4 h-4 mt-0.5 text-blue-500 dark:text-sky-400" />
                 <div>
-                  <p className="text-gray-400">Date & time</p>
-                  <p className="text-gray-100 font-medium">{dateLabel}</p>
+                  <p className="text-slate-500 dark:text-slate-400">
+                    Date & time
+                  </p>
+                  <p className="text-slate-900 dark:text-slate-50 font-medium">
+                    {dateLabel}
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <Users className="w-4 h-4 mt-0.5 text-orange-300" />
+                <Users className="w-4 h-4 mt-0.5 text-orange-500" />
                 <div>
-                  <p className="text-gray-400">Group size</p>
-                  <p className="text-gray-100 font-medium">{capacityLabel}</p>
+                  <p className="text-slate-500 dark:text-slate-400">
+                    Group size
+                  </p>
+                  <p className="text-slate-900 dark:text-slate-50 font-medium">
+                    {capacityLabel}
+                    {typeof remainingSeats === "number" &&
+                      remainingSeats >= 0 && (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-1">
+                          · {remainingSeats} left
+                        </span>
+                      )}
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <Globe2 className="w-4 h-4 mt-0.5 text-emerald-300" />
+                <Globe2 className="w-4 h-4 mt-0.5 text-emerald-500" />
                 <div>
-                  <p className="text-gray-400">Perfect for</p>
-                  <p className="text-gray-100 font-medium">
-                    Travellers, expats & locals
+                  <p className="text-slate-500 dark:text-slate-400">
+                    Perfect for
+                  </p>
+                  <p className="text-slate-900 dark:text-slate-50 font-medium">
+                    Travellers & locals who want to move and meet people
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-2">
-              {tags.map((tag, idx) => (
-                <span
-                  key={idx}
-                  className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-gray-200"
-                >
-                  #{tag}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-700 dark:text-slate-200"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck
+                    size={14}
+                    className="text-emerald-500 dark:text-emerald-400"
+                  />
+                  Verified by Passiify
                 </span>
-              ))}
+                <span className="flex items-center gap-1.5">
+                  <HeartHandshake
+                    size={14}
+                    className="text-orange-500 dark:text-orange-400"
+                  />
+                  Traveller-friendly host
+                </span>
+              </div>
             </div>
           </div>
 
           {/* About */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)]">
-            <h2 className="text-xl sm:text-2xl font-semibold text-white mb-3">
+          <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(15,23,42,0.1)]">
+            <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-50 mb-3">
               About this experience
             </h2>
-            <p className="text-sm sm:text-[15px] text-gray-200 leading-relaxed">
+            <p className="text-sm sm:text-[15px] text-slate-700 dark:text-slate-300 leading-relaxed">
               {event.description ||
-                "A curated fitness experience designed for travellers and locals to move, connect and explore the city together."}
+                "A curated fitness experience designed for travellers and locals to move, connect and explore the city together — without any long-term membership."}
             </p>
           </div>
 
-          {/* Who is this for + Experience */}
+          {/* Host story + host special notes */}
+          <div className="grid md:grid-cols-[1.2fr,1fr] gap-5">
+            {/* Host story */}
+            <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)] flex gap-4">
+              <div className="w-14 h-14 rounded-full border border-orange-300/60 dark:border-orange-400/70 bg-gradient-to-br from-orange-400 to-blue-500 flex items-center justify-center text-lg font-semibold text-white shrink-0">
+                {event.organizer?.[0]?.toUpperCase() || "H"}
+              </div>
+              <div className="space-y-2">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+                  Hosted by{" "}
+                  <span className="text-blue-700 dark:text-sky-300">
+                    {event.organizer}
+                  </span>
+                  <ShieldCheck className="text-emerald-500 dark:text-emerald-400 w-4 h-4" />
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Verified host · Part of the Passiify community network
+                </p>
+                {event.personalNote && event.personalNote.trim() !== "" && (
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 italic bg-gradient-to-r from-orange-50/80 via-sky-50/80 to-transparent dark:from-slate-800/60 dark:via-slate-800/30 rounded-lg px-3 py-2 border border-orange-100/70 dark:border-slate-700">
+                    “{event.personalNote}”
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Host special instructions */}
+            <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-2 flex items-center gap-2">
+                <Info className="w-4 h-4 text-blue-500 dark:text-sky-400" />
+                From your host
+              </h3>
+              {hostNotes.length > 0 ? (
+                <ul className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-1.5 list-disc pl-4">
+                  {hostNotes.map((note, idx) => (
+                    <li key={idx}>{note}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Your host will share exact meetup tips and any special
+                  requirements on your digital ticket after booking.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Who is it for / What you'll experience */}
           <div className="grid sm:grid-cols-2 gap-5">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 shadow-[0_16px_50px_rgba(0,0,0,0.9)]">
-              <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <HeartHandshake className="w-5 h-5 text-orange-300" />
+            <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-3 flex items-center gap-2">
+                <HeartHandshake className="w-5 h-5 text-orange-500 dark:text-orange-400" />
                 Who is this for?
               </h3>
-              <ul className="text-sm text-gray-200 space-y-2 list-disc pl-5">
-                <li>Travellers who want to meet people through movement</li>
-                <li>Locals exploring new fitness communities in their city</li>
-                <li>Beginners & intermediates — no strict level required</li>
+              <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 list-disc pl-5">
+                <li>Travellers who want to meet people through movement.</li>
+                <li>Locals exploring new fitness communities in their city.</li>
+                <li>Beginners & intermediates — all levels welcome.</li>
               </ul>
             </div>
 
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 shadow-[0_16px_50px_rgba(0,0,0,0.9)]">
-              <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-sky-300" />
+            <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-3 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-blue-500 dark:text-sky-400" />
                 What you’ll experience
               </h3>
-              <ul className="text-sm text-gray-200 space-y-2 list-disc pl-5">
-                <li>A structured session led by certified coaches</li>
-                <li>Warm-up, main workout, cool-down & recap</li>
-                <li>Time to connect and talk with other attendees</li>
+              <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 list-disc pl-5">
+                <li>A structured session led by a passionate host/trainer.</li>
+                <li>Warm-up, main workout/activity & cool-down.</li>
+                <li>Time to talk, share stories and connect afterwards.</li>
               </ul>
             </div>
           </div>
 
-          {/* What's included / What to bring */}
-          <div className="grid sm:grid-cols-2 gap-5">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 shadow-[0_16px_50px_rgba(0,0,0,0.9)]">
-              <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-emerald-300" />
-                What’s included
-              </h3>
-              <ul className="text-sm text-gray-200 space-y-1.5 list-disc pl-5">
-                <li>Entry to the event / facility</li>
-                <li>Guided session with host / coach</li>
-                <li>Support from Passiify in case of issues</li>
-              </ul>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 shadow-[0_16px_50px_rgba(0,0,0,0.9)]">
-              <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-                <Info className="w-5 h-5 text-orange-300" />
-                What to bring
-              </h3>
-              <ul className="text-sm text-gray-200 space-y-1.5 list-disc pl-5">
-                <li>Comfortable workout clothing & shoes</li>
-                <li>Water bottle and small towel</li>
-                <li>Valid ID (for venue verification if asked)</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Languages / Good to know */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)]">
+          {/* Languages & Good to know */}
+          <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
             <div className="grid sm:grid-cols-2 gap-5 text-sm">
               <div>
-                <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-                  <Languages className="w-5 h-5 text-emerald-300" />
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-3 flex items-center gap-2">
+                  <Languages className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                   Languages & vibe
                 </h3>
-                <p className="text-gray-200 mb-2">
-                  Most events are hosted in{" "}
-                  <span className="font-semibold text-gray-100">
-                    English & Hindi
-                  </span>{" "}
-                  — travellers are always welcome.
+                <p className="text-slate-700 dark:text-slate-300 mb-2">
+                  This experience usually runs in{" "}
+                  <span className="font-semibold">
+                    {languages.join(", ")}
+                  </span>
+                  . Travellers are always welcome, and the host keeps things
+                  beginner-friendly.
                 </p>
-                <p className="text-gray-400 text-xs">
-                  If you’re unsure, you can still book — the host details and
-                  exact meeting info are shared on your Passiify ticket and
-                  email.
+                <p className="text-slate-500 dark:text-slate-400 text-xs">
+                  Exact contact and meeting details are shared on your Passiify
+                  ticket & email after booking.
                 </p>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-sky-300" />
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-3 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-500 dark:text-sky-400" />
                   Good to know
                 </h3>
-                <ul className="text-gray-200 space-y-1.5 list-disc pl-5">
-                  <li>Arrive 10–15 minutes before start time</li>
-                  <li>Carry a bottle of water & comfortable clothing</li>
-                  <li>Exact meeting point shared on ticket & email</li>
+                <ul className="text-slate-700 dark:text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Arrive 10–15 minutes before start time.</li>
+                  <li>Bring water, comfortable clothes and valid ID.</li>
+                  <li>
+                    Exact meeting point is shared in your booking confirmation.
+                  </li>
                 </ul>
               </div>
             </div>
           </div>
 
-          {/* Organizer block */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full border border-orange-300/70 bg-gradient-to-br from-orange-400 to-sky-500 flex items-center justify-center text-lg font-semibold">
-                {event.organizer?.[0]?.toUpperCase() || "H"}
-              </div>
-              <div>
-                <p className="flex items-center gap-2 text-sm font-semibold text-white">
-                  Hosted by{" "}
-                  <span className="text-orange-300">{event.organizer}</span>
-                  <ShieldCheck className="text-emerald-300 w-4 h-4" />
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Verified organizer • Identity & details checked by Passiify
-                </p>
-              </div>
+          {/* Cancellation policy & stats */}
+          <div className="grid sm:grid-cols-2 gap-5">
+            <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-2 flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-orange-500 dark:text-orange-400" />
+                Cancellation policy
+              </h3>
+              <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+                {cancellationSummary}
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Refunds (if applicable) are processed back to your original
+                payment method as per Passiify’s terms.
+              </p>
             </div>
 
-            {event.personalNote && event.personalNote.trim() !== "" && (
-              <div className="sm:max-w-sm bg-black/40 border border-white/10 rounded-xl p-4 text-xs sm:text-sm text-gray-200 italic">
-                “{event.personalNote}”
+            <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-2 flex items-center gap-2">
+                <BarMiniIcon />
+                Community snapshot
+              </h3>
+              <div className="flex flex-wrap gap-4 text-sm text-slate-700 dark:text-slate-300">
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Total bookings
+                  </p>
+                  <p className="font-semibold">
+                    {stats.totalBookings ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Total attendees
+                  </p>
+                  <p className="font-semibold">
+                    {stats.totalAttendees ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Cancellations
+                  </p>
+                  <p className="font-semibold">
+                    {stats.totalCancellations ?? 0}
+                  </p>
+                </div>
               </div>
-            )}
+              <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+                These numbers give you a sense of how many people have already
+                joined this experience.
+              </p>
+            </div>
           </div>
 
-          {/* Traveller FAQ */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)]">
-            <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <Plane className="w-5 h-5 text-sky-300" />
-              Travelling from another country?
+          {/* Traveller questions (tiny FAQ) */}
+          <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_18px_55px_rgba(15,23,42,0.1)]">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-3">
+              For travellers: quick answers
             </h3>
-            <div className="grid sm:grid-cols-3 gap-4 text-xs sm:text-[13px] text-gray-200">
+            <div className="grid sm:grid-cols-3 gap-4 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
               <div>
-                <p className="font-semibold mb-1">Payment</p>
-                <p className="text-gray-300">
-                  Pay securely in INR. Most foreign cards & UPI-enabled apps
-                  work via our payment partners.
+                <p className="font-semibold mb-1">Do I need a membership?</p>
+                <p>No. This is a one-time experience. Just book and show up.</p>
+              </div>
+              <div>
+                <p className="font-semibold mb-1">Is it safe?</p>
+                <p>
+                  Hosts are verified and bookings are processed securely by
+                  Passiify.
                 </p>
               </div>
               <div>
-                <p className="font-semibold mb-1">Safety</p>
-                <p className="text-gray-300">
-                  Events are manually approved. Venues and hosts are checked
-                  before going live on Passiify.
-                </p>
-              </div>
-              <div>
-                <p className="font-semibold mb-1">Support</p>
-                <p className="text-gray-300">
-                  If something feels off, you can reach Passiify support from
-                  your ticket page and we’ll help you out.
+                <p className="font-semibold mb-1">Can I come alone?</p>
+                <p>
+                  Absolutely. Many guests arrive solo and leave with new
+                  friends.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Map */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 sm:p-4 shadow-[0_20px_60px_rgba(0,0,0,0.9)]">
-            <h3 className="text-base font-semibold text-white mb-3">
+          {/* Map / meeting point */}
+          <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-2">
               Meeting point
             </h3>
-            <div className="rounded-xl overflow-hidden h-[220px] border border-white/10">
+            {event.meetingPoint && (
+              <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">
+                <strong>Suggested spot:</strong> {event.meetingPoint}
+              </p>
+            )}
+            {event.meetingInstructions && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                {event.meetingInstructions}
+              </p>
+            )}
+            <div className="rounded-xl overflow-hidden h-[220px] border border-slate-200 dark:border-slate-700">
               <iframe
                 src={`https://www.google.com/maps?q=${encodeURIComponent(
                   event.location || ""
@@ -480,110 +680,141 @@ const EventDetail = () => {
 
         {/* RIGHT: Booking card */}
         <aside className="md:sticky md:top-24 h-fit">
-          <div className="bg-gradient-to-b from-sky-500 via-blue-700 to-gray-900 rounded-3xl shadow-[0_26px_90px_rgba(0,0,0,1)] border border-white/10 p-6 sm:p-7">
-            <h3 className="text-xl sm:text-2xl font-bold text-white mb-1">
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-[0_26px_90px_rgba(15,23,42,0.2)] p-6 sm:p-7">
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50 mb-1">
               ₹{event.price}{" "}
-              <span className="text-sm text-blue-100">/ person</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400 font-normal">
+                / person
+              </span>
             </h3>
-            <p className="text-xs sm:text-sm text-blue-100 mb-4">
-              Instant confirmation • No monthly commitment
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Instant confirmation · No membership · Pay once, join once.
             </p>
 
-            {/* Countdown / state */}
+            {/* Countdown / status */}
             {!isPast ? (
-              diffDays > 0 ? (
-                <p className="flex items-center gap-2 bg-black/25 border border-white/10 px-4 py-2 rounded-2xl text-xs sm:text-sm text-gray-100 mb-4">
-                  <Clock size={16} className="text-orange-200" />
-                  Starts in <span className="font-semibold">{diffDays}</span>{" "}
-                  day{diffDays > 1 ? "s" : ""}
+              diffDays !== null && diffDays > 0 ? (
+                <p className="flex items-center gap-2 bg-sky-50 dark:bg-sky-900/40 border border-sky-100 dark:border-sky-800 px-4 py-2 rounded-2xl text-xs sm:text-sm text-sky-800 dark:text-sky-200 mb-3">
+                  <Clock size={16} className="text-sky-500 dark:text-sky-300" />
+                  Starts in{" "}
+                  <span className="font-semibold">{diffDays}</span> day
+                  {diffDays > 1 ? "s" : ""}
                 </p>
               ) : (
-                <p className="flex items-center gap-2 bg-black/25 border border-white/10 px-4 py-2 rounded-2xl text-xs sm:text-sm text-emerald-100 mb-4">
-                  <Clock size={16} className="text-emerald-200" />
+                <p className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800 px-4 py-2 rounded-2xl text-xs sm:text-sm text-emerald-800 dark:text-emerald-200 mb-3">
+                  <Clock
+                    size={16}
+                    className="text-emerald-500 dark:text-emerald-300"
+                  />
                   Happening <span className="font-semibold">today</span>
                 </p>
               )
             ) : (
-              <p className="flex items-center gap-2 bg-black/25 border border-red-400/60 px-4 py-2 rounded-2xl text-xs sm:text-sm text-red-100 mb-4">
-                <Clock size={16} className="text-red-200" />
+              <p className="flex items-center gap-2 bg-rose-50 dark:bg-rose-900/40 border border-rose-100 dark:border-rose-800 px-4 py-2 rounded-2xl text-xs sm:text-sm text-rose-800 dark:text-rose-200 mb-3">
+                <Clock
+                  size={16}
+                  className="text-rose-500 dark:text-rose-300"
+                />
                 This experience has already ended.
               </p>
             )}
 
             {/* Capacity warning */}
-            {typeof event.capacity === "number" &&
-              event.capacity > 0 &&
-              event.capacity <= 10 &&
+            {typeof remainingSeats === "number" &&
+              remainingSeats > 0 &&
+              remainingSeats <= 10 &&
               !isPast && (
-                <p className="text-[11px] text-red-100 font-medium mb-3">
-                  Only {event.capacity} spots available for this date 🔥
+                <p className="text-[11px] text-rose-600 dark:text-rose-300 font-medium mb-3">
+                  Only {remainingSeats} spot
+                  {remainingSeats > 1 ? "s" : ""} left for this date 🔥
                 </p>
               )}
 
             <button
               onClick={handleBookEvent}
-              disabled={isPast || bookingLoading}
-              className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm mt-1 transition-transform shadow-[0_18px_60px_rgba(0,0,0,1)] ${
-                isPast
-                  ? "bg-gray-500/60 text-gray-200 cursor-not-allowed"
-                  : "bg-white text-blue-800 hover:scale-[1.02]"
+              disabled={bookingDisabled || bookingLoading}
+              className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm mt-1 transition-transform shadow-md ${
+                bookingDisabled
+                  ? "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-orange-500 text-white hover:shadow-lg hover:scale-[1.03]"
               }`}
             >
               {bookingLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
+                  Booking…
                 </>
               ) : (
                 <>
                   <Ticket size={18} />
-                  {isPast ? "Event Finished" : "Book this Experience"}
+                  {isPast || remainingSeats === 0
+                    ? "Not available"
+                    : "Book this experience"}
                 </>
               )}
             </button>
 
             {/* Trust block */}
-            <div className="mt-6 bg-black/35 border border-white/10 rounded-2xl p-4 text-xs sm:text-[13px] text-blue-50 space-y-2">
+            <div className="mt-6 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-xs sm:text-[13px] text-slate-700 dark:text-slate-300 space-y-2">
               <p className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-emerald-300" />
-                100% secure payment via Passiify
+                <ShieldCheck
+                  size={16}
+                  className="text-emerald-500 dark:text-emerald-400"
+                />
+                100% secure payment processed via Passiify.
               </p>
               <p className="flex items-center gap-2">
-                <RotateCcw size={16} className="text-orange-200" />
-                Full refund if host cancels the event
+                <RotateCcw
+                  size={16}
+                  className="text-orange-500 dark:text-orange-400"
+                />
+                Refunds as per this event’s cancellation policy.
               </p>
               <p className="flex items-center gap-2">
-                <MessageCircle size={16} className="text-sky-200" />
-                Support from Passiify team before your session
+                <MessageCircle
+                  size={16}
+                  className="text-blue-500 dark:text-sky-400"
+                />
+                Support from Passiify if you need help before your session.
               </p>
             </div>
 
-            <p className="mt-4 text-[11px] text-blue-100">
-              No long-term membership. Just book this one experience, show your
-              Passiify ticket at check-in, and you’re in.
+            <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
+              Just book this one experience, show your Passiify ticket at
+              check-in, and you’re in — no complicated memberships or hidden
+              fees.
             </p>
           </div>
         </aside>
       </main>
 
       {/* Footer CTA */}
-      <footer className="mt-16 bg-gradient-to-r from-sky-600 via-blue-700 to-orange-500 py-12 text-center text-white">
+      <footer className="mt-16 bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 dark:from-sky-500 dark:via-blue-700 dark:to-orange-500 py-12 text-center text-white">
         <h2 className="text-2xl sm:text-3xl font-semibold mb-2">
           Experience. Connect. Move different.
         </h2>
-        <p className="text-sm sm:text-base text-blue-100 mb-6 max-w-xl mx-auto">
+        <p className="text-sm sm:text-base text-blue-50/90 max-w-xl mx-auto mb-6">
           Discover more fight camps, yoga circles and city workouts hosted by
-          local communities across India.
+          local communities across India — one pass at a time.
         </p>
         <Link
           to="/events"
           className="inline-flex items-center gap-2 bg-white text-blue-700 px-6 py-2.5 rounded-full font-semibold text-sm shadow-lg hover:bg-orange-50 transition"
         >
-          Browse more events
+          Browse more experiences
         </Link>
       </footer>
     </div>
   );
 };
+
+// Tiny mini icon for analytics section
+const BarMiniIcon = () => (
+  <span className="inline-flex items-end gap-0.5">
+    <span className="w-1 h-2.5 rounded-sm bg-blue-200 dark:bg-sky-500/60" />
+    <span className="w-1 h-3.5 rounded-sm bg-blue-400 dark:bg-sky-400" />
+    <span className="w-1 h-5 rounded-sm bg-blue-600 dark:bg-sky-300" />
+  </span>
+);
 
 export default EventDetail;
