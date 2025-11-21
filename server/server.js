@@ -1,7 +1,9 @@
 // server.js
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
+
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -18,7 +20,6 @@ import eventRoutes from "./routes/eventRoutes.js";
 import eventBookingRoutes from "./routes/eventBookingRoutes.js";
 import adminEventRoutes from "./routes/adminEventRoutes.js";  // ⭐ Event admin routes
 
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

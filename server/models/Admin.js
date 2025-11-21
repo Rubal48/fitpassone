@@ -18,33 +18,30 @@ const AdminSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      select: false, // 🚨 Prevent leaking hashed password in queries
+      select: false,
     },
 
-    // 🔥 Multiple roles
+    // 🔥 Updated roles (include admin for login)
     role: {
       type: String,
-      enum: ["superadmin", "moderator", "support"],
-      default: "moderator",
+      enum: ["superadmin", "admin", "moderator", "support"], // ✅ ADDED admin
+      default: "admin",
     },
 
-    // 🔒 Account control
     status: {
       type: String,
       enum: ["active", "suspended"],
       default: "active",
     },
 
-    // 📌 Security & Monitoring
     lastLogin: {
       type: Date,
     },
 
     loginIP: {
-      type: String, // store last login IP for security review
+      type: String,
     },
 
-    // 📝 Activity logs (internal use)
     activityLog: [
       {
         action: String,
@@ -53,7 +50,6 @@ const AdminSchema = new mongoose.Schema(
       },
     ],
 
-    // 🔐 If you add 2FA later
     twoFactorEnabled: {
       type: Boolean,
       default: false,
@@ -73,12 +69,12 @@ AdminSchema.pre("save", async function (next) {
   next();
 });
 
-// 🔍 Method to compare passwords
+// 🔍 Compare password
 AdminSchema.methods.matchPassword = async function (enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
 };
 
-// 📝 Log admin actions easily
+// 📝 Log actions
 AdminSchema.methods.logAction = async function (action, ip = null) {
   this.activityLog.push({ action, ip });
   await this.save();

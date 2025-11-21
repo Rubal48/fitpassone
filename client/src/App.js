@@ -24,6 +24,7 @@ import EventDetail from "./pages/EventDetail";
 import BookEvent from "./pages/BookEvent";
 import MyEventBookings from "./pages/MyEventBookings";
 import HostEvent from "./pages/HostEvent"; // ⭐ added
+import AdminEventDetails from "./pages/AdminEventDetails";
 
 // 🔐 Auth Pages
 import LoginPage from "./pages/LoginPage";
@@ -35,6 +36,16 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminGymDetails from "./pages/AdminGymDetails";
+
+// 🤝 Partner Dashboard Pages
+import PartnerDashboardLayout from "./pages/partner/PartnerDashboardLayout";
+import PartnerOverview from "./pages/partner/PartnerOverview";
+import PartnerPasses from "./pages/partner/PartnerPasses";
+import PartnerBookings from "./pages/partner/PartnerBookings";
+import PartnerEvents from "./pages/partner/PartnerEvents";
+import PartnerRevenue from "./pages/partner/PartnerRevenue";
+import PartnerReviews from "./pages/partner/PartnerReviews";
+import PartnerProfile from "./pages/partner/PartnerProfile";
 
 const App = () => {
   return (
@@ -62,8 +73,19 @@ const App = () => {
         <Route path="/book-event/:id" element={<BookEvent />} />
         <Route path="/my-event-bookings" element={<MyEventBookings />} />
 
-        {/* 🔐 Dashboard Route */}
+        {/* 🔐 User Dashboard Route */}
         <Route path="/my-dashboard" element={<MyDashboard />} />
+
+        {/* 🤝 Partner Dashboard (nested) */}
+        <Route path="/partner/dashboard" element={<PartnerDashboardLayout />}>
+          <Route index element={<PartnerOverview />} />
+          <Route path="passes" element={<PartnerPasses />} />
+          <Route path="bookings" element={<PartnerBookings />} />
+          <Route path="events" element={<PartnerEvents />} />
+          <Route path="revenue" element={<PartnerRevenue />} />
+          <Route path="reviews" element={<PartnerReviews />} />
+          <Route path="profile" element={<PartnerProfile />} />
+        </Route>
 
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
@@ -79,6 +101,9 @@ const App = () => {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/gym/:id" element={<AdminGymDetails />} />
+        <Route path="/admin/event/:id" element={<AdminEventDetails />} />
+        
+
       </Routes>
     </>
   );

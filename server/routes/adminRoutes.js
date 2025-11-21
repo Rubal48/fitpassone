@@ -1,4 +1,3 @@
-// routes/adminRoutes.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -8,14 +7,20 @@ import Gym from "../models/Gym.js";
 import Event from "../models/Event.js";
 import adminAuth from "../middleware/adminAuth.js";
 
-
 const router = express.Router();
 
 /* ========================
    🔐 Admin Token Helper
 ========================= */
+
+// ✅ Always sign admin tokens with ONE consistent secret
+const ADMIN_SIGN_SECRET =
+  process.env.JWT_SECRET ||
+  process.env.ADMIN_SECRET ||
+  "dev_admin_secret";
+
 const generateAdminToken = (id, expiresIn = "7d") =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn });
+  jwt.sign({ id }, ADMIN_SIGN_SECRET, { expiresIn });
 
 /* =======================================================
    🔓 PUBLIC ADMIN ROUTES (NO TOKEN)
@@ -25,27 +30,40 @@ const generateAdminToken = (id, expiresIn = "7d") =>
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const emailLower = email.trim().toLowerCase();
+    const emailLower = (email || "").trim().toLowerCase();
 
-    const admin = await Admin.findOne({ email: emailLower });
+    console.log("🔑 [ADMIN LOGIN] attempt:", emailLower);
+    console.log(
+      "🔑 [ADMIN LOGIN] secret configured?",
+      !!ADMIN_SIGN_SECRET
+    );
+
+    const admin = await Admin.findOne({ email: emailLower }).select(
+      "+password"
+    );
     if (!admin) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const isMatch = await bcrypt.compare(password.trim(), admin.password);
+    const isMatch = await bcrypt.compare(
+      (password || "").trim(),
+      admin.password
+    );
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    // Optional: track last login
-    admin.lastLoginAt = new Date();
+    admin.lastLogin = new Date();
     await admin.save();
+
+    const token = generateAdminToken(admin._id);
+    console.log("✅ [ADMIN LOGIN] success, token starts:", token.slice(0, 20));
 
     res.json({
       _id: admin._id,
       email: admin.email,
       role: admin.role || "admin",
-      token: generateAdminToken(admin._id),
+      token, // 👈 frontend uses res.data.token
     });
   } catch (err) {
     console.error("Admin login error:", err);
@@ -53,11 +71,11 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/** ⚙️ One-time admin creation (use carefully) */
+/** ⚙️ One-time admin creation */
 router.post("/create", async (req, res) => {
   try {
     const { email, password, role } = req.body;
-    const emailLower = email.trim().toLowerCase();
+    const emailLower = (email || "").trim().toLowerCase();
 
     const existing = await Admin.findOne({ email: emailLower });
     if (existing) {
@@ -66,7 +84,7 @@ router.post("/create", async (req, res) => {
 
     const admin = await Admin.create({
       email: emailLower,
-      password: password.trim(),
+      password: (password || "").trim(),
       role: role || "admin",
     });
 
@@ -84,16 +102,15 @@ router.post("/create", async (req, res) => {
    🛡️ PROTECTED ADMIN ROUTES (REQUIRE TOKEN)
 ======================================================= */
 
-// Everything below this line requires a valid admin JWT
 router.use(adminAuth);
 
-/** 👤 Get current admin profile (for dashboard header) */
+/** 👤 Current admin profile */
 router.get("/me", async (req, res) => {
   res.json({
     _id: req.admin._id,
     email: req.admin.email,
     role: req.admin.role || "admin",
-    lastLoginAt: req.admin.lastLoginAt,
+    lastLogin: req.admin.lastLogin,
   });
 });
 
@@ -101,13 +118,11 @@ router.get("/me", async (req, res) => {
    🏋️ GYM MANAGEMENT
 ========================== */
 
-/** 📋 Fetch all gyms (with optional status filter) */
 router.get("/gyms", async (req, res) => {
   try {
-    const { status } = req.query; // ?status=pending / approved / rejected
+    const { status } = req.query;
     const filter = status ? { status } : {};
     const gyms = await Gym.find(filter).sort({ createdAt: -1 });
-
     res.json(gyms);
   } catch (err) {
     console.error("Error fetching gyms:", err);
@@ -115,12 +130,10 @@ router.get("/gyms", async (req, res) => {
   }
 });
 
-/** 🔍 Get single gym detail */
 router.get("/gyms/:id", async (req, res) => {
   try {
     const gym = await Gym.findById(req.params.id);
     if (!gym) return res.status(404).json({ message: "Gym not found" });
-
     res.json(gym);
   } catch (err) {
     console.error("Error fetching gym:", err);
@@ -128,11 +141,9 @@ router.get("/gyms/:id", async (req, res) => {
   }
 });
 
-/** 🟢 Unified verify / approve / reject */
 router.put("/gyms/:id/verify", async (req, res) => {
   try {
-    const { status } = req.body; // "approved" | "rejected" | "pending"
-
+    const { status } = req.body;
     if (!["approved", "rejected", "pending"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
@@ -142,56 +153,15 @@ router.put("/gyms/:id/verify", async (req, res) => {
 
     gym.status = status;
     gym.verified = status === "approved";
-
     await gym.save();
 
-    res.json({
-      message: `Gym marked as ${status}`,
-      gym,
-    });
+    res.json({ message: `Gym marked as ${status}`, gym });
   } catch (err) {
     console.error("Error updating gym status:", err);
     res.status(500).json({ message: "Failed to update gym status" });
   }
 });
 
-/** 🟩 Legacy approve route (backward compatible) */
-router.put("/gyms/:id/approve", async (req, res) => {
-  try {
-    const gym = await Gym.findById(req.params.id);
-    if (!gym) return res.status(404).json({ message: "Gym not found" });
-
-    gym.status = "approved";
-    gym.verified = true;
-
-    await gym.save();
-
-    res.json({ message: "Gym approved", gym });
-  } catch (err) {
-    console.error("Error approving gym:", err);
-    res.status(500).json({ message: "Failed to approve gym" });
-  }
-});
-
-/** 🟥 Legacy reject route (backward compatible) */
-router.put("/gyms/:id/reject", async (req, res) => {
-  try {
-    const gym = await Gym.findById(req.params.id);
-    if (!gym) return res.status(404).json({ message: "Gym not found" });
-
-    gym.status = "rejected";
-    gym.verified = false;
-
-    await gym.save();
-
-    res.json({ message: "Gym rejected", gym });
-  } catch (err) {
-    console.error("Error rejecting gym:", err);
-    res.status(500).json({ message: "Failed to reject gym" });
-  }
-});
-
-/** ❌ Delete gym permanently */
 router.delete("/gyms/:id", async (req, res) => {
   try {
     const gym = await Gym.findById(req.params.id);
@@ -207,10 +177,9 @@ router.delete("/gyms/:id", async (req, res) => {
 
 /* ==========================
    🎟️ EVENT MANAGEMENT
-   (used by your AdminDashboard.jsx)
 ========================== */
 
-/** 📋 Fetch all events */
+// List events
 router.get("/events", async (req, res) => {
   try {
     const { status } = req.query;
@@ -223,45 +192,7 @@ router.get("/events", async (req, res) => {
   }
 });
 
-/** 🟢 Approve / Reject event */
-router.put("/events/:id/verify", async (req, res) => {
-  try {
-    const { status } = req.body; // "approved" | "rejected" | "pending"
-
-    if (!["approved", "rejected", "pending"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
-    }
-
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ message: "Event not found" });
-
-    event.status = status;
-    event.verified = status === "approved";
-
-    await event.save();
-
-    res.json({ message: `Event marked as ${status}`, event });
-  } catch (err) {
-    console.error("Error verifying event:", err);
-    res.status(500).json({ message: "Failed to update event status" });
-  }
-});
-
-/** ❌ Delete event */
-router.delete("/events/:id", async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ message: "Event not found" });
-
-    await event.deleteOne();
-    res.json({ message: "Event deleted successfully" });
-  } catch (err) {
-    console.error("Error deleting event:", err);
-    res.status(500).json({ message: "Failed to delete event" });
-  }
-});
-
-/** 📊 Event Analytics Summary (for AdminDashboard) */
+// 📊 Event analytics (keep this BEFORE /events/:id)
 router.get("/events/analytics/summary", async (_req, res) => {
   try {
     const totalEvents = await Event.countDocuments();
@@ -269,25 +200,13 @@ router.get("/events/analytics/summary", async (_req, res) => {
     const pendingEvents = await Event.countDocuments({ status: "pending" });
     const rejectedEvents = await Event.countDocuments({ status: "rejected" });
 
-    // Category stats
     const categoryStats = await Event.aggregate([
-      {
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$category", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
 
-    // Simple estimated revenue = sum of event.price
     const revenueAgg = await Event.aggregate([
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$price" },
-        },
-      },
+      { $group: { _id: null, total: { $sum: "$price" } } },
     ]);
     const estimatedRevenue = revenueAgg[0]?.total || 0;
 
@@ -302,6 +221,54 @@ router.get("/events/analytics/summary", async (_req, res) => {
   } catch (err) {
     console.error("Error getting analytics:", err);
     res.status(500).json({ message: "Failed to load analytics" });
+  }
+});
+
+// ✅ Single event for AdminEventDetails.jsx
+router.get("/events/:id", async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+    res.json(event);
+  } catch (err) {
+    console.error("Error fetching event:", err);
+    res.status(500).json({ message: "Failed to fetch event" });
+  }
+});
+
+router.put("/events/:id/verify", async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["approved", "rejected", "pending"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    event.status = status;
+    event.verified = status === "approved";
+    await event.save();
+
+    res.json({ message: `Event marked as ${status}`, event });
+  } catch (err) {
+    console.error("Error verifying event:", err);
+    res.status(500).json({ message: "Failed to update event status" });
+  }
+});
+
+router.delete("/events/:id", async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    await event.deleteOne();
+    res.json({ message: "Event deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting event:", err);
+    res.status(500).json({ message: "Failed to delete event" });
   }
 });
 

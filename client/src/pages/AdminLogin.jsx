@@ -1,3 +1,4 @@
+// src/pages/AdminLogin.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../utils/api";
@@ -27,11 +28,24 @@ const AdminLogin = () => {
 
     try {
       const res = await API.post("/admin/login", { email, password });
-      localStorage.setItem("adminToken", res.data.token);
+
+      const token = res.data?.token || res.data?.adminToken;
+      if (!token) {
+        throw new Error("No admin token returned from backend");
+      }
+
+      localStorage.setItem("adminToken", token);
+
+      // Optional: clear user/partner tokens if you want strict separation
+      // localStorage.removeItem("token");
+      // localStorage.removeItem("partnerToken");
+
       navigate("/admin/dashboard");
     } catch (error) {
+      console.error("Admin login error:", error);
       const msg =
         error?.response?.data?.message ||
+        error?.message ||
         "Invalid credentials. Please check email & password.";
       setErrorMsg(msg);
     } finally {
@@ -70,7 +84,7 @@ const AdminLogin = () => {
               Passiify Admin Console
             </h1>
             <p className="text-xs text-gray-400 mt-2">
-              Secure sign-in for internal team & verified partners.
+              Secure sign-in for internal team &amp; verified partners.
             </p>
           </div>
 
@@ -138,9 +152,7 @@ const AdminLogin = () => {
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
                 <span>Protected by role-based access.</span>
               </div>
-              <span className="text-gray-500">
-                v1.0 • Internal use only
-              </span>
+              <span className="text-gray-500">v1.0 • Internal use only</span>
             </div>
 
             {/* Submit button */}

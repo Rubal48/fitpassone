@@ -1,56 +1,31 @@
 // src/utils/api.js
 import axios from "axios";
 
-// ---------- BASE URL RESOLUTION (Vite + CRA + fallback) ----------
-let baseURL = "http://localhost:5000/api";
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
-try {
-  // ✅ Vite style: import.meta.env.VITE_API_BASE_URL
-  if (
-    typeof import.meta !== "undefined" &&
-    import.meta &&
-    import.meta.env &&
-    import.meta.env.VITE_API_BASE_URL
-  ) {
-    baseURL = import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, "") + "/api";
-  }
-  // ✅ CRA style: process.env.REACT_APP_API_BASE_URL
-  else if (process.env.REACT_APP_API_BASE_URL) {
-    baseURL = process.env.REACT_APP_API_BASE_URL.replace(/\/+$/, "") + "/api";
-  }
-} catch (e) {
-  // If anything weird happens, just stay with localhost
-  baseURL = "http://localhost:5000/api";
-}
-
+/**
+ * 🌐 Default API for normal users & partners
+ */
 const API = axios.create({
-  baseURL,
+  baseURL: BASE_URL,
 });
 
-// ---------- INTERCEPTOR: ATTACH TOKENS ----------
+// Attach user / partner token (NOT admin)
 API.interceptors.request.use(
   (config) => {
     const userToken = localStorage.getItem("token");
     const partnerToken = localStorage.getItem("partnerToken");
-    const adminToken = localStorage.getItem("adminToken");
 
     const url = config.url || "";
     const isAdminRoute = url.startsWith("/admin") || url.startsWith("admin");
 
-    // Make sure headers exists
-    config.headers = {
-      ...(config.headers || {}),
-    };
-
-    // 🔐 Admin routes use adminToken
+    // Don't touch admin routes with this instance
     if (isAdminRoute) {
-      if (adminToken) {
-        config.headers.Authorization = `Bearer ${adminToken}`;
-      }
       return config;
     }
 
-    // 🤝 Partner routes
+    // Partner protected routes
     const isPartnerRoute =
       url.startsWith("/gyms/me") ||
       url.startsWith("gyms/me") ||
@@ -63,6 +38,10 @@ API.interceptors.request.use(
       url.startsWith("/event-bookings") ||
       url.startsWith("event-bookings");
 
+    config.headers = {
+      ...(config.headers || {}),
+    };
+
     if (isPartnerRoute) {
       if (partnerToken) {
         config.headers.Authorization = `Bearer ${partnerToken}`;
@@ -72,9 +51,38 @@ API.interceptors.request.use(
       return config;
     }
 
-    // 👤 Normal user routes
+    // Normal user token
     if (userToken) {
       config.headers.Authorization = `Bearer ${userToken}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+/**
+ * 🛡️ Admin-only API — ALWAYS tries to send admin token
+ */
+export const adminAPI = axios.create({
+  baseURL: BASE_URL,
+});
+
+adminAPI.interceptors.request.use(
+  (config) => {
+    const adminToken = localStorage.getItem("adminToken");
+
+    config.headers = {
+      ...(config.headers || {}),
+    };
+
+    if (adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`;
+      // Optional debug:
+      // console.log("[ADMIN API] attaching token", adminToken.slice(0, 15));
+    } else {
+      // Optional debug:
+      // console.log("[ADMIN API] no adminToken in localStorage");
     }
 
     return config;
