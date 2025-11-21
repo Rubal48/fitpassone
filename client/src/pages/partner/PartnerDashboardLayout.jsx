@@ -112,14 +112,14 @@ const PartnerDashboardLayout = () => {
       }}
       className="flex"
     >
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 bg-black/40 backdrop-blur-xl hidden md:flex flex-col">
-        <div className="px-5 py-4 flex items-center gap-3 border-b border-white/5">
-          <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-300 flex items-center justify-center shadow-lg shadow-orange-500/40">
-            <span className="font-black text-sm tracking-tight">P</span>
+      {/* Sidebar (desktop) */}
+      <aside className="hidden w-64 flex-col border-r border-white/5 bg-black/40 backdrop-blur-xl md:flex">
+        <div className="flex items-center gap-3 border-b border-white/5 px-5 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-300 text-sm font-black tracking-tight shadow-lg shadow-orange-500/40">
+            P
           </div>
           <div>
-            <div className="font-semibold tracking-tight text-sm">
+            <div className="text-sm font-semibold tracking-tight">
               Passiify Partner
             </div>
             <div className="text-[11px] text-gray-400">
@@ -130,9 +130,9 @@ const PartnerDashboardLayout = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-4 space-y-6">
+        <div className="flex-1 space-y-6 py-4 overflow-y-auto">
           <div className="px-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500 mb-2">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-gray-500">
               main
             </p>
             <nav className="space-y-1">
@@ -145,14 +145,14 @@ const PartnerDashboardLayout = () => {
                     end={item.end}
                     className={({ isActive }) =>
                       [
-                        "flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all",
+                        "flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition-all",
                         isActive
-                          ? "bg-orange-500/15 text-white border border-orange-500/60 shadow shadow-orange-500/30"
-                          : "text-gray-300 hover:bg-white/5 border border-transparent",
+                          ? "border-orange-500/60 bg-orange-500/15 text-white shadow shadow-orange-500/30"
+                          : "border-transparent text-gray-300 hover:bg-white/5",
                       ].join(" ")
                     }
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="h-4 w-4" />
                     <span>{item.label}</span>
                   </NavLink>
                 );
@@ -161,17 +161,17 @@ const PartnerDashboardLayout = () => {
           </div>
         </div>
 
-        <div className="px-4 py-4 border-t border-white/5 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-white/5 flex items-center justify-center text-[13px] font-semibold">
+        <div className="flex items-center gap-3 border-t border-white/5 px-4 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-[13px] font-semibold">
             {gym?.name?.[0]?.toUpperCase() || "P"}
           </div>
           <div className="flex-1">
-            <p className="text-xs font-medium truncate">
+            <p className="truncate text-xs font-medium">
               {gym?.name || "Your Space"}
             </p>
-            <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
+            <p className="flex items-center gap-1 truncate text-[11px] text-gray-400">
               {isVerified && (
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                <ShieldCheck className="h-3 w-3 text-emerald-400" />
               )}
               {isVerified
                 ? isEventHost
@@ -190,11 +190,11 @@ const PartnerDashboardLayout = () => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0">
-        {/* Top bar for mobile */}
-        <div className="md:hidden px-4 py-3 border-b border-white/10 flex items-center justify-between sticky top-0 bg-black/70 backdrop-blur-xl z-20">
+      <main className="min-w-0 flex-1">
+        {/* Top bar (mobile) */}
+        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-black/70 px-4 py-3 backdrop-blur-xl md:hidden">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-300 flex items-center justify-center text-xs font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-300 text-xs font-bold">
               P
             </div>
             <div>
@@ -204,47 +204,81 @@ const PartnerDashboardLayout = () => {
               </p>
             </div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="text-[11px] text-gray-400 hover:text-gray-200"
+          >
+            Log out
+          </button>
+        </div>
+
+        {/* Mobile nav pills */}
+        <div className="md:hidden border-b border-white/10 bg-black/60 px-4 pb-2 pt-2 backdrop-blur-xl">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    [
+                      "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] whitespace-nowrap border transition-all",
+                      isActive
+                        ? "border-orange-500/70 bg-orange-500/20 text-white"
+                        : "border-white/10 text-gray-300 bg-white/5",
+                    ].join(" ")
+                  }
+                >
+                  <Icon className="h-3 w-3" />
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })}
+          </div>
         </div>
 
         {/* Content area */}
-        <div className="px-4 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
+        <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
           {loadingGym ? (
-            <div className="flex items-center justify-center py-20 text-gray-300 gap-3">
-              <Loader2 className="w-5 h-5 animate-spin" />
+            <div className="flex items-center justify-center gap-3 py-20 text-gray-300">
+              <Loader2 className="h-5 w-5 animate-spin" />
               <span className="text-sm">Loading your dashboard…</span>
             </div>
           ) : noGym ? (
             // ✅ Friendly empty state when 404 (no gym for this account)
-            <div className="max-w-lg mx-auto border border-white/10 bg-black/40 rounded-2xl px-5 py-6 text-center">
-              <h2 className="text-lg font-semibold mb-2">
+            <div className="mx-auto max-w-lg rounded-2xl border border-white/10 bg-black/40 px-5 py-6 text-center shadow-xl shadow-black/40">
+              <h2 className="mb-2 text-lg font-semibold">
                 No gym linked to this account yet
               </h2>
-              <p className="text-xs text-gray-400 mb-4">
+              <p className="mb-4 text-xs text-gray-400">
                 To use Passiify Partner, first submit your gym or event space
                 via the Partner form. Once approved, it will appear here
                 automatically.
               </p>
               {errorGym && (
-                <p className="text-[11px] text-gray-500 mb-3">{errorGym}</p>
+                <p className="mb-3 text-[11px] text-gray-500">{errorGym}</p>
               )}
               <button
                 onClick={() => navigate("/partner")}
-                className="px-4 py-2 rounded-xl text-xs bg-gradient-to-r from-orange-500 to-amber-400 text-black font-medium shadow shadow-orange-500/40"
+                className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 px-4 py-2 text-xs font-medium text-black shadow shadow-orange-500/40"
               >
                 Go to Partner form
               </button>
             </div>
           ) : errorGym ? (
-            <div className="max-w-md mx-auto text-center border border-red-500/40 bg-red-500/5 rounded-2xl px-4 py-6">
-              <p className="text-sm text-red-300 mb-2">{errorGym}</p>
+            <div className="mx-auto max-w-md rounded-2xl border border-red-500/40 bg-red-500/5 px-4 py-6 text-center">
+              <p className="mb-2 text-sm text-red-300">{errorGym}</p>
               <button
                 onClick={fetchGym}
-                className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10"
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs hover:bg-white/10"
               >
                 Retry
               </button>
             </div>
           ) : (
+            // 👇 children pages get full control of card layout, but with context
             <Outlet
               context={{
                 gym,
