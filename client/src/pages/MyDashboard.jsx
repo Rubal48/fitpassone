@@ -1,3 +1,4 @@
+// src/pages/MyDashboard.jsx
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import API from "../utils/api";
@@ -16,6 +17,22 @@ import {
   Sparkles,
 } from "lucide-react";
 
+/* ==========================================
+   VIBE OPTIONS — local only (no backend change)
+========================================== */
+const VIBE_GOALS = [
+  "Strength & muscle",
+  "Combat sports",
+  "Yoga & mobility",
+  "Cardio / running",
+  "Just staying active",
+];
+
+const VIBE_TIMES = ["Early morning", "Evenings", "Weekends", "Flexible"];
+
+/* ==========================================
+   MAIN COMPONENT
+========================================== */
 const MyDashboard = () => {
   const [user, setUser] = useState(null);
 
@@ -29,6 +46,16 @@ const MyDashboard = () => {
   const [updatedName, setUpdatedName] = useState("");
   const [updatedEmail, setUpdatedEmail] = useState("");
   const [updatingProfile, setUpdatingProfile] = useState(false);
+
+  // 🎛 user vibe (local only)
+  const [vibe, setVibe] = useState({
+    primaryGoal: "",
+    preferredTime: "",
+    homeCity: "",
+    travelCities: "",
+  });
+  const [savingVibe, setSavingVibe] = useState(false);
+  const [vibeSaved, setVibeSaved] = useState(false);
 
   const navigate = useNavigate();
 
@@ -65,10 +92,10 @@ const MyDashboard = () => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
 
-        // ✔ Match new backend routes
+        // ✔ Match existing backend routes
         const [gymsRes, eventsRes] = await Promise.all([
-          API.get("/bookings/user", { headers }), // from bookingController.getBookingsByUser
-          API.get("/event-bookings/me", { headers }), // from eventBookingController.getMyEventBookings
+          API.get("/bookings/user", { headers }), // bookingController.getBookingsByUser
+          API.get("/event-bookings/me", { headers }), // eventBookingController.getMyEventBookings
         ]);
 
         const gymData = Array.isArray(gymsRes.data)
@@ -89,6 +116,25 @@ const MyDashboard = () => {
     };
 
     fetchData();
+  }, []);
+
+  /* ===============================
+     Load stored vibe (local only)
+  =============================== */
+  useEffect(() => {
+    const stored = localStorage.getItem("passiifyVibe");
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object") {
+        setVibe((prev) => ({
+          ...prev,
+          ...parsed,
+        }));
+      }
+    } catch {
+      // ignore parse errors silently
+    }
   }, []);
 
   /* ===============================
@@ -132,6 +178,13 @@ const MyDashboard = () => {
   const totalEvents = eventBookings.length;
   const totalUpcoming = upcomingGymBookings.length + upcomingEventBookings.length;
 
+  const hasVibe =
+    vibe.primaryGoal ||
+    vibe.preferredTime ||
+    vibe.homeCity ||
+    vibe.travelCities;
+  const vibeComplete = Boolean(vibe.primaryGoal && vibe.preferredTime);
+
   /* ===============================
      Actions
   =============================== */
@@ -167,6 +220,17 @@ const MyDashboard = () => {
       console.error("❌ Error updating profile:", error.response?.data || error);
     } finally {
       setUpdatingProfile(false);
+    }
+  };
+
+  const handleSaveVibe = () => {
+    try {
+      setSavingVibe(true);
+      localStorage.setItem("passiifyVibe", JSON.stringify(vibe));
+      setVibeSaved(true);
+      setTimeout(() => setVibeSaved(false), 1800);
+    } finally {
+      setSavingVibe(false);
     }
   };
 
@@ -246,6 +310,26 @@ const MyDashboard = () => {
                 All your day passes and event tickets in one place. Land in any
                 city with a workout already planned.
               </p>
+              {vibeComplete && (
+                <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+                  <span>
+                    You’re in{" "}
+                    <span className="font-semibold">
+                      {vibe.primaryGoal.toLowerCase()}
+                    </span>{" "}
+                    mode, mostly training in{" "}
+                    <span className="font-semibold">
+                      {vibe.homeCity || "your current city"}
+                    </span>{" "}
+                    with a preference for{" "}
+                    <span className="font-semibold">
+                      {vibe.preferredTime.toLowerCase()}
+                    </span>{" "}
+                    sessions.
+                  </span>
+                </p>
+              )}
             </div>
           </div>
 
@@ -375,7 +459,7 @@ const MyDashboard = () => {
           {activeTab === "profile" && (
             <div className="space-y-8">
               <div className="flex flex-col items-center text-center">
-                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-blue-600 via-sky-500 to-orange-500 flex items-center justify-center text-2xl sm:text-3xl font-bold text-slate-950 shadow-[0_20px_70px_rgba(15,23,42,0.8)]">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-blue-600 via-sky-500 to-orange-500 flex items-center justify-center text-2xl sm:text-3xl font-bold text-slate-950 shadow-[0_20px_70px_rgba(15,23,42,0.8)]">
                   {avatarLetter}
                 </div>
                 <h2 className="text-lg sm:text-2xl font-semibold mt-4">
@@ -428,6 +512,190 @@ const MyDashboard = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Your Passiify vibe */}
+              <div className="rounded-2xl bg-slate-50/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800/80 px-4 sm:px-5 py-4 sm:py-5 text-xs sm:text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-sky-500" />
+                      <h3 className="text-sm sm:text-base font-semibold">
+                        Your Passiify vibe
+                      </h3>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-md">
+                      Tell Passiify what kind of movement you love. We’ll use
+                      this to surface better gyms and events for your vibe.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    {vibeComplete ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-200 border border-emerald-200/70 dark:border-emerald-700/70">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Vibe set
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/70">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        Not fully set
+                      </span>
+                    )}
+                    {vibeSaved && (
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-300">
+                        Saved
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4">
+                  {/* Goal */}
+                  <div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                      Primary goal
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {VIBE_GOALS.map((goal) => {
+                        const active = vibe.primaryGoal === goal;
+                        return (
+                          <button
+                            key={goal}
+                            type="button"
+                            onClick={() =>
+                              setVibe((prev) => ({
+                                ...prev,
+                                primaryGoal:
+                                  prev.primaryGoal === goal ? "" : goal,
+                              }))
+                            }
+                            className={`px-3 py-1.5 rounded-full text-[11px] border transition ${
+                              active
+                                ? "bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 text-slate-950 border-transparent shadow-sm"
+                                : "bg-white dark:bg-slate-950 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-100 hover:border-sky-400/70 dark:hover:border-sky-400/70"
+                            }`}
+                          >
+                            {goal}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                      Usual training time
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {VIBE_TIMES.map((label) => {
+                        const active = vibe.preferredTime === label;
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() =>
+                              setVibe((prev) => ({
+                                ...prev,
+                                preferredTime:
+                                  prev.preferredTime === label ? "" : label,
+                              }))
+                            }
+                            className={`px-3 py-1.5 rounded-full text-[11px] border transition ${
+                              active
+                                ? "bg-sky-50 dark:bg-sky-900/40 text-sky-800 dark:text-sky-100 border-sky-300/80 dark:border-sky-600/80"
+                                : "bg-white dark:bg-slate-950 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-100 hover:border-sky-400/70 dark:hover:border-sky-400/70"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Cities */}
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">
+                        Home city
+                      </p>
+                      <input
+                        type="text"
+                        value={vibe.homeCity}
+                        onChange={(e) =>
+                          setVibe((prev) => ({
+                            ...prev,
+                            homeCity: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. Delhi, Goa"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] sm:text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 dark:focus:ring-sky-500/50"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">
+                        Cities you often visit
+                      </p>
+                      <input
+                        type="text"
+                        value={vibe.travelCities}
+                        onChange={(e) =>
+                          setVibe((prev) => ({
+                            ...prev,
+                            travelCities: e.target.value,
+                          }))
+                        }
+                        placeholder="Comma-separated · e.g. Mumbai, Bangalore"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] sm:text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 dark:focus:ring-sky-500/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 justify-between">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md">
+                    We keep this on your device and use it to prioritise
+                    experiences that match how and when you like to move.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSaveVibe}
+                    disabled={savingVibe}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-semibold bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 text-slate-950 shadow-[0_16px_60px_rgba(15,23,42,0.8)] hover:scale-[1.02] transition-transform disabled:opacity-60 disabled:hover:scale-100"
+                  >
+                    {savingVibe ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Saving vibe…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Save your vibe
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tiny summary if vibe exists */}
+              {hasVibe && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                  Based on your vibe, we’ll lean into{" "}
+                  <span className="font-semibold">
+                    {vibe.primaryGoal || "mixed disciplines"}
+                  </span>{" "}
+                  and{" "}
+                  <span className="font-semibold">
+                    {vibe.preferredTime || "flexible timings"}
+                  </span>{" "}
+                  around{" "}
+                  <span className="font-semibold">
+                    {vibe.homeCity || "your home base"}
+                  </span>
+                  .
+                </p>
+              )}
             </div>
           )}
 

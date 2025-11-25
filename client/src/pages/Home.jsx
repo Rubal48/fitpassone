@@ -6,19 +6,22 @@ import {
   CalendarDays,
   MapPin,
   Shield,
+  ShieldCheck,
   Award,
   Heart,
   Clock,
   Dumbbell,
   Star,
   ArrowRight,
-  Sun,
-  Moon,
+  Globe2,
+  Users,
+  Ticket,
+  CheckCircle2,
 } from "lucide-react";
 import API from "../utils/api";
 
 /* =========================================================
-   THEME TOKENS — LIGHT / DARK (BALANCED BLUE x ORANGE)
+   THEME TOKENS — aligned with EventsPage (blue 600 / orange 500)
    ========================================================= */
 
 const LIGHT_THEME = {
@@ -27,11 +30,11 @@ const LIGHT_THEME = {
   bgSoft: "#EEF1F7",
   card: "rgba(255,255,255,0.96)",
   cardAlt: "rgba(249,250,252,0.98)",
-  textMain: "#0F172A",
+  textMain: "#020617",
   textMuted: "#6B7280",
-  accentBlue: "#2563EB",
-  accentOrange: "#F97316",
-  accentMint: "#14B8A6",
+  accentBlue: "#2563EB", // same as EventsPage
+  accentOrange: "#F97316", // same as EventsPage
+  accentMint: "#22C55E",
   borderSoft: "rgba(148,163,184,0.35)",
   shadowStrong: "0 30px 90px rgba(15,23,42,0.25)",
   shadowSoft: "0 16px 55px rgba(15,23,42,0.12)",
@@ -42,15 +45,15 @@ const DARK_THEME = {
   bg: "#020617",
   bgSoft: "#020617",
   card: "rgba(15,23,42,0.96)",
-  cardAlt: "rgba(15,23,42,0.92)",
+  cardAlt: "rgba(15,23,42,0.9)",
   textMain: "#E5E7EB",
   textMuted: "#9CA3AF",
-  accentBlue: "#3B82F6",
-  accentOrange: "#FB923C",
-  accentMint: "#22D3EE",
+  accentBlue: "#2563EB", // match EventsPage
+  accentOrange: "#F97316", // match EventsPage
+  accentMint: "#22C55E",
   borderSoft: "rgba(148,163,184,0.55)",
   shadowStrong: "0 30px 120px rgba(0,0,0,0.95)",
-  shadowSoft: "0 20px 80px rgba(15,23,42,0.9)",
+  shadowSoft: "0 20px 80px rgba(15,23,42,0.85)",
 };
 
 /* =========================================================
@@ -64,13 +67,14 @@ const fallbackGymImage = () =>
   "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1400";
 
 /* =========================================================
-   HERO SECTION
+   HERO SECTION — now truly light/dark aware
    ========================================================= */
 
 function Hero({
   theme,
   mode,
   topEvent,
+  featuredGym,
   onSearch,
   startingDayPrice,
   eventsCount,
@@ -79,6 +83,7 @@ function Hero({
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [type, setType] = useState("all");
+  const isDark = mode === "dark";
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -103,117 +108,119 @@ function Hero({
   const dayPassFrom = startingDayPrice ?? 249;
 
   return (
-    <header className="relative overflow-hidden">
-      {/* Ambient background shapes */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* soft blue blob */}
-        <div
-          className="absolute -top-40 -left-36 w-96 h-96 rounded-full blur-3xl opacity-50"
-          style={{ background: theme.accentBlue }}
-        />
-        {/* soft orange blob */}
-        <div
-          className="absolute -bottom-40 -right-36 w-[420px] h-[420px] rounded-full blur-3xl opacity-45"
-          style={{ background: theme.accentOrange }}
-        />
-        {/* subtle grid */}
-        <div
-          className="absolute inset-0 opacity-10 mix-blend-soft-light"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(148,163,184,0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.2) 1px, transparent 1px)",
-            backgroundSize: "38px 38px",
-          }}
-        />
+    <header className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-8 md:pt-10">
+      {/* Ambient blobs behind the hero card */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-24 -left-16 w-72 h-72 rounded-full bg-blue-500/30 blur-3xl" />
+        <div className="absolute -bottom-24 -right-10 w-80 h-80 rounded-full bg-orange-500/30 blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full bg-sky-400/20 blur-3xl" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-6 pt-24 pb-16 lg:pt-28 lg:pb-24">
-        <div className="grid lg:grid-cols-[1.1fr,1fr] gap-10 items-center">
-          {/* LEFT: copy + search */}
-          <div>
-            {/* micro trust pill */}
+      {/* Shell hero card — light/dark aware */}
+      <div
+        className="relative rounded-[32px] border overflow-hidden backdrop-blur-2xl"
+        style={{
+          borderColor: theme.borderSoft,
+          boxShadow: theme.shadowStrong,
+          background: isDark
+            ? "radial-gradient(circle at top, rgba(15,23,42,1), rgba(15,23,42,0.96))"
+            : "radial-gradient(circle at top, rgba(255,255,255,1), rgba(241,245,249,0.96))",
+        }}
+      >
+        {/* subtle grid */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.16]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.12) 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+        {/* radial glow */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18)_0,_transparent_55%),radial-gradient(circle_at_bottom,_rgba(249,115,22,0.18)_0,_transparent_55%)]" />
+
+        <div className="relative px-5 sm:px-8 py-7 sm:py-9 md:py-11 grid md:grid-cols-[1.6fr,1.1fr] gap-6 lg:gap-10 items-center">
+          {/* LEFT — copy + search + trust */}
+          <div className="space-y-4 sm:space-y-5">
+            {/* micro trust strip */}
             <div
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur mb-6"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border backdrop-blur-xl"
               style={{
                 borderColor: theme.borderSoft,
-                background:
-                  mode === "dark"
-                    ? "rgba(15,23,42,0.9)"
-                    : "rgba(255,255,255,0.9)",
-                boxShadow: theme.shadowSoft,
+                background: isDark
+                  ? "rgba(15,23,42,0.95)"
+                  : "rgba(255,255,255,0.98)",
               }}
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span
-                className="text-[11px] font-semibold uppercase tracking-[0.25em]"
+                className="text-[10px] sm:text-[11px] uppercase tracking-[0.22em]"
                 style={{ color: theme.textMuted }}
               >
-                VERIFIED • FLEXIBLE • GEN-Z
+                one-day passes · verified hosts · travel-first
               </span>
             </div>
 
             <h1
-              className="text-4xl md:text-5xl lg:text-[3.3rem] font-black tracking-tight"
+              className="text-[1.7rem] sm:text-[2rem] md:text-[2.3rem] lg:text-[2.6rem] font-extrabold leading-tight tracking-tight"
               style={{ color: theme.textMain }}
             >
               One-day{" "}
               <span
-                className="px-1.5 rounded-md"
                 style={{
-                  backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
+                  backgroundImage: `linear-gradient(90deg, ${theme.accentBlue}, ${theme.accentOrange})`,
                   WebkitBackgroundClip: "text",
                   color: "transparent",
                 }}
               >
-                gym passes
+                gym passes & events
               </span>{" "}
-              & fitness events. No cringe contracts.
+              for how Gen-Z actually trains.
             </h1>
 
             <p
-              className="mt-4 text-base md:text-lg max-w-xl"
+              className="text-[11px] sm:text-sm md:text-[15px] max-w-xl"
               style={{ color: theme.textMuted }}
             >
-              Train while you travel — MMA, rooftop yoga, dance, CrossFit,
-              strength clubs. Book clean, transparent passes that match how you
-              actually live.
+              Tap into MMA gyms, rooftop yoga, dance studios or strength clubs
+              in any city. Book clean, honest 1-day passes — no sales tours, no
+              lock-ins, no cringe.
             </p>
 
-            {/* Search bar */}
+            {/* Search bar — light/dark aware glass */}
             <form
               onSubmit={handleSubmit}
-              className="mt-8 max-w-xl"
+              className="mt-4 max-w-xl"
               aria-label="Search fitness experiences"
             >
               <div
                 className="flex items-stretch rounded-2xl border backdrop-blur-xl"
                 style={{
-                  borderColor: theme.borderSoft,
-                  background:
-                    mode === "dark"
-                      ? "rgba(15,23,42,0.96)"
-                      : "rgba(255,255,255,0.97)",
-                  boxShadow: theme.shadowStrong,
+                  borderColor: isDark
+                    ? "rgba(51,65,85,0.9)"
+                    : "rgba(148,163,184,0.7)",
+                  background: isDark
+                    ? "rgba(2,6,23,0.94)"
+                    : "rgba(255,255,255,0.98)",
+                  boxShadow: theme.shadowSoft,
                 }}
               >
                 {/* type selector */}
                 <div
                   className="flex items-center px-3 border-r rounded-l-2xl"
                   style={{
-                    borderColor:
-                      mode === "dark"
-                        ? "rgba(51,65,85,0.8)"
-                        : "rgba(226,232,240,0.9)",
-                    background:
-                      mode === "dark"
-                        ? "rgba(15,23,42,0.96)"
-                        : "rgba(248,250,252,0.96)",
+                    borderColor: isDark
+                      ? "rgba(51,65,85,1)"
+                      : "rgba(226,232,240,1)",
+                    background: isDark
+                      ? "rgba(15,23,42,0.98)"
+                      : "rgba(248,250,252,0.98)",
                   }}
                 >
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value)}
-                    className="bg-transparent text-xs md:text-sm outline-none pr-2"
+                    className="bg-transparent text-[11px] sm:text-xs md:text-sm outline-none pr-2"
                     style={{ color: theme.textMain }}
                   >
                     <option value="all">All</option>
@@ -232,11 +239,8 @@ function Hero({
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    className="flex-1 bg-transparent text-sm md:text-base px-2 py-3 outline-none"
-                    style={{
-                      color: theme.textMain,
-                      caretColor: theme.accentBlue,
-                    }}
+                    className="flex-1 bg-transparent text-xs md:text-sm px-2 py-3 outline-none placeholder:text-slate-400"
+                    style={{ color: theme.textMain }}
                     placeholder="Search MMA, yoga, dance or a city — e.g. Goa"
                   />
                 </div>
@@ -244,11 +248,7 @@ function Hero({
                 {/* submit */}
                 <button
                   type="submit"
-                  className="px-4 md:px-6 py-3 text-sm md:text-base font-semibold rounded-r-2xl flex items-center gap-2"
-                  style={{
-                    backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
-                    color: "#020617",
-                  }}
+                  className="px-4 md:px-6 py-2.5 text-[11px] sm:text-sm font-semibold rounded-r-2xl flex items-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 text-white shadow-[0_18px_40px_rgba(37,99,235,0.9)] hover:shadow-[0_22px_60px_rgba(37,99,235,1)] hover:scale-[1.03] transition"
                 >
                   <span>Search</span>
                   <ArrowRight size={16} />
@@ -256,7 +256,7 @@ function Hero({
               </div>
 
               {/* quick chips + price highlight */}
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs md:text-sm">
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] sm:text-[11px]">
                 <div className="flex flex-wrap gap-2">
                   {[
                     { label: "MMA gyms", type: "gyms" },
@@ -271,10 +271,9 @@ function Hero({
                       className="px-3 py-1.5 rounded-full border transition"
                       style={{
                         borderColor: theme.borderSoft,
-                        background:
-                          mode === "dark"
-                            ? "rgba(15,23,42,0.92)"
-                            : "rgba(255,255,255,0.96)",
+                        background: isDark
+                          ? "rgba(15,23,42,0.94)"
+                          : "rgba(248,250,252,0.98)",
                         color: theme.textMain,
                       }}
                     >
@@ -282,42 +281,42 @@ function Hero({
                     </button>
                   ))}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] md:text-xs">
-                  <span
-                    className="px-3 py-1 rounded-full font-semibold"
-                    style={{
-                      background:
-                        mode === "dark"
-                          ? "rgba(22,163,74,0.18)"
-                          : "rgba(22,163,74,0.08)",
-                      color: mode === "dark" ? "#BBF7D0" : "#15803D",
-                    }}
-                  >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 font-medium">
                     Day-pass from ₹{dayPassFrom}
                   </span>
                   <span style={{ color: theme.textMuted }}>
-                    in select partner cities
+                    across select partner gyms
                   </span>
                 </div>
               </div>
             </form>
 
             {/* trust badges */}
-            <div className="mt-6 flex flex-wrap gap-4 text-xs md:text-sm">
+            <div className="mt-4 flex flex-wrap gap-4 text-[11px] sm:text-xs">
               <div className="flex items-center gap-2">
-                <Shield size={16} className="text-emerald-400" />
+                <Shield
+                  size={16}
+                  className="text-emerald-400"
+                />
                 <span style={{ color: theme.textMuted }}>
                   Verified hosts & venues
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Award size={16} className="text-yellow-400" />
+                <Award
+                  size={16}
+                  className="text-yellow-300"
+                />
                 <span style={{ color: theme.textMuted }}>
-                  Secure UPI/card payments
+                  Secure UPI / card payments
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Heart size={16} className="text-rose-400" />
+                <Heart
+                  size={16}
+                  className="text-rose-400"
+                />
                 <span style={{ color: theme.textMuted }}>
                   Built for travellers & Gen-Z
                 </span>
@@ -325,18 +324,20 @@ function Hero({
             </div>
 
             {/* compact metrics row */}
-            <div className="mt-6 flex flex-wrap gap-4 text-[11px] md:text-xs">
+            <div className="mt-3 flex flex-wrap gap-4 text-[10px] sm:text-[11px]">
               <div
                 className="px-3 py-2 rounded-xl border"
                 style={{
                   borderColor: theme.borderSoft,
-                  background:
-                    mode === "dark"
-                      ? "rgba(15,23,42,0.9)"
-                      : "rgba(255,255,255,0.96)",
+                  background: isDark
+                    ? "rgba(15,23,42,0.96)"
+                    : "rgba(255,255,255,0.96)",
                 }}
               >
-                <span style={{ color: theme.textMuted }}>
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: theme.textMuted }}
+                >
                   Gyms & studios live
                 </span>
                 <div
@@ -350,14 +351,16 @@ function Hero({
                 className="px-3 py-2 rounded-xl border"
                 style={{
                   borderColor: theme.borderSoft,
-                  background:
-                    mode === "dark"
-                      ? "rgba(15,23,42,0.9)"
-                      : "rgba(255,255,255,0.96)",
+                  background: isDark
+                    ? "rgba(15,23,42,0.96)"
+                    : "rgba(255,255,255,0.96)",
                 }}
               >
-                <span style={{ color: theme.textMuted }}>
-                  Events listed now
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: theme.textMuted }}
+                >
+                  Events listed right now
                 </span>
                 <div
                   className="text-sm font-semibold"
@@ -369,205 +372,265 @@ function Hero({
             </div>
           </div>
 
-          {/* RIGHT: hero visual + top event card */}
+          {/* RIGHT — dual highlight card (event + gym), light/dark aware shell */}
           <div className="relative">
+            {/* floating halos */}
+            <div className="pointer-events-none absolute -top-10 right-4 w-32 h-32 rounded-full bg-sky-400/40 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-10 -left-4 w-40 h-40 rounded-full bg-orange-500/35 blur-3xl" />
+
+            {/* main glass card */}
             <div
-              className="rounded-[28px] overflow-hidden border backdrop-blur-xl"
+              className="relative rounded-3xl border backdrop-blur-2xl overflow-hidden"
               style={{
                 borderColor: theme.borderSoft,
-                background:
-                  mode === "dark"
-                    ? "rgba(15,23,42,0.96)"
-                    : "rgba(255,255,255,0.96)",
+                background: isDark
+                  ? "rgba(15,23,42,0.96)"
+                  : "rgba(255,255,255,0.98)",
                 boxShadow: theme.shadowStrong,
               }}
             >
-              <div className="relative h-80 md:h-[420px] bg-black">
+              {/* TOP: hero event */}
+              <div className="relative h-64">
                 <img
                   src={topEvent?.image || fallbackEventImage()}
-                  alt={topEvent?.name || "Passiify Experience"}
-                  className="w-full h-full object-cover transform hover:scale-[1.03] transition duration-700"
+                  alt={topEvent?.name || "Passiify event"}
+                  className="w-full h-full object-cover"
                   loading="lazy"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
 
-                {/* overlay */}
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background:
-                      mode === "dark"
-                        ? "linear-gradient(to top, rgba(15,23,42,1), rgba(15,23,42,0.2))"
-                        : "linear-gradient(to top, rgba(15,23,42,0.9), rgba(15,23,42,0.1))",
-                  }}
-                />
-
-                {/* label */}
                 <div className="absolute top-4 left-4">
                   <span
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.18em]"
                     style={{
-                      borderColor: "rgba(255,255,255,0.25)",
+                      borderColor: "rgba(148,163,184,0.6)",
                       background: "rgba(15,23,42,0.9)",
                       color: "#F9FAFB",
                     }}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Top pick this week
+                    Event spotlight
                   </span>
                 </div>
 
-                {/* top event info card */}
-                {topEvent ? (
-                  <div className="absolute left-4 right-4 bottom-4">
-                    <div className="flex gap-3 sm:gap-4 items-stretch">
-                      <div className="hidden sm:block w-20 h-20 rounded-2xl overflow-hidden border border-white/20 bg-black/40">
-                        <img
-                          src={topEvent.image || fallbackEventImage()}
-                          alt={topEvent.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
+                <div className="absolute left-4 right-4 bottom-4">
+                  <div
+                    className="rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 shadow-[0_18px_50px_rgba(15,23,42,0.9)]"
+                    style={{
+                      borderColor: "rgba(148,163,184,0.7)",
+                      background: "rgba(15,23,42,0.96)",
+                    }}
+                  >
+                    <div className="flex-1">
+                      <h3 className="text-sm md:text-base font-semibold line-clamp-1 text-slate-50">
+                        {topEvent?.name || "Upcoming fitness experiences"}
+                      </h3>
+                      <div className="mt-1 flex flex-wrap gap-3 text-[11px] md:text-xs text-slate-300">
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays size={13} />
+                          {topEvent?.date
+                            ? new Date(topEvent.date).toLocaleDateString(
+                                "en-IN",
+                                { day: "numeric", month: "short" }
+                              )
+                            : "New dates every week"}
+                        </span>
+                        {topEvent && (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin size={13} />
+                            {topEvent.location || topEvent.city || "TBA"}
+                          </span>
+                        )}
                       </div>
+                    </div>
 
+                    <div className="flex flex-col items-end justify-between">
+                      <div className="text-[11px] text-slate-300">From</div>
                       <div
-                        className="flex-1 rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
+                        className="text-lg md:text-2xl font-extrabold"
                         style={{
-                          borderColor: "rgba(148,163,184,0.5)",
-                          background: "rgba(15,23,42,0.94)",
-                          boxShadow: theme.shadowSoft,
+                          backgroundImage: `linear-gradient(120deg, ${theme.accentOrange}, ${theme.accentBlue})`,
+                          WebkitBackgroundClip: "text",
+                          color: "transparent",
                         }}
                       >
-                        <div className="flex-1">
-                          <h3
-                            className="text-sm md:text-base font-semibold line-clamp-1"
-                            style={{ color: "#F9FAFB" }}
-                          >
-                            {topEvent.name}
-                          </h3>
-                          <div className="mt-1 flex flex-wrap gap-3 text-[11px] md:text-xs">
-                            <span
-                              className="inline-flex items-center gap-1"
-                              style={{ color: theme.textMuted }}
-                            >
-                              <CalendarDays size={13} />
-                              {new Date(topEvent.date).toLocaleDateString()}
-                            </span>
-                            <span
-                              className="inline-flex items-center gap-1"
-                              style={{ color: theme.textMuted }}
-                            >
-                              <MapPin size={13} />
-                              {topEvent.location || topEvent.city || "TBA"}
-                            </span>
-                            <span
-                              className="inline-flex items-center gap-1"
-                              style={{ color: theme.textMuted }}
-                            >
-                              <Clock size={13} />
-                              1-day entry
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-end justify-between">
-                          <div
-                            className="text-[11px]"
-                            style={{ color: theme.textMuted }}
-                          >
-                            From
-                          </div>
-                          <div
-                            className="text-lg md:text-2xl font-extrabold"
-                            style={{
-                              backgroundImage: `linear-gradient(110deg, ${theme.accentOrange}, ${theme.accentBlue})`,
-                              WebkitBackgroundClip: "text",
-                              color: "transparent",
-                            }}
-                          >
-                            ₹{topEvent.price}
-                          </div>
-                          <div className="mt-1 flex gap-2">
+                        {topEvent && typeof topEvent.price === "number"
+                          ? `₹${topEvent.price}`
+                          : "₹399"}
+                      </div>
+                      <div className="mt-1 flex gap-2">
+                        {topEvent ? (
+                          <>
                             <Link
                               to={`/events/${topEvent._id}`}
-                              className="px-3 py-1 rounded-full border text-[11px] md:text-xs"
-                              style={{
-                                borderColor: "rgba(148,163,184,0.5)",
-                                color: "#E5E7EB",
-                              }}
+                              className="px-3 py-1 rounded-full border text-[11px] md:text-xs text-slate-100 hover:bg-slate-800/80 transition"
+                              style={{ borderColor: "rgba(148,163,184,0.7)" }}
                             >
-                              View
+                              Details
                             </Link>
                             <Link
                               to={`/book-event/${topEvent._id}`}
-                              className="px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold"
-                              style={{
-                                backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
-                                color: "#020617",
-                              }}
+                              className="px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold bg-gradient-to-r from-blue-600 to-orange-500 text-white shadow-[0_16px_40px_rgba(37,99,235,0.8)] hover:shadow-[0_20px_55px_rgba(37,99,235,1)] transition"
                             >
                               Book now
                             </Link>
-                          </div>
-                        </div>
+                          </>
+                        ) : (
+                          <Link
+                            to="/events"
+                            className="px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold bg-gradient-to-r from-blue-600 to-orange-500 text-white shadow-[0_16px_40px_rgba(37,99,235,0.8)] hover:shadow-[0_20px_55px_rgba(37,99,235,1)] transition"
+                          >
+                            Browse events
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="absolute left-4 right-4 bottom-4">
-                    <div
-                      className="rounded-2xl border px-4 py-3 text-center"
+                </div>
+              </div>
+
+              {/* Divider line */}
+              <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-700/80 to-transparent" />
+
+              {/* BOTTOM: hero gym */}
+              <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-4 items-center">
+                <div className="w-full sm:w-40 h-32 rounded-2xl overflow-hidden border bg-slate-900/60"
+                  style={{ borderColor: theme.borderSoft }}
+                >
+                  <img
+                    src={
+                      featuredGym?.images?.[0] ||
+                      featuredGym?.coverImage ||
+                      featuredGym?.image ||
+                      fallbackGymImage()
+                    }
+                    alt={featuredGym?.name || "Featured gym"}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="flex-1 w-full">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3
+                      className="text-sm font-semibold line-clamp-1"
+                      style={{ color: theme.textMain }}
+                    >
+                      {featuredGym?.name || "Premium day-pass gyms"}
+                    </h3>
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
                       style={{
-                        borderColor: "rgba(148,163,184,0.5)",
-                        background: "rgba(15,23,42,0.94)",
+                        background: isDark
+                          ? "rgba(37,99,235,0.2)"
+                          : "rgba(37,99,235,0.08)",
+                        color: theme.accentBlue,
                       }}
                     >
-                      <div
-                        className="text-sm font-semibold"
-                        style={{ color: "#F9FAFB" }}
-                      >
-                        New experiences dropping soon
-                      </div>
-                      <div
-                        className="text-xs mt-1"
+                      <Dumbbell size={11} />
+                      Day-pass
+                    </span>
+                  </div>
+                  <p
+                    className="text-[11px] line-clamp-2"
+                    style={{ color: theme.textMuted }}
+                  >
+                    {featuredGym?.description ||
+                      "Drop in once, no awkward membership pitches at the desk. Clean, transparent pricing every time."}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {featuredGym && (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          style={{ color: theme.textMuted }}
+                        >
+                          <MapPin size={12} />
+                          {featuredGym.city || "City TBA"}
+                        </span>
+                      )}
+                      <span
+                        className="inline-flex items-center gap-1"
                         style={{ color: theme.textMuted }}
                       >
-                        Hosts are lining up retreats, runs and fight-camps.
+                        <Star
+                          size={12}
+                          className="text-yellow-300 fill-yellow-300"
+                        />
+                        {featuredGym?.rating ?? "4.7"} rating
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <span
+                          className="block text-[10px]"
+                          style={{ color: theme.textMuted }}
+                        >
+                          From
+                        </span>
+                        <span
+                          className="text-sm font-bold"
+                          style={{ color: theme.textMain }}
+                        >
+                          ₹
+                          {featuredGym?.price ?? startingDayPrice ?? "—"}
+                          <span
+                            className="text-[10px] font-normal ml-1"
+                            style={{ color: theme.textMuted }}
+                          >
+                            / day-pass
+                          </span>
+                        </span>
                       </div>
+                      <Link
+                        to={
+                          featuredGym?._id
+                            ? `/booking/${featuredGym._id}`
+                            : "/explore"
+                        }
+                        className="px-3 py-1.5 rounded-full text-[11px] font-semibold transition"
+                        style={{
+                          background: isDark
+                            ? "#F9FAFB"
+                            : "rgba(15,23,42,0.98)",
+                          color: isDark ? "#020617" : "#F9FAFB",
+                        }}
+                      >
+                        Book pass
+                      </Link>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
-            {/* mini pills */}
-            <div className="mt-4 flex flex-wrap gap-3 text-xs">
+            {/* tiny bottom tags under card */}
+            <div className="hidden sm:flex mt-3 flex-wrap gap-3 text-[10px]">
               <div
-                className="px-3 py-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur"
+                className="px-3 py-1.5 rounded-full border backdrop-blur flex items-center gap-1.5"
                 style={{
                   borderColor: theme.borderSoft,
-                  background:
-                    mode === "dark"
-                      ? "rgba(15,23,42,0.96)"
-                      : "rgba(255,255,255,0.96)",
-                  color: theme.textMain,
+                  background: isDark
+                    ? "rgba(15,23,42,0.95)"
+                    : "rgba(255,255,255,0.96)",
+                  color: theme.textMuted,
                 }}
               >
-                <Dumbbell size={14} />
-                1-day pass gyms
+                <Users size={13} />
+                <span>Solo, group & community sessions</span>
               </div>
               <div
-                className="px-3 py-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur"
+                className="px-3 py-1.5 rounded-full border backdrop-blur flex items-center gap-1.5"
                 style={{
                   borderColor: theme.borderSoft,
-                  background:
-                    mode === "dark"
-                      ? "rgba(15,23,42,0.96)"
-                      : "rgba(255,255,255,0.96)",
-                  color: theme.textMain,
+                  background: isDark
+                    ? "rgba(15,23,42,0.95)"
+                    : "rgba(255,255,255,0.96)",
+                  color: theme.textMuted,
                 }}
               >
-                <Star size={14} className="text-yellow-300" />
-                Traveler-approved studios
+                <Globe2 size={13} />
+                <span>Perfect for travellers & expats</span>
               </div>
             </div>
           </div>
@@ -578,27 +641,39 @@ function Hero({
 }
 
 /* =========================================================
-   STATS STRIP
+   STATS STRIP + TRUSTED BY
    ========================================================= */
 
-function StatsStrip({ theme, mode, eventsCount, gymsCount }) {
+function StatsStrip({
+  theme,
+  mode,
+  gymsCount,
+  globalRating,
+  globalRatingCount,
+}) {
   const stats = [
-    {
-      label: "Day-pass sessions booked",
-      value: "5k+",
-    },
+    { label: "Day-pass sessions booked", value: "5k+" },
     {
       label: "Gyms & studios onboarded",
       value: gymsCount ? `${gymsCount}` : "150+",
     },
-    {
-      label: "Cities explored by movers",
-      value: "40+",
-    },
   ];
 
+  if (globalRating) {
+    stats.push({
+      label: "Community rating",
+      value: `${globalRating.toFixed(1)}/5`,
+      extra: globalRatingCount ? `${globalRatingCount}+ reviews` : "",
+    });
+  } else {
+    stats.push({
+      label: "Cities explored by movers",
+      value: "40+",
+    });
+  }
+
   return (
-    <section className="max-w-7xl mx-auto px-6 pb-6 -mt-6">
+    <section className="max-w-7xl mx-auto px-6 pb-4 -mt-6 space-y-4">
       <div
         className="rounded-2xl border px-5 py-4 grid sm:grid-cols-3 gap-4 backdrop-blur"
         style={{
@@ -624,8 +699,218 @@ function StatsStrip({ theme, mode, eventsCount, gymsCount }) {
             >
               {item.label}
             </span>
+            {item.extra && (
+              <span
+                className="text-[10px]"
+                style={{ color: theme.textMuted }}
+              >
+                {item.extra}
+              </span>
+            )}
           </div>
         ))}
+      </div>
+
+      {/* trusted by row */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <p
+          className="text-[11px] uppercase tracking-[0.25em] font-semibold"
+          style={{ color: theme.textMuted }}
+        >
+          Trusted by people training on the move
+        </p>
+        <div className="flex flex-wrap gap-4 text-xs">
+          {[
+            "Remote founders",
+            "Digital nomads",
+            "Exchange students",
+            "Weekend travellers",
+          ].map((label) => (
+            <span
+              key={label}
+              className="px-3 py-1.5 rounded-full border"
+              style={{
+                borderColor: theme.borderSoft,
+                color: theme.textMuted,
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   FOR YOU STRIP — pulls from /event-bookings/me
+   ========================================================= */
+
+function ForYouStrip({ theme, mode, bookings, loading, events }) {
+  if (loading) return null;
+
+  const now = new Date();
+  const upcomingRaw = (bookings || []).filter((b) => {
+    if (!b) return false;
+    if (b.status && ["cancelled", "expired"].includes(b.status)) return false;
+
+    const eventObj = b.event && typeof b.event === "object" ? b.event : null;
+    const eventDate = b.eventDate || (eventObj && eventObj.date) || null;
+    if (!eventDate) return false;
+    const d = new Date(eventDate);
+    if (Number.isNaN(d.getTime())) return false;
+    return d >= now;
+  });
+
+  if (upcomingRaw.length === 0) return null;
+
+  const eventsById = new Map(
+    (events || []).map((ev) => [ev._id?.toString(), ev])
+  );
+
+  const upcoming = upcomingRaw
+    .slice()
+    .sort((a, b) => {
+      const dateA = new Date(
+        a.eventDate ||
+          (a.event && typeof a.event === "object" ? a.event.date : null) ||
+          0
+      );
+      const dateB = new Date(
+        b.eventDate ||
+          (b.event && typeof b.event === "object" ? b.event.date : null) ||
+          0
+      );
+      return dateA - dateB;
+    })
+    .slice(0, 3);
+
+  return (
+    <section className="max-w-7xl mx-auto px-6 pt-2 pb-6">
+      <div
+        className="rounded-2xl border px-4 py-4 md:px-5 md:py-5 backdrop-blur flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        style={{
+          borderColor: theme.borderSoft,
+          background:
+            mode === "dark"
+              ? "rgba(15,23,42,0.96)"
+              : "rgba(255,255,255,0.98)",
+          boxShadow: theme.shadowSoft,
+        }}
+      >
+        <div className="flex items-start gap-2 md:gap-3">
+          <div className="mt-0.5">
+            <Ticket size={18} style={{ color: theme.accentBlue }} />
+          </div>
+          <div>
+            <p
+              className="text-[11px] uppercase tracking-[0.25em] font-semibold mb-1"
+              style={{ color: theme.textMuted }}
+            >
+              For you
+            </p>
+            <h3
+              className="text-sm md:text-base font-semibold"
+              style={{ color: theme.textMain }}
+            >
+              Your upcoming tickets
+            </h3>
+            <p
+              className="text-[11px] md:text-xs mt-1"
+              style={{ color: theme.textMuted }}
+            >
+              These are the next events you&apos;re booked into. Save them to
+              your calendar and just show your Passiify ticket at the gate.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col gap-2 md:gap-1">
+          {upcoming.map((b) => {
+            const eventObj =
+              b.event && typeof b.event === "object"
+                ? b.event
+                : eventsById.get(b.event?.toString?.() || b.event) || null;
+
+            const title = eventObj?.name || "Upcoming event";
+            const location =
+              eventObj?.location || eventObj?.city || "Location TBA";
+            const rawDate =
+              b.eventDate || eventObj?.date || b.bookingDate || b.createdAt;
+            let dateLabel = "TBA";
+            if (rawDate) {
+              const d = new Date(rawDate);
+              if (!Number.isNaN(d.getTime())) {
+                dateLabel = d.toLocaleString();
+              }
+            }
+
+            return (
+              <div
+                key={b._id || b.id || b.bookingCode}
+                className="flex items-center justify-between gap-3 rounded-xl px-3 py-2"
+                style={{
+                  background:
+                    mode === "dark"
+                      ? "rgba(15,23,42,0.85)"
+                      : "rgba(248,250,252,0.98)",
+                }}
+              >
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-xs font-semibold truncate"
+                    style={{ color: theme.textMain }}
+                  >
+                    {title}
+                  </p>
+                  <p
+                    className="text-[10px] truncate mt-0.5"
+                    style={{ color: theme.textMuted }}
+                  >
+                    {dateLabel} · {location}
+                  </p>
+                  {b.bookingCode && (
+                    <p
+                      className="text-[10px] mt-0.5"
+                      style={{ color: theme.textMuted }}
+                    >
+                      Code: {b.bookingCode}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px]"
+                    style={{ color: theme.accentMint }}
+                  >
+                    <CheckCircle2 size={12} />
+                    {b.tickets || 1} ticket
+                    {b.tickets > 1 ? "s" : ""}
+                  </span>
+                  {eventObj?._id && (
+                    <Link
+                      to={`/events/${eventObj._id}`}
+                      className="text-[10px] font-semibold hover:underline"
+                      style={{ color: theme.accentBlue }}
+                    >
+                      View event
+                    </Link>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex justify-end mt-1">
+            <Link
+              to="/my-bookings"
+              className="text-[11px] font-semibold hover:underline"
+              style={{ color: theme.textMuted }}
+            >
+              View all bookings →
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -656,8 +941,8 @@ function TravelCityStrip({ theme, mode }) {
           className="text-sm max-w-md"
           style={{ color: theme.textMuted }}
         >
-          Browse curated gyms and events in popular traveller hubs. Lock your
-          training in before you land.
+          Line up a gym or event before you arrive. No more “I&apos;ll start
+          next week” energy.
         </p>
       </div>
 
@@ -672,7 +957,7 @@ function TravelCityStrip({ theme, mode }) {
               background:
                 mode === "dark"
                   ? "rgba(15,23,42,0.96)"
-                  : "rgba(255,255,255,0.96)",
+                  : "rgba(255,255,255,0.98)",
               boxShadow: theme.shadowSoft,
             }}
           >
@@ -733,7 +1018,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
             className="text-sm mt-1"
             style={{ color: theme.textMuted }}
           >
-            Runs, workshops, retreats and fight nights you can book in a few
+            Runs, bootcamps, retreats and fight nights — all bookable in a few
             taps.
           </p>
         </div>
@@ -758,7 +1043,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
           className="text-sm"
           style={{ color: theme.textMuted }}
         >
-          No events live right now — keep an eye out for the next drop.
+          No events live right now — check back soon or explore gyms instead.
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -771,7 +1056,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                 background:
                   mode === "dark"
                     ? "rgba(15,23,42,0.96)"
-                    : "rgba(255,255,255,0.96)",
+                    : "rgba(255,255,255,0.98)",
                 boxShadow: theme.shadowSoft,
               }}
             >
@@ -796,13 +1081,27 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                     className="px-2 py-1 rounded-full border text-[10px] uppercase tracking-[0.2em]"
                     style={{
                       borderColor: "rgba(255,255,255,0.25)",
-                      background: "rgba(15,23,42,0.9)",
+                      background: "rgba(15,23,42,0.95)",
                       color: "#F9FAFB",
                     }}
                   >
                     Event
                   </span>
                 </div>
+                {typeof ev.rating === "number" && (
+                  <div className="absolute top-3 right-3">
+                    <span
+                      className="px-2 py-1 rounded-full text-[10px] inline-flex items-center gap-1"
+                      style={{
+                        background: "rgba(15,23,42,0.9)",
+                        color: "#EAB308",
+                      }}
+                    >
+                      <Star size={12} />
+                      {ev.rating.toFixed(1)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 flex flex-col gap-3">
@@ -919,8 +1218,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
               className="text-sm mt-1"
               style={{ color: theme.textMuted }}
             >
-              Drop into premium facilities without signing up for monthly
-              contracts.
+              Tap in today, leave tomorrow. No long forms, no binding contracts.
             </p>
           </div>
           <Link
@@ -944,11 +1242,12 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
             className="text-sm"
             style={{ color: theme.textMuted }}
           >
-            No gyms added yet — we’re onboarding hosts in your region.
+            No partner gyms live yet — we&apos;re onboarding hosts in your
+            region.
           </div>
         ) : (
-          <div className="space-y-5">
-            {/* Featured gym */}
+          <div className="space-y-6">
+            {/* Featured gym row */}
             {featured && (
               <article
                 className="rounded-3xl overflow-hidden border flex flex-col md:flex-row backdrop-blur-xl"
@@ -956,7 +1255,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                   borderColor: theme.borderSoft,
                   background:
                     mode === "dark"
-                      ? "rgba(15,23,42,0.97)"
+                      ? "rgba(15,23,42,0.98)"
                       : "rgba(255,255,255,0.98)",
                   boxShadow: theme.shadowStrong,
                 }}
@@ -978,8 +1277,8 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                     style={{
                       background:
                         mode === "dark"
-                          ? "linear-gradient(to top right, rgba(15,23,42,1), rgba(15,23,42,0.25))"
-                          : "linear-gradient(to top right, rgba(15,23,42,0.85), rgba(15,23,42,0.2))",
+                          ? "linear-gradient(to top right, rgba(15,23,42,1), rgba(15,23,42,0.3))"
+                          : "linear-gradient(to top right, rgba(15,23,42,0.9), rgba(15,23,42,0.25))",
                     }}
                   />
                   <div className="absolute top-3 left-3">
@@ -987,7 +1286,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                       className="px-2 py-1 rounded-full border text-[10px] uppercase tracking-[0.2em]"
                       style={{
                         borderColor: "rgba(255,255,255,0.25)",
-                        background: "rgba(15,23,42,0.9)",
+                        background: "rgba(15,23,42,0.95)",
                         color: "#F9FAFB",
                       }}
                     >
@@ -1030,7 +1329,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                       style={{ color: theme.textMuted }}
                     >
                       {featured.description ||
-                        "A clean, well-equipped space for one perfect session while you’re in town."}
+                        "A clean, well-equipped space with trainers who get that you&apos;re just passing through — but still serious about your training."}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
                       <span
@@ -1038,7 +1337,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                         style={{ color: theme.textMuted }}
                       >
                         <Star size={13} className="text-yellow-300" />
-                        {featured.rating ?? "4.6"} rating
+                        {featured.rating ?? "4.7"} rating
                       </span>
                       {featured.openingHours && (
                         <span
@@ -1098,7 +1397,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
               </article>
             )}
 
-            {/* Remaining gyms */}
+            {/* Other gyms grid */}
             {rest.length > 0 && (
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {rest.map((g) => (
@@ -1110,7 +1409,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                       background:
                         mode === "dark"
                           ? "rgba(15,23,42,0.96)"
-                          : "rgba(255,255,255,0.96)",
+                          : "rgba(255,255,255,0.98)",
                       boxShadow: theme.shadowSoft,
                     }}
                   >
@@ -1140,7 +1439,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                           className="px-2 py-1 rounded-full border text-[10px] uppercase tracking-[0.2em]"
                           style={{
                             borderColor: "rgba(255,255,255,0.25)",
-                            background: "rgba(15,23,42,0.9)",
+                            background: "rgba(15,23,42,0.95)",
                             color: "#F9FAFB",
                           }}
                         >
@@ -1222,7 +1521,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                               background:
                                 mode === "dark"
                                   ? "#F9FAFB"
-                                  : "rgba(15,23,42,0.9)",
+                                  : "rgba(15,23,42,0.96)",
                               color:
                                 mode === "dark"
                                   ? "#0F172A"
@@ -1246,7 +1545,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
 }
 
 /* =========================================================
-   CATEGORY STRIP
+   CATEGORY STRIP — Explore by vibe
    ========================================================= */
 
 function CategoryStrip({ theme, mode }) {
@@ -1288,7 +1587,7 @@ function CategoryStrip({ theme, mode }) {
               background:
                 mode === "dark"
                   ? "rgba(15,23,42,0.96)"
-                  : "rgba(255,255,255,0.96)",
+                  : "rgba(255,255,255,0.98)",
               boxShadow: theme.shadowSoft,
             }}
           >
@@ -1313,21 +1612,21 @@ function CategoryStrip({ theme, mode }) {
 }
 
 /* =========================================================
-   WHY PASSIIFY
+   WHY PASSIIFY & GEN-Z ANGLE
    ========================================================= */
 
 function WhyPassiifySection({ theme, mode }) {
   const items = [
     {
       title: "No contracts. Ever.",
-      desc: "Commit to the workout, not a 12-month plan. Every pass is short, clean and flexible.",
+      desc: "Commit to the workout, not a 12-month plan. Every pass is clean, short and flexible.",
     },
     {
       title: "Travel-first design.",
-      desc: "Swap between fight clubs, yoga rooftops and strength clubs in any city without friction.",
+      desc: "Swap between fight clubs, yoga rooftops and strength clubs in any city with zero friction.",
     },
     {
-      title: "Verified hosts.",
+      title: "Verified hosts only.",
       desc: "We vet every partner so the vibes, safety and quality feel worth your time and money.",
     },
   ];
@@ -1340,7 +1639,7 @@ function WhyPassiifySection({ theme, mode }) {
           borderColor: theme.borderSoft,
           background:
             mode === "dark"
-              ? "radial-gradient(circle at top left, rgba(37,99,235,0.24), transparent 55%), rgba(15,23,42,0.96)"
+              ? "radial-gradient(circle at top left, rgba(37,99,235,0.22), transparent 55%), rgba(15,23,42,0.98)"
               : "radial-gradient(circle at top left, rgba(37,99,235,0.10), transparent 55%), rgba(255,255,255,0.98)",
           boxShadow: theme.shadowSoft,
         }}
@@ -1369,7 +1668,7 @@ function WhyPassiifySection({ theme, mode }) {
             >
               Passiify lets you experiment with Muay Thai, rooftop yoga, dance
               cardio or strength clubs — with honest pricing and instant
-              booking. No awkward sales desk chats.
+              booking. No awkward sales desk chats. No guilt when you travel.
             </p>
           </div>
 
@@ -1382,7 +1681,7 @@ function WhyPassiifySection({ theme, mode }) {
                   borderColor: theme.borderSoft,
                   background:
                     mode === "dark"
-                      ? "rgba(15,23,42,0.96)"
+                      ? "rgba(15,23,42,0.98)"
                       : "rgba(255,255,255,0.98)",
                 }}
               >
@@ -1414,6 +1713,84 @@ function WhyPassiifySection({ theme, mode }) {
 }
 
 /* =========================================================
+   PARTNER STRIP (for gyms / organisers)
+   ========================================================= */
+
+function PartnerStrip({ theme, mode }) {
+  return (
+    <section className="max-w-7xl mx-auto px-6 py-8">
+      <div
+        className="rounded-3xl border px-5 py-6 md:px-7 md:py-8 flex flex-col md:flex-row gap-5 md:items-center md:justify-between backdrop-blur-xl"
+        style={{
+          borderColor: theme.borderSoft,
+          background:
+            mode === "dark"
+              ? "rgba(15,23,42,0.98)"
+              : "rgba(255,255,255,0.98)",
+          boxShadow: theme.shadowSoft,
+        }}
+      >
+        <div className="max-w-md">
+          <p
+            className="text-[11px] uppercase tracking-[0.25em] font-semibold mb-2"
+            style={{ color: theme.textMuted }}
+          >
+            For gyms, studios & event organisers
+          </p>
+          <h3
+            className="text-xl md:text-2xl font-semibold"
+            style={{ color: theme.textMain }}
+          >
+            Bring high-intent travellers and locals into your space — no sales
+            calls needed.
+          </h3>
+          <p
+            className="text-xs md:text-sm mt-2"
+            style={{ color: theme.textMuted }}
+          >
+            List your gym or event on Passiify and get paid for one-day passes,
+            drop-ins and curated events. You control capacity, pricing and
+            availability.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 text-[11px] md:text-xs max-w-xs">
+          <ul
+            className="space-y-1.5"
+            style={{ color: theme.textMuted }}
+          >
+            <li>• Transparent payouts (UPI/card)</li>
+            <li>• Simple dashboard for passes, events & revenue</li>
+            <li>• Trusted by young travellers & digital nomads</li>
+          </ul>
+          <div className="mt-3 flex gap-3 flex-wrap">
+            <Link
+              to="/partner"
+              className="px-4 py-2 rounded-xl text-xs font-semibold"
+              style={{
+                backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
+                color: "#020617",
+              }}
+            >
+              Become a partner
+            </Link>
+            <Link
+              to="/partner?tab=events"
+              className="px-4 py-2 rounded-xl text-xs font-semibold border"
+              style={{
+                borderColor: theme.borderSoft,
+                color: theme.textMain,
+              }}
+            >
+              Host an event
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
    HOW IT WORKS
    ========================================================= */
 
@@ -1422,7 +1799,7 @@ function HowItWorksSection({ theme, mode }) {
     {
       emoji: "🌍",
       title: "Drop a pin",
-      desc: "Choose your city or your next trip spot.",
+      desc: "Choose your city or next trip spot.",
     },
     {
       emoji: "🧾",
@@ -1442,7 +1819,7 @@ function HowItWorksSection({ theme, mode }) {
   ];
 
   return (
-    <section className="max-w-7xl mx-auto px-6 py-10">
+    <section className="max-w-7xl mx-auto px-6 py-10" id="how-it-works">
       <h2
         className="text-2xl font-semibold mb-6"
         style={{ color: theme.textMain }}
@@ -1459,7 +1836,7 @@ function HowItWorksSection({ theme, mode }) {
               background:
                 mode === "dark"
                   ? "rgba(15,23,42,0.96)"
-                  : "rgba(255,255,255,0.96)",
+                  : "rgba(255,255,255,0.98)",
             }}
           >
             <div className="text-2xl mb-2">{step.emoji}</div>
@@ -1538,8 +1915,8 @@ function LocalDiscoveryInline({ theme, mode }) {
                 borderColor: theme.borderSoft,
                 background:
                   mode === "dark"
-                    ? "rgba(15,23,42,0.92)"
-                    : "rgba(248,250,252,0.96)",
+                    ? "rgba(15,23,42,0.94)"
+                    : "rgba(248,250,252,0.98)",
                 color: theme.textMain,
               }}
             >
@@ -1553,41 +1930,34 @@ function LocalDiscoveryInline({ theme, mode }) {
 }
 
 /* =========================================================
-   CTA SECTION
+   CTA SECTION — matched to EventsPage CTA style
    ========================================================= */
 
-function CTASection({ theme }) {
+function CTASection() {
   return (
-    <section className="relative overflow-hidden mt-4">
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
-          opacity: 0.97,
-        }}
-      />
-      <div className="relative max-w-4xl mx-auto px-6 py-16 text-center text-gray-900">
-        <h2 className="text-3xl font-black mb-3">
-          Ready to make your training as flexible as your travel?
-        </h2>
-        <p className="text-sm md:text-base text-black/80 mb-7 max-w-2xl mx-auto">
-          Join travellers and locals who treat every new city as a playground —
-          book fight clubs, studios and workouts in a few taps.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link
-            to="/events"
-            className="px-6 py-3 bg-black text-white font-semibold rounded-xl text-sm md:text-base"
-          >
-            Explore events
-          </Link>
-          <Link
-            to="/explore"
-            className="px-6 py-3 border border-black/40 text-black font-semibold rounded-xl text-sm md:text-base bg-white/40"
-          >
-            Find gyms & studios
-          </Link>
-        </div>
+    <section className="mt-4 bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 dark:from-sky-500 dark:via-blue-700 dark:to-orange-500 py-10 text-center text-white">
+      <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-2">
+        Experience. Connect. Move different.
+      </h2>
+      <p className="text-xs sm:text-sm md:text-base text-blue-50/90 max-w-xl mx-auto mb-6">
+        Pick one session in the city you&apos;re visiting and build the rest of
+        your day around it. Book fight clubs, rooftops and strength clubs in a
+        few taps.
+      </p>
+      <div className="flex flex-wrap gap-3 justify-center">
+        <Link
+          to="/events"
+          className="inline-flex items-center gap-2 bg-white text-blue-700 px-6 py-2.5 rounded-full font-semibold text-sm shadow-lg hover:bg-orange-50 transition"
+        >
+          Explore events
+          <ArrowRight size={16} />
+        </Link>
+        <Link
+          to="/explore"
+          className="inline-flex items-center gap-2 bg-slate-950/20 border border-white/60 text-white px-6 py-2.5 rounded-full font-semibold text-sm hover:bg-slate-950/30 transition"
+        >
+          Find gyms & studios
+        </Link>
       </div>
     </section>
   );
@@ -1598,93 +1968,207 @@ function CTASection({ theme }) {
    ========================================================= */
 
 function Footer({ theme, mode }) {
+  const borderColor =
+    mode === "dark" ? "rgba(30,41,59,1)" : "rgba(226,232,240,1)";
+  const bgColor =
+    mode === "dark" ? "rgba(15,23,42,0.98)" : "rgba(248,250,252,0.98)";
+
   return (
     <footer
-      className="border-t mt-12"
+      className="border-t mt-16"
       style={{
-        borderColor:
-          mode === "dark"
-            ? "rgba(30,41,59,1)"
-            : "rgba(226,232,240,1)",
-        background:
-          mode === "dark"
-            ? "rgba(15,23,42,0.98)"
-            : "rgba(248,250,252,0.98)",
+        borderColor,
+        background: bgColor,
       }}
     >
-      <div className="max-w-7xl mx-auto px-6 py-10 grid md:grid-cols-3 gap-6">
-        <div>
-          <h4
-            className="text-xl font-bold"
-            style={{ color: theme.textMain }}
-          >
-            Passiify
-          </h4>
-          <p
-            className="text-xs mt-2 max-w-xs"
-            style={{ color: theme.textMuted }}
-          >
-            One-day fitness passes and curated events for travellers, expats
-            and locals who hate long-term contracts and hidden BS.
-          </p>
+      <div className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+        <div className="grid gap-8 md:grid-cols-4">
+          {/* Brand */}
+          <div>
+            <h4
+              className="text-xl font-bold tracking-tight"
+              style={{ color: theme.textMain }}
+            >
+              Passiify
+            </h4>
+            <p
+              className="text-xs mt-3 max-w-xs"
+              style={{ color: theme.textMuted }}
+            >
+              One-day fitness passes and curated events for travellers, expats
+              and locals who hate long-term contracts and hidden extras.
+            </p>
+            <p
+              className="text-[11px] mt-3"
+              style={{ color: theme.textMuted }}
+            >
+              Built for people who treat every city like a playground.
+            </p>
+          </div>
+
+          {/* Product */}
+          <div>
+            <h5
+              className="text-sm font-semibold mb-2"
+              style={{ color: theme.textMain }}
+            >
+              Product
+            </h5>
+            <ul className="text-xs space-y-1.5">
+              <li>
+                <Link
+                  to="/explore"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  Explore gyms & studios
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/events"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  Fitness events
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/dashboard"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  My dashboard
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="#how-it-works"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  How it works
+                </a>
+              </li>
+              <li>
+                <Link
+                  to="/about"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  About Passiify
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Hosts & partners */}
+          <div>
+            <h5
+              className="text-sm font-semibold mb-2"
+              style={{ color: theme.textMain }}
+            >
+              For hosts & partners
+            </h5>
+            <ul className="text-xs space-y-1.5">
+              <li>
+                <Link
+                  to="/partner"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  List your gym / studio
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/partner?tab=events"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  Host an event
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/partner/dashboard"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  Partner dashboard
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/admin/login"
+                  className="hover:underline"
+                  style={{ color: theme.textMuted }}
+                >
+                  Admin panel
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Support / legal */}
+          <div>
+            <h5
+              className="text-sm font-semibold mb-2"
+              style={{ color: theme.textMain }}
+            >
+              Support
+            </h5>
+            <p
+              className="text-xs"
+              style={{ color: theme.textMuted }}
+            >
+              Drop us a mail any time:
+            </p>
+            <p
+              className="text-xs mt-1 font-medium"
+              style={{ color: theme.textMain }}
+            >
+              support@passiify.com
+            </p>
+
+            <div className="mt-4 text-xs space-y-1.5">
+              <Link
+                to="/terms"
+                className="hover:underline block"
+                style={{ color: theme.textMuted }}
+              >
+                Terms & conditions
+              </Link>
+              <Link
+                to="/privacy"
+                className="hover:underline block"
+                style={{ color: theme.textMuted }}
+              >
+                Privacy policy
+              </Link>
+            </div>
+          </div>
         </div>
 
-        <div>
-          <h5
-            className="text-sm font-semibold mb-2"
-            style={{ color: theme.textMain }}
-          >
-            Quick links
-          </h5>
-          <ul className="text-xs space-y-1.5">
-            <li>
-              <Link
-                to="/explore"
-                className="hover:underline"
-                style={{ color: theme.textMuted }}
-              >
-                Explore
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/partner"
-                className="hover:underline"
-                style={{ color: theme.textMuted }}
-              >
-                Partner with us
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/about"
-                className="hover:underline"
-                style={{ color: theme.textMuted }}
-              >
-                About
-              </Link>
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <h5
-            className="text-sm font-semibold mb-2"
-            style={{ color: theme.textMain }}
-          >
-            Contact
-          </h5>
+        <div
+          className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-4 border-t"
+          style={{
+            borderColor,
+          }}
+        >
           <p
-            className="text-xs"
-            style={{ color: theme.textMuted }}
-          >
-            support@passiify.com
-          </p>
-          <p
-            className="text-xs mt-3"
+            className="text-[11px]"
             style={{ color: theme.textMuted }}
           >
             © {new Date().getFullYear()} Passiify. All rights reserved.
+          </p>
+          <p
+            className="text-[11px]"
+            style={{ color: theme.textMuted }}
+          >
+            Made for travellers, students & wanderers who still need a serious
+            workout.
           </p>
         </div>
       </div>
@@ -1705,39 +2189,40 @@ export default function Home() {
   const [startingDayPrice, setStartingDayPrice] = useState(null);
   const [mode, setMode] = useState("dark"); // "light" | "dark"
 
-  // Initial theme: respect localStorage, then device preference
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("passiify-theme");
-      if (stored === "light" || stored === "dark") {
-        setMode(stored);
-        return;
-      }
-      if (
-        typeof window !== "undefined" &&
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: light)").matches
-      ) {
-        setMode("light");
-      } else {
-        setMode("dark");
-      }
-    } catch {
-      setMode("dark");
-    }
-  }, []);
+  const [eventBookings, setEventBookings] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(true);
 
-  // Persist theme choice
+  // Theme: follow device preference (no manual toggle)
   useEffect(() => {
-    try {
-      localStorage.setItem("passiify-theme", mode);
-    } catch {
-      // ignore
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const handleChange = (event) => {
+      setMode(event.matches ? "dark" : "light");
+    };
+
+    // initial
+    handleChange(mediaQuery);
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleChange);
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handleChange);
     }
-  }, [mode]);
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", handleChange);
+      } else if (mediaQuery.removeListener) {
+        mediaQuery.removeListener("change", handleChange);
+      }
+    };
+  }, []);
 
   const theme = mode === "light" ? LIGHT_THEME : DARK_THEME;
 
+  // Fetch events & gyms from backend
   useEffect(() => {
     let mounted = true;
 
@@ -1789,62 +2274,97 @@ export default function Home() {
     };
   }, []);
 
+  // Fetch personal event bookings (for "For You" strip)
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const res = await API.get("/event-bookings/me");
+        if (!mounted) return;
+
+        const data = res.data?.bookings || res.data || [];
+        const arr = Array.isArray(data) ? data : [];
+        setEventBookings(arr);
+      } catch (err) {
+        if (!mounted) return;
+        // Not logged in or no bookings yet — silently ignore
+        setEventBookings([]);
+      } finally {
+        if (!mounted) return;
+        setLoadingBookings(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handleSearch = (q, t) => {
-    // tracking hook if you need analytics later
+    // central hook if you ever add analytics
     console.log("Passiify search", { query: q, type: t });
   };
 
-  const backgroundImage =
-    mode === "dark"
-      ? `radial-gradient(circle at top, rgba(37,99,235,0.30), transparent 55%),
-         radial-gradient(circle at bottom right, rgba(249,115,22,0.20), transparent 60%)`
-      : `radial-gradient(circle at top, rgba(37,99,235,0.12), transparent 55%),
-         radial-gradient(circle at bottom right, rgba(249,115,22,0.14), transparent 60%)`;
+  const featuredGym = gyms[0] || null;
+
+  // Aggregate global rating from gyms + events
+  let ratingSum = 0;
+  let ratingN = 0;
+
+  gyms.forEach((g) => {
+    const r = typeof g.rating === "number" ? g.rating : null;
+    const c = typeof g.ratingCount === "number" ? g.ratingCount : 0;
+    if (r && r > 0) {
+      const weight = c > 0 ? c : 1;
+      ratingSum += r * weight;
+      ratingN += weight;
+    }
+  });
+
+  events.forEach((ev) => {
+    const r = typeof ev.rating === "number" ? ev.rating : null;
+    const c = typeof ev.ratingCount === "number" ? ev.ratingCount : 0;
+    if (r && r > 0) {
+      const weight = c > 0 ? c : 1;
+      ratingSum += r * weight;
+      ratingN += weight;
+    }
+  });
+
+  const globalAvgRating = ratingN > 0 ? ratingSum / ratingN : null;
+  const globalRatingCount = ratingN;
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        backgroundColor: theme.bg,
-        backgroundImage,
-        color: theme.textMain,
-      }}
-    >
-      {/* Theme toggle — still respects device, but user can switch */}
-      <button
-        onClick={() => setMode((prev) => (prev === "dark" ? "light" : "dark"))}
-        className="fixed top-4 right-4 z-40 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] backdrop-blur"
-        style={{
-          borderColor: theme.borderSoft,
-          background:
-            mode === "dark"
-              ? "rgba(15,23,42,0.95)"
-              : "rgba(255,255,255,0.95)",
-          boxShadow:
-            mode === "dark"
-              ? "0 12px 40px rgba(0,0,0,0.8)"
-              : "0 10px 30px rgba(15,23,42,0.2)",
-          color: theme.textMain,
-        }}
-      >
-        {mode === "dark" ? (
-          <>
-            <Sun size={14} className="text-amber-300" />
-            <span>Light</span>
-          </>
-        ) : (
-          <>
-            <Moon size={14} className="text-slate-700" />
-            <span>Dark</span>
-          </>
-        )}
-      </button>
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-50 pb-16">
+      {/* TOP TRUST STRIP — same as EventsPage so pages feel unified */}
+      <div className="border-b border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/80 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-[11px] md:text-xs text-slate-500 dark:text-slate-300">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>
+              Curated day-pass gyms & fitness experiences across Indian cities.
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+              <span>Verified hosts only</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-orange-400" />
+              <span>Transparent pricing · No lock-ins</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* HERO */}
       <Hero
         theme={theme}
         mode={mode}
         topEvent={topEvent}
+        featuredGym={featuredGym}
         onSearch={handleSearch}
         startingDayPrice={startingDayPrice}
         eventsCount={events.length}
@@ -1856,8 +2376,16 @@ export default function Home() {
         <StatsStrip
           theme={theme}
           mode={mode}
-          eventsCount={events.length}
           gymsCount={gyms.length}
+          globalRating={globalAvgRating}
+          globalRatingCount={globalRatingCount}
+        />
+        <ForYouStrip
+          theme={theme}
+          mode={mode}
+          bookings={eventBookings}
+          loading={loadingBookings}
+          events={events}
         />
         <TravelCityStrip theme={theme} mode={mode} />
         <UpcomingEventsSection
@@ -1874,9 +2402,10 @@ export default function Home() {
         />
         <CategoryStrip theme={theme} mode={mode} />
         <WhyPassiifySection theme={theme} mode={mode} />
+        <PartnerStrip theme={theme} mode={mode} />
         <HowItWorksSection theme={theme} mode={mode} />
         <LocalDiscoveryInline theme={theme} mode={mode} />
-        <CTASection theme={theme} />
+        <CTASection />
       </main>
 
       {/* FOOTER */}
