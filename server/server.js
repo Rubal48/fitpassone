@@ -16,10 +16,10 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import testEmailRoute from "./routes/testEmailRoute.js";
-import eventRoutes from "./routes/eventRoutes.js";   
+import eventRoutes from "./routes/eventRoutes.js";
 import eventBookingRoutes from "./routes/eventBookingRoutes.js";
-import adminEventRoutes from "./routes/adminEventRoutes.js";  // ⭐ Event admin routes
-
+import adminEventRoutes from "./routes/adminEventRoutes.js"; // ⭐ Event admin routes
+import paymentRoutes from "./routes/paymentRoutes.js";       // ⭐ NEW: Razorpay payments
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +47,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/test", testEmailRoute);
 app.use("/api/events", eventRoutes);
 app.use("/api/event-bookings", eventBookingRoutes);
+
+// ⭐ Razorpay payments (NEW)
+app.use("/api/payments", paymentRoutes);
 
 // ⭐ Correct way:
 // Frontend calls `/api/admin/events/...`, so backend must register same:

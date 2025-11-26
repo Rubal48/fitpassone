@@ -14,12 +14,12 @@ import {
 import { Link } from "react-router-dom";
 
 /* =========================================================
-   PASSIIFY BLUE/ORANGE THEME (LIGHT + DARK)
+   PASSIIFY THEME — MATCH NAVBAR (Blue / Sky / Orange)
    ========================================================= */
 const THEME = {
-  accentBlue: "#2563EB", // blue-600
-  accentSky: "#0EA5E9", // sky-500
-  accentOrange: "#F97316", // orange-500
+  accentFrom: "#2563EB", // blue-600
+  accentMid: "#0EA5E9", // sky-500
+  accentTo: "#F97316", // orange-500,
 };
 
 /* reusable pill */
@@ -63,19 +63,30 @@ const PersonaCard = ({ badge, title, body }) => (
 export default function About() {
   const [view, setView] = useState("movers"); // "movers" | "hosts"
 
+  const mainGradient = `linear-gradient(120deg, ${THEME.accentFrom}, ${THEME.accentMid}, ${THEME.accentTo})`;
+  const textGradient = `linear-gradient(90deg, ${THEME.accentFrom}, ${THEME.accentTo})`;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-black text-slate-900 dark:text-slate-50">
       {/* ambient glows */}
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute -top-40 -left-40 w-80 h-80 rounded-full bg-blue-500/25 blur-3xl" />
-        <div className="absolute -bottom-40 -right-32 w-96 h-96 rounded-full bg-orange-500/25 blur-3xl" />
+        {/* left blue glow using official accentFrom */}
+        <div
+          className="absolute -top-40 -left-40 w-80 h-80 rounded-full blur-3xl"
+          style={{ backgroundColor: `${THEME.accentFrom}40` }} // 25% opacity
+        />
+        {/* right orange glow using official accentTo */}
+        <div
+          className="absolute -bottom-40 -right-32 w-96 h-96 rounded-full blur-3xl"
+          style={{ backgroundColor: `${THEME.accentTo}40` }}
+        />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.5),_transparent_55%)] dark:bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.25),_transparent_55%)]" />
       </div>
 
       {/* =====================================================
          HERO SECTION
          ===================================================== */}
-      <section className="relative max-w-6xl mx-auto px-5 sm:px-6 pt-24 pb-14 md:pt-28">
+      <section className="relative max-w-7xl mx-auto px-5 sm:px-6 pt-24 pb-14 md:pt-28">
         <div className="flex flex-col lg:flex-row gap-10 lg:items-center">
           {/* LEFT */}
           <div className="relative z-10 flex-1">
@@ -85,7 +96,7 @@ export default function About() {
               Redefining{" "}
               <span
                 style={{
-                  backgroundImage: `linear-gradient(90deg, ${THEME.accentBlue}, ${THEME.accentOrange})`,
+                  backgroundImage: textGradient,
                   WebkitBackgroundClip: "text",
                   color: "transparent",
                 }}
@@ -106,9 +117,9 @@ export default function About() {
             <div className="mt-6 flex flex-wrap gap-3 items-center">
               <Link
                 to="/register"
-                className="inline-flex items-center justify-center px-6 py-2.5 rounded-full text-xs md:text-sm font-semibold shadow-[0_18px_60px_rgba(37,99,235,0.7)] hover:shadow-[0_22px_70px_rgba(37,99,235,0.9)] hover:scale-[1.02] active:scale-[0.99] transition-transform text-white"
+                className="inline-flex items-center justify-center px-6 py-2.5 rounded-full text-xs md:text-sm font-semibold shadow-[0_18px_60px_rgba(15,23,42,0.7)] hover:shadow-[0_22px_70px_rgba(15,23,42,0.9)] hover:scale-[1.02] active:scale-[0.99] transition-transform text-white"
                 style={{
-                  backgroundImage: `linear-gradient(120deg, ${THEME.accentBlue}, ${THEME.accentOrange})`,
+                  backgroundImage: mainGradient,
                 }}
               >
                 Get started with Passiify
@@ -132,11 +143,17 @@ export default function About() {
                 <span>No long-term lock-ins</span>
               </div>
               <div className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                <TicketCheck className="w-4 h-4 text-orange-500" />
+                <TicketCheck
+                  className="w-4 h-4"
+                  style={{ color: THEME.accentTo }}
+                />
                 <span>One-day gym passes & event tickets</span>
               </div>
               <div className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                <Globe2 className="w-4 h-4 text-sky-500" />
+                <Globe2
+                  className="w-4 h-4"
+                  style={{ color: THEME.accentMid }}
+                />
                 <span>Built for travellers & Gen-Z movers</span>
               </div>
             </div>
@@ -145,7 +162,12 @@ export default function About() {
           {/* RIGHT — stats card */}
           <div className="relative z-10 flex-1 flex justify-center lg:justify-end">
             <div className="relative w-full max-w-xs sm:max-w-sm">
-              <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-sky-200 via-transparent to-orange-200 dark:from-sky-500/40 dark:via-transparent dark:to-orange-400/40 blur-xl opacity-80" />
+              <div
+                className="absolute -inset-2 rounded-3xl blur-xl opacity-80"
+                style={{
+                  backgroundImage: `linear-gradient(to top right, ${THEME.accentMid}33, transparent, ${THEME.accentTo}33)`,
+                }}
+              />
 
               <div className="relative rounded-3xl px-5 py-5 bg-white/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800 shadow-[0_30px_90px_rgba(15,23,42,0.65)]">
                 <div className="flex items-center justify-between">
@@ -153,7 +175,7 @@ export default function About() {
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shadow-sm"
                       style={{
-                        backgroundImage: `linear-gradient(135deg, ${THEME.accentBlue}, ${THEME.accentOrange})`,
+                        backgroundImage: mainGradient,
                         color: "#F9FAFB",
                       }}
                     >
@@ -168,13 +190,20 @@ export default function About() {
                       </div>
                     </div>
                   </div>
-                  <Zap className="w-5 h-5 text-orange-400" />
+                  <Zap
+                    className="w-5 h-5"
+                    style={{ color: THEME.accentTo }}
+                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 text-[11px] mt-4">
                   <Stat label="Commitment" value="0%" hint="No yearly lock-ins" />
                   <Stat label="Access type" value="Day" hint="Passes & tickets" />
-                  <Stat label="Vibe" value="High" hint="Community-first sessions" />
+                  <Stat
+                    label="Vibe"
+                    value="High"
+                    hint="Community-first sessions"
+                  />
                 </div>
 
                 <div className="mt-3 rounded-2xl p-3 bg-slate-50/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800">
@@ -200,7 +229,10 @@ export default function About() {
 
               <div className="hidden sm:block absolute -bottom-6 -left-4 rounded-2xl px-3 py-1.5 text-[10px] bg-white/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 shadow-[0_18px_60px_rgba(15,23,42,0.45)]">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-orange-500" />
+                  <MapPin
+                    className="w-3.5 h-3.5"
+                    style={{ color: THEME.accentTo }}
+                  />
                   <span>Built for people who travel, move & explore.</span>
                 </div>
               </div>
@@ -212,14 +244,14 @@ export default function About() {
       {/* =====================================================
          STORY — GYMS + EVENTS
          ===================================================== */}
-      <section className="relative max-w-6xl mx-auto py-10 px-5 sm:px-6">
+      <section className="relative max-w-7xl mx-auto py-10 px-5 sm:px-6">
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
             <h2 className="text-2xl md:text-3xl font-semibold mb-4 text-slate-900 dark:text-slate-50">
               The story behind{" "}
               <span
                 style={{
-                  backgroundImage: `linear-gradient(90deg, ${THEME.accentOrange}, ${THEME.accentBlue})`,
+                  backgroundImage: `linear-gradient(90deg, ${THEME.accentTo}, ${THEME.accentFrom})`,
                   WebkitBackgroundClip: "text",
                   color: "transparent",
                 }}
@@ -259,14 +291,22 @@ export default function About() {
 
           <div className="flex justify-center md:justify-end">
             <div className="relative w-full md:w-4/5">
-              <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-sky-200 via-transparent to-orange-200 dark:from-sky-500/40 dark:via-transparent dark:to-orange-400/40 blur-lg opacity-80" />
+              <div
+                className="absolute -inset-2 rounded-3xl blur-lg opacity-80"
+                style={{
+                  backgroundImage: `linear-gradient(to top right, ${THEME.accentMid}33, transparent, ${THEME.accentTo}33)`,
+                }}
+              />
               <img
                 src="https://images.unsplash.com/photo-1558611848-73f7eb4001a1?auto=format&fit=crop&w=900&q=80"
                 alt="People training together at a gym"
                 className="relative rounded-3xl object-cover shadow-[0_30px_90px_rgba(15,23,42,0.7)] border border-slate-200/80 dark:border-slate-800"
               />
               <div className="absolute bottom-3 right-3 rounded-full px-3 py-1.5 text-[10px] flex items-center gap-2 bg-white/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 shadow-md">
-                <Users className="w-3.5 h-3.5 text-orange-500" />
+                <Users
+                  className="w-3.5 h-3.5"
+                  style={{ color: THEME.accentTo }}
+                />
                 <span>Real people. Real sessions. Real stories.</span>
               </div>
             </div>
@@ -277,7 +317,7 @@ export default function About() {
       {/* =====================================================
          EVENTS SECTION
          ===================================================== */}
-      <section className="max-w-6xl mx-auto py-10 px-5 sm:px-6">
+      <section className="max-w-7xl mx-auto py-10 px-5 sm:px-6">
         <div className="rounded-3xl px-5 py-7 md:px-8 md:py-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-7 bg-white/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800 shadow-[0_18px_70px_rgba(15,23,42,0.22)]">
           <div className="max-w-xl">
             <h2 className="text-2xl md:text-3xl font-semibold mb-2 text-slate-900 dark:text-slate-50">
@@ -336,7 +376,7 @@ export default function About() {
       {/* =====================================================
          MOVERS vs HOSTS TOGGLE
          ===================================================== */}
-      <section className="max-w-6xl mx-auto py-10 px-5 sm:px-6">
+      <section className="max-w-7xl mx-auto py-10 px-5 sm:px-6">
         <div className="rounded-3xl px-5 py-7 md:px-8 md:py-8 bg-white/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800 shadow-[0_18px_70px_rgba(15,23,42,0.22)]">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
             <div>
@@ -356,9 +396,7 @@ export default function About() {
                 className="px-4 py-1.5 rounded-full flex items-center gap-1 transition-colors"
                 style={{
                   backgroundImage:
-                    view === "movers"
-                      ? `linear-gradient(120deg, ${THEME.accentBlue}, ${THEME.accentOrange})`
-                      : "none",
+                    view === "movers" ? mainGradient : "none",
                   color: view === "movers" ? "#F9FAFB" : undefined,
                 }}
               >
@@ -370,9 +408,7 @@ export default function About() {
                 className="px-4 py-1.5 rounded-full flex items-center gap-1 transition-colors text-slate-600 dark:text-slate-300"
                 style={{
                   backgroundImage:
-                    view === "hosts"
-                      ? `linear-gradient(120deg, ${THEME.accentBlue}, ${THEME.accentOrange})`
-                      : "none",
+                    view === "hosts" ? mainGradient : "none",
                   color: view === "hosts" ? "#F9FAFB" : undefined,
                 }}
               >
@@ -462,7 +498,10 @@ export default function About() {
       <section className="py-16">
         <div className="max-w-4xl mx-auto px-5 sm:px-6 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-5 bg-white/90 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-700 shadow-sm">
-            <Target size={30} className="text-orange-500" />
+            <Target
+              size={30}
+              style={{ color: THEME.accentTo }}
+            />
           </div>
           <h2 className="text-2xl md:text-3xl font-semibold mb-3 text-slate-900 dark:text-slate-50">
             Our mission
@@ -483,7 +522,7 @@ export default function About() {
       {/* =====================================================
          WHO WE'RE BUILT FOR
          ===================================================== */}
-      <section className="max-w-6xl mx-auto py-14 px-5 sm:px-6">
+      <section className="max-w-7xl mx-auto py-14 px-5 sm:px-6">
         <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-center text-slate-900 dark:text-slate-50">
           Who we&apos;re built for
         </h2>
@@ -510,7 +549,7 @@ export default function About() {
       {/* =====================================================
          VALUES
          ===================================================== */}
-      <section className="max-w-6xl mx-auto py-14 px-5 sm:px-6">
+      <section className="max-w-7xl mx-auto py-14 px-5 sm:px-6">
         <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-center text-slate-900 dark:text-slate-50">
           Our core values
         </h2>
@@ -519,21 +558,30 @@ export default function About() {
           {[
             {
               icon: (
-                <Users className="w-8 h-8 mx-auto mb-3 text-orange-500" />
+                <Users
+                  className="w-8 h-8 mx-auto mb-3"
+                  style={{ color: THEME.accentTo }}
+                />
               ),
               title: "Community first",
               desc: "We believe the best workouts come with stories, not just stats. We exist to connect travellers, locals and coaches.",
             },
             {
               icon: (
-                <Sparkles className="w-8 h-8 mx-auto mb-3 text-orange-500" />
+                <Sparkles
+                  className="w-8 h-8 mx-auto mb-3"
+                  style={{ color: THEME.accentTo }}
+                />
               ),
               title: "Play & experimentation",
               desc: "Fitness shouldn’t feel like punishment. We encourage trying, exploring and switching things up without guilt.",
             },
             {
               icon: (
-                <Heart className="w-8 h-8 mx-auto mb-3 text-orange-500" />
+                <Heart
+                  className="w-8 h-8 mx-auto mb-3"
+                  style={{ color: THEME.accentTo }}
+                />
               ),
               title: "Respect for your time",
               desc: "No hidden fees, no long-term lock-ins. Your time, energy and money are treated like they matter.",
@@ -558,13 +606,13 @@ export default function About() {
       {/* =====================================================
          FOUNDER NOTE
          ===================================================== */}
-      <section className="max-w-5xl mx-auto py-10 px-5 sm:px-6">
+      <section className="max-w-7xl mx-auto py-10 px-5 sm:px-6">
         <div className="rounded-3xl px-6 py-7 md:px-8 md:py-8 flex flex-col md:flex-row gap-6 items-start bg-white/95 dark:bg-slate-950/95 border border-slate-200/80 dark:border-slate-800 shadow-[0_20px_70px_rgba(15,23,42,0.4)]">
           <div className="flex-shrink-0">
             <div
               className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold shadow-[0_12px_40px_rgba(15,23,42,0.6)]"
               style={{
-                backgroundImage: `linear-gradient(135deg, ${THEME.accentBlue}, ${THEME.accentOrange})`,
+                backgroundImage: mainGradient,
                 color: "#F9FAFB",
               }}
             >
@@ -621,7 +669,7 @@ export default function About() {
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: `linear-gradient(120deg, ${THEME.accentBlue}, ${THEME.accentOrange})`,
+            backgroundImage: mainGradient,
             opacity: 0.97,
           }}
         />

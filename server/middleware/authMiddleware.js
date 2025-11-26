@@ -43,3 +43,6 @@ const verifyToken = async (req, res, next) => {
 };
 
 export default verifyToken;
+console.log("GOOGLE_CLIENT_ID present?", !!process.env.GOOGLE_CLIENT_ID);
+console.log("GOOGLE_CLIENT_SECRET present?", !!process.env.GOOGLE_CLIENT_SECRET);
+console.log("GOOGLE_REDIRECT_URI:", process.env.GOOGLE_REDIRECT_URI);

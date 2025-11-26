@@ -46,16 +46,35 @@ export default function SignupPage() {
   }, [password]);
 
   // -------------------------------------------------------
-  // GOOGLE SIGNUP (frontend only – no errors)
+  // GOOGLE SIGNUP (CRA-friendly)
   // -------------------------------------------------------
   const handleGoogleSignup = () => {
-    // When your backend Google OAuth is ready, you can do:
-    // window.location.href = `${import.meta.env.VITE_API_BASE_URL}/auth/google`;
-    alert("Google sign-up will be available soon. You can continue with email for now.");
+    setError("");
+
+    // CRA env: REACT_APP_API_BASE_URL
+    const envBase = process.env.REACT_APP_API_BASE_URL;
+
+    // Fallback: common local dev
+    const apiBase =
+      envBase ||
+      (window.location.origin.includes("localhost")
+        ? "http://localhost:5000/api"
+        : `${window.location.origin}/api`);
+
+    if (!apiBase) {
+      console.error("No API base URL configured for Google OAuth");
+      setError(
+        "Google sign-in is temporarily unavailable. Please sign up with email."
+      );
+      return;
+    }
+
+    const cleanedBase = apiBase.replace(/\/+$/, "");
+    window.location.href = `${cleanedBase}/auth/google`;
   };
 
   // -------------------------------------------------------
-  // HANDLE SIGNUP (backend route unchanged)
+  // HANDLE SIGNUP (register + auto-login + go home)
   // -------------------------------------------------------
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -80,15 +99,26 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await API.post("/auth/register", { name, email, password });
-      // You can replace this alert with a toast later
-      alert("🎉 Account created successfully!");
-      navigate("/login");
+      // 1️⃣ Create account
+      await API.post("/auth/register", { name, email, password });
+
+      // 2️⃣ Auto-login using same credentials
+      const loginRes = await API.post("/auth/login", {
+        email,
+        password,
+      });
+
+      // 🔑 Store auth info – match this with your Login page
+      // If your Login page uses a different key, change "userInfo" to that.
+      localStorage.setItem("userInfo", JSON.stringify(loginRes.data));
+
+      // 3️⃣ Go straight to Home
+      navigate("/");
     } catch (err) {
-      console.error("Signup failed:", err);
+      console.error("Signup / auto-login failed:", err);
       setError(
         err?.response?.data?.message ||
-          "User already exists or details are invalid."
+          "Signup failed. Please check your details and try again."
       );
     } finally {
       setLoading(false);

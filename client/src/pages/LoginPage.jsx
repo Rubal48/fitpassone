@@ -35,13 +35,61 @@ export default function LoginPage() {
     }
   }, []);
 
+  // Show any OAuth error from backend redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get("error");
+
+    if (!oauthError) return;
+
+    if (oauthError === "google_auth_failed") {
+      setError("Google sign-in failed. Please try again or use email login.");
+    } else if (oauthError === "google_not_configured") {
+      setError("Google sign-in is not configured yet. Please use email login.");
+    } else if (oauthError === "missing_google_code") {
+      setError("Missing Google authorization code. Please try again.");
+    } else if (oauthError === "no_email_from_google") {
+      setError(
+        "We could not read your email from Google. Please try a different account or use email login."
+      );
+    } else if (
+      oauthError === "no_id_token_from_google" ||
+      oauthError === "no_tokens_from_google"
+    ) {
+      setError(
+        "We couldn’t get your Google account details. Please try again or use email login."
+      );
+    } else {
+      setError("Something went wrong with Google sign-in. Please try again.");
+    }
+  }, []);
+
   // -------------------------------------------------------
-  // GOOGLE LOGIN (frontend only for now)
+  // GOOGLE LOGIN — real redirect to backend
   // -------------------------------------------------------
   const handleGoogleLogin = () => {
-    // When you plug in Google OAuth:
-    // window.location.href = `${import.meta.env.VITE_API_BASE_URL}/auth/google`;
-    alert("Google login will be available soon. You can continue with email for now.");
+    setError("");
+
+    // CRA-style env var
+    const envBase = process.env.REACT_APP_API_BASE_URL;
+
+    // Fallbacks
+    const apiBase =
+      envBase ||
+      (window.location.origin.includes("localhost")
+        ? "http://localhost:5000/api"
+        : `${window.location.origin}/api`);
+
+    if (!apiBase) {
+      console.error("No API base URL configured for Google OAuth");
+      setError(
+        "Google login is temporarily unavailable. Please log in with email."
+      );
+      return;
+    }
+
+    const cleanedBase = apiBase.replace(/\/+$/, "");
+    window.location.href = `${cleanedBase}/auth/google`;
   };
 
   // -------------------------------------------------------
@@ -79,7 +127,7 @@ export default function LoginPage() {
         localStorage.removeItem("passiify_remember_email");
       }
 
-      navigate("/"); // adjust if your user dashboard route is different
+      navigate("/"); // home/dashboard
     } catch (err) {
       console.error("Login failed:", err);
       setError(
@@ -318,8 +366,10 @@ export default function LoginPage() {
                     <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-orange-400" />
                     <span>
                       Switch between{" "}
-                      <span className="font-semibold">gyms, studios and
-                      events</span> whenever your plans change.
+                      <span className="font-semibold">
+                        gyms, studios and events
+                      </span>{" "}
+                      whenever your plans change.
                     </span>
                   </li>
                   <li className="flex gap-2">
@@ -345,7 +395,7 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-
+                  
         {/* Tiny footer line */}
         <p className="mt-3 text-[10px] text-center text-slate-500 dark:text-slate-500 max-w-xl mx-auto">
           Secure by design. Your login details are encrypted and never shared

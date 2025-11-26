@@ -22,13 +22,58 @@ import {
 } from "lucide-react";
 import API from "../utils/api";
 
+/* =========================================================
+   THEME — shared Passiify gradient tokens
+   ======================================================== */
+const THEME = {
+  accentFrom: "#2563EB", // blue-600
+  accentMid: "#0EA5E9",  // sky-500
+  accentTo: "#F97316",   // orange-500
+};
+
+const primaryGradient = `linear-gradient(120deg, ${THEME.accentFrom}, ${THEME.accentMid}, ${THEME.accentTo})`;
+const primaryGradient90 = `linear-gradient(90deg, ${THEME.accentFrom}, ${THEME.accentMid}, ${THEME.accentTo})`;
+
+/* =========================================================
+   HELPER FUNCTIONS — match EventsPage + backend shape
+========================================================= */
+
+// Flexible start date from multiple fields
+const getEventStartDate = (event) => {
+  const raw =
+    event?.startTime ||
+    event?.startDate ||
+    event?.date ||
+    event?.start_at ||
+    null;
+
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
+// Match backend event pricing & EventsPage getPrice
+const getEventPrice = (event) => {
+  if (!event) return null;
+
+  const raw =
+    event.price ??
+    event.passPrice ??
+    event.amount ??
+    (event.pricing && event.pricing.price);
+
+  const n = Number(raw);
+  if (!raw || Number.isNaN(n) || n <= 0) return null;
+  return n;
+};
+
 const EventDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState("");
 
   // ─────────────────────────────────────────
@@ -56,7 +101,7 @@ const EventDetail = () => {
   // ─────────────────────────────────────────
   // Derived values
   // ─────────────────────────────────────────
-  const eventDate = event ? new Date(event.date) : null;
+  const eventDate = event ? getEventStartDate(event) : null;
 
   const today = useMemo(() => {
     const d = new Date();
@@ -80,14 +125,23 @@ const EventDetail = () => {
       })
     : "Date TBA";
 
+  const eventPrice = useMemo(() => getEventPrice(event), [event]);
+
+  const baseCapacity =
+    typeof event?.capacity === "number"
+      ? event.capacity
+      : typeof event?.totalSlots === "number"
+      ? event.totalSlots
+      : null;
+
   const remainingSeats =
     typeof event?.remainingSeats === "number"
       ? event.remainingSeats
-      : event?.capacity ?? null;
+      : baseCapacity;
 
   const capacityLabel =
-    typeof event?.capacity === "number" && event.capacity > 0
-      ? `${event.capacity} spots`
+    typeof baseCapacity === "number" && baseCapacity > 0
+      ? `${baseCapacity} spots`
       : "Limited spots";
 
   const ratingLabel =
@@ -149,12 +203,16 @@ const EventDetail = () => {
   }, [event]);
 
   const bookingDisabled =
-    isPast || remainingSeats === 0 || (remainingSeats && remainingSeats < 0);
+    isPast ||
+    remainingSeats === 0 ||
+    (typeof remainingSeats === "number" && remainingSeats < 0) ||
+    !eventPrice ||
+    event?.isSoldOut;
 
   // ─────────────────────────────────────────
-  // Booking handler – uses /event-bookings with token
+  // Booking handler – send to Razorpay checkout page
   // ─────────────────────────────────────────
-  const handleBookEvent = async () => {
+  const handleBookEvent = () => {
     if (!event || bookingDisabled) return;
 
     const token = localStorage.getItem("token");
@@ -164,37 +222,10 @@ const EventDetail = () => {
       return;
     }
 
-    if (isPast) {
-      alert("This experience has already happened. Please pick another one.");
-      return;
-    }
-
-    try {
-      setBookingLoading(true);
-      setError("");
-
-      const res = await API.post("/event-bookings", {
-        eventId: event._id,
-        tickets: 1,
-      });
-
-      if (res.data?.success && res.data?.booking) {
-        navigate(`/booking-success/${res.data.booking._id}`, {
-          state: { type: "event", name: event.name },
-        });
-      } else {
-        console.warn("Unexpected booking response:", res.data);
-        alert(res.data?.message || "Something went wrong while booking.");
-      }
-    } catch (err) {
-      console.error("Error booking event:", err);
-      const msg =
-        err.response?.data?.message ||
-        "We couldn’t complete your booking. Please try again.";
-      alert(msg);
-    } finally {
-      setBookingLoading(false);
-    }
+    // Let BookEvent.jsx handle Razorpay integration + verification
+    navigate(`/book-event/${event._id}`, {
+      state: { from: "event-detail" },
+    });
   };
 
   // ─────────────────────────────────────────
@@ -245,7 +276,8 @@ const EventDetail = () => {
         </p>
         <Link
           to="/events"
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-md hover:shadow-xl hover:scale-[1.03] transition"
+          className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-md hover:shadow-xl hover:scale-[1.03] transition"
+          style={{ backgroundImage: primaryGradient }}
         >
           Browse other experiences
         </Link>
@@ -287,7 +319,12 @@ const EventDetail = () => {
         <div className="relative rounded-[28px] overflow-hidden shadow-[0_28px_90px_rgba(15,23,42,0.35)] border border-slate-100 dark:border-slate-800 bg-slate-900">
           <div className="relative h-[320px] sm:h-[420px] md:h-[460px]">
             <img
-              src={event.image || "/images/default-event.jpg"}
+              src={
+                event.bannerImage ||
+                event.image ||
+                (Array.isArray(event.images) && event.images[0]) ||
+                "/images/default-event.jpg"
+              }
               alt={event.name}
               className="w-full h-full object-cover"
             />
@@ -297,7 +334,10 @@ const EventDetail = () => {
             {/* Hero content */}
             <div className="absolute bottom-6 sm:bottom-10 left-5 sm:left-8 right-5 sm:right-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div>
-                <div className="inline-flex items-center gap-2 text-[11px] px-3 py-1 rounded-full bg-gradient-to-r from-blue-500/80 to-orange-400/80 border border-white/30 mb-3 backdrop-blur-sm">
+                <div
+                  className="inline-flex items-center gap-2 text-[11px] px-3 py-1 rounded-full border border-white/30 mb-3 backdrop-blur-sm"
+                  style={{ backgroundImage: primaryGradient }}
+                >
                   <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
                   <span className="uppercase tracking-[0.18em] text-slate-50">
                     Move & Roam by Passiify
@@ -309,7 +349,7 @@ const EventDetail = () => {
                 <p className="flex flex-wrap items-center gap-3 text-sm text-slate-100">
                   <span className="flex items-center gap-1.5">
                     <MapPin size={16} className="text-orange-300" />
-                    {event.location}
+                    {event.location || event.city || "Location shared later"}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-slate-900/60 border border-white/20">
                     <CalendarDays size={14} className="text-sky-300" />
@@ -322,11 +362,13 @@ const EventDetail = () => {
                 <div className="inline-flex items-baseline gap-1 px-4 py-2 rounded-2xl bg-slate-900/80 border border-white/15">
                   <span className="text-xs text-slate-200">from</span>
                   <span className="text-2xl sm:text-3xl font-extrabold text-orange-300">
-                    ₹{event.price}
+                    {eventPrice ? `₹${eventPrice}` : "Price TBA"}
                   </span>
-                  <span className="text-[11px] text-slate-300 ml-1">
-                    / person
-                  </span>
+                  {eventPrice && (
+                    <span className="text-[11px] text-slate-300 ml-1">
+                      / person
+                    </span>
+                  )}
                 </div>
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/25 text-[11px] text-slate-50">
                   <Star
@@ -461,13 +503,18 @@ const EventDetail = () => {
             {/* Host story */}
             <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)] flex gap-4">
               <div className="w-14 h-14 rounded-full border border-orange-300/60 dark:border-orange-400/70 bg-gradient-to-br from-orange-400 to-blue-500 flex items-center justify-center text-lg font-semibold text-white shrink-0">
-                {event.organizer?.[0]?.toUpperCase() || "H"}
+                {event.organizer?.[0]?.toUpperCase() ||
+                  event.hostName?.[0]?.toUpperCase() ||
+                  "H"}
               </div>
               <div className="space-y-2">
                 <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
                   Hosted by{" "}
                   <span className="text-blue-700 dark:text-sky-300">
-                    {event.organizer}
+                    {event.organizer ||
+                      event.hostName ||
+                      event.host?.name ||
+                      "Passiify host"}
                   </span>
                   <ShieldCheck className="text-emerald-500 dark:text-emerald-400 w-4 h-4" />
                 </p>
@@ -593,17 +640,13 @@ const EventDetail = () => {
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Total bookings
                   </p>
-                  <p className="font-semibold">
-                    {stats.totalBookings ?? 0}
-                  </p>
+                  <p className="font-semibold">{stats.totalBookings ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Total attendees
                   </p>
-                  <p className="font-semibold">
-                    {stats.totalAttendees ?? 0}
-                  </p>
+                  <p className="font-semibold">{stats.totalAttendees ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -635,7 +678,7 @@ const EventDetail = () => {
                 <p className="font-semibold mb-1">Is it safe?</p>
                 <p>
                   Hosts are verified and bookings are processed securely by
-                  Passiify.
+                  Passiify via Razorpay.
                 </p>
               </div>
               <div>
@@ -666,7 +709,7 @@ const EventDetail = () => {
             <div className="rounded-xl overflow-hidden h-[220px] border border-slate-200 dark:border-slate-700">
               <iframe
                 src={`https://www.google.com/maps?q=${encodeURIComponent(
-                  event.location || ""
+                  event.location || event.city || ""
                 )}&output=embed`}
                 width="100%"
                 height="100%"
@@ -682,14 +725,23 @@ const EventDetail = () => {
         <aside className="md:sticky md:top-24 h-fit">
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-[0_26px_90px_rgba(15,23,42,0.2)] p-6 sm:p-7">
             <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50 mb-1">
-              ₹{event.price}{" "}
-              <span className="text-sm text-slate-500 dark:text-slate-400 font-normal">
-                / person
-              </span>
+              {eventPrice ? `₹${eventPrice}` : "Price TBA"}{" "}
+              {eventPrice && (
+                <span className="text-sm text-slate-500 dark:text-slate-400 font-normal">
+                  / person
+                </span>
+              )}
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-4">
               Instant confirmation · No membership · Pay once, join once.
             </p>
+
+            {!eventPrice && (
+              <p className="text-[11px] text-rose-600 dark:text-rose-300 mb-3">
+                Pricing for this experience is being updated. Please check back
+                soon or explore other events.
+              </p>
+            )}
 
             {/* Countdown / status */}
             {!isPast ? (
@@ -698,7 +750,7 @@ const EventDetail = () => {
                   <Clock size={16} className="text-sky-500 dark:text-sky-300" />
                   Starts in{" "}
                   <span className="font-semibold">{diffDays}</span> day
-                  {diffDays > 1 ? "s" : ""}
+                  {diffDays > 1 ? "s" : ""}.
                 </p>
               ) : (
                 <p className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800 px-4 py-2 rounded-2xl text-xs sm:text-sm text-emerald-800 dark:text-emerald-200 mb-3">
@@ -706,7 +758,7 @@ const EventDetail = () => {
                     size={16}
                     className="text-emerald-500 dark:text-emerald-300"
                   />
-                  Happening <span className="font-semibold">today</span>
+                  Happening <span className="font-semibold">today</span>.
                 </p>
               )
             ) : (
@@ -732,26 +784,20 @@ const EventDetail = () => {
 
             <button
               onClick={handleBookEvent}
-              disabled={bookingDisabled || bookingLoading}
+              disabled={bookingDisabled}
               className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm mt-1 transition-transform shadow-md ${
                 bookingDisabled
                   ? "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-orange-500 text-white hover:shadow-lg hover:scale-[1.03]"
+                  : "text-white hover:shadow-lg hover:scale-[1.03]"
               }`}
+              style={
+                bookingDisabled ? undefined : { backgroundImage: primaryGradient }
+              }
             >
-              {bookingLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Booking…
-                </>
-              ) : (
-                <>
-                  <Ticket size={18} />
-                  {isPast || remainingSeats === 0
-                    ? "Not available"
-                    : "Book this experience"}
-                </>
-              )}
+              <Ticket size={18} />
+              {isPast || remainingSeats === 0
+                ? "Not available"
+                : "Continue to secure checkout"}
             </button>
 
             {/* Trust block */}
@@ -761,7 +807,8 @@ const EventDetail = () => {
                   size={16}
                   className="text-emerald-500 dark:text-emerald-400"
                 />
-                100% secure payment processed via Passiify.
+                100% secure payments processed via Razorpay (UPI, cards,
+                netbanking).
               </p>
               <p className="flex items-center gap-2">
                 <RotateCcw
@@ -780,16 +827,19 @@ const EventDetail = () => {
             </div>
 
             <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-              Just book this one experience, show your Passiify ticket at
-              check-in, and you’re in — no complicated memberships or hidden
-              fees.
+              Just book this one experience, pay via Razorpay, show your
+              Passiify ticket at check-in, and you’re in — no complicated
+              memberships or hidden fees.
             </p>
           </div>
         </aside>
       </main>
 
       {/* Footer CTA */}
-      <footer className="mt-16 bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 dark:from-sky-500 dark:via-blue-700 dark:to-orange-500 py-12 text-center text-white">
+      <footer
+        className="mt-16 py-12 text-center text-white"
+        style={{ backgroundImage: primaryGradient90 }}
+      >
         <h2 className="text-2xl sm:text-3xl font-semibold mb-2">
           Experience. Connect. Move different.
         </h2>

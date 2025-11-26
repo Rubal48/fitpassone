@@ -14,8 +14,81 @@ import {
   Minus,
   Plus,
   Sparkles,
+  CreditCard,
+  Lock,
 } from "lucide-react";
 import API from "../utils/api";
+
+/* =========================================================
+   Shared helpers — align with EventsPage
+========================================================= */
+
+const getEventStartDate = (event) => {
+  const raw =
+    event?.startTime ||
+    event?.startDate ||
+    event?.date ||
+    event?.start_at ||
+    null;
+
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
+const getLocationLabel = (event) => {
+  const city =
+    event?.city ||
+    event?.gym?.city ||
+    event?.gym?.location ||
+    event?.gym?.area ||
+    null;
+
+  const baseLoc = event?.location || event?.address || null;
+
+  if (city && baseLoc) return `${city}, ${baseLoc}`;
+  if (city) return city;
+  if (baseLoc) return baseLoc;
+  return "Location shared after booking";
+};
+
+const getSpotsLeft = (event) => {
+  if (typeof event?.remainingSeats === "number") {
+    return Math.max(event.remainingSeats, 0);
+  }
+
+  const capacity = Number(event?.capacity || event?.totalSlots || 0);
+  const booked = Number(event?.bookedCount || event?.bookingsCount || 0);
+
+  if (!capacity) return null;
+  return Math.max(capacity - booked, 0);
+};
+
+/* 🔌 Load Razorpay SDK on demand */
+const loadRazorpayScript = () =>
+  new Promise((resolve) => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      resolve(false);
+      return;
+    }
+
+    if (window.Razorpay) return resolve(true);
+
+    const existing = document.getElementById("razorpay-checkout-js");
+    if (existing) {
+      existing.onload = () => resolve(true);
+      existing.onerror = () => resolve(false);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "razorpay-checkout-js";
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 
 const BookEvent = () => {
   const { id } = useParams();
@@ -23,9 +96,12 @@ const BookEvent = () => {
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const [tickets, setTickets] = useState(1);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [error, setError] = useState("");
+
+  const [pageError, setPageError] = useState("");
+  const [bookingError, setBookingError] = useState("");
 
   // ─────────────────────────────────────────
   // Fetch event details
@@ -34,13 +110,13 @@ const BookEvent = () => {
     const fetchEvent = async () => {
       try {
         setLoading(true);
-        setError("");
+        setPageError("");
         const res = await API.get(`/events/${id}`);
         const ev = res.data?.event || res.data;
         setEvent(ev);
       } catch (err) {
         console.error("Error fetching event:", err);
-        setError("We couldn’t load this experience. Please try again.");
+        setPageError("We couldn’t load this experience. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -54,10 +130,7 @@ const BookEvent = () => {
   // ─────────────────────────────────────────
   const eventDate = useMemo(() => {
     if (!event) return null;
-    const raw = event.startTime || event.date || event.startDate;
-    if (!raw) return null;
-    const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? null : d;
+    return getEventStartDate(event);
   }, [event]);
 
   const today = useMemo(() => {
@@ -89,34 +162,43 @@ const BookEvent = () => {
       })
     : null;
 
-  const remainingSeats =
-    typeof event?.remainingSeats === "number"
-      ? event.remainingSeats
-      : event?.capacity ?? null;
+  const remainingSeats = useMemo(() => getSpotsLeft(event), [event]);
 
-  const capacityLabel =
-    typeof event?.capacity === "number" && event.capacity > 0
-      ? `${event.capacity} spots`
-      : "Limited spots";
+  const isSoldOut =
+    event?.isSoldOut ||
+    (typeof remainingSeats === "number" && remainingSeats === 0);
 
-  const pricePerTicket = useMemo(
-    () => (event?.price ? Number(event.price) : 0),
-    [event]
-  );
+  const capacityLabel = useMemo(() => {
+    if (typeof event?.capacity === "number" && event.capacity > 0)
+      return `${event.capacity} spots`;
+    if (typeof event?.totalSlots === "number" && event.totalSlots > 0)
+      return `${event.totalSlots} spots`;
+    return "Limited spots";
+  }, [event]);
+
+  // 🔢 Match backend price usage (event.price)
+  const pricePerTicket = useMemo(() => {
+    if (!event) return null;
+    const raw =
+      event.price ??
+      event.passPrice ??
+      event.amount ??
+      (event.pricing && event.pricing.price);
+
+    const n = Number(raw);
+    if (!raw || Number.isNaN(n) || n <= 0) return null;
+    return n;
+  }, [event]);
 
   const totalPrice = useMemo(
-    () => (pricePerTicket > 0 ? pricePerTicket * tickets : 0),
+    () => (pricePerTicket ? pricePerTicket * tickets : 0),
     [tickets, pricePerTicket]
   );
 
-  const bookingDisabled =
-    !event ||
-    isPast ||
-    remainingSeats === 0 ||
-    (remainingSeats && remainingSeats < 0);
+  const bookingDisabled = !event || isPast || isSoldOut || !pricePerTicket;
 
   // ─────────────────────────────────────────
-  // Booking handler – /event-bookings with token
+  // Booking handler – Razorpay flow
   // ─────────────────────────────────────────
   const handleBookEvent = async () => {
     if (!event || bookingDisabled) return;
@@ -125,6 +207,13 @@ const BookEvent = () => {
     if (!token) {
       alert("Please login to book this experience.");
       navigate("/login");
+      return;
+    }
+
+    if (!pricePerTicket) {
+      setBookingError(
+        "This experience doesn’t have a valid price yet. Please try another event or contact support."
+      );
       return;
     }
 
@@ -139,36 +228,138 @@ const BookEvent = () => {
       remainingSeats >= 0
     ) {
       alert(
-        `Only ${remainingSeats} seat${remainingSeats === 1 ? "" : "s"} left for this experience.`
+        `Only ${remainingSeats} seat${
+          remainingSeats === 1 ? "" : "s"
+        } left for this experience.`
       );
       setTickets(Math.max(1, remainingSeats || 1));
       return;
     }
 
     try {
+      setBookingError("");
       setBookingLoading(true);
-      setError("");
 
-      const res = await API.post("/event-bookings", {
+      // 1️⃣ Ensure Razorpay SDK is loaded
+      const sdkLoaded = await loadRazorpayScript();
+      if (!sdkLoaded || !window.Razorpay) {
+        setBookingLoading(false);
+        setBookingError(
+          "Payment SDK failed to load. Check your internet and try again."
+        );
+        return;
+      }
+
+      // 2️⃣ Create order on backend
+      const orderRes = await API.post("/payments/event/create-order", {
         eventId: event._id,
         tickets,
       });
 
-      if (res.data?.success && res.data?.booking) {
-        navigate(`/booking-success/${res.data.booking._id}`, {
-          state: { type: "event", name: event.name },
-        });
-      } else {
-        console.warn("Unexpected booking response:", res.data);
-        alert(res.data?.message || "Something went wrong while booking.");
+      const data = orderRes.data || {};
+      if (!data.success || !data.order) {
+        setBookingLoading(false);
+        setBookingError(
+          data.message || "Failed to start payment. Please try again."
+        );
+        return;
       }
+
+      const { order, key } = data;
+
+      // 3️⃣ Prefill user details from localStorage (if any)
+      let userName = "";
+      let userEmail = "";
+      let userPhone = "";
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          userName = parsed.user?.name || parsed.name || "";
+          userEmail = parsed.user?.email || parsed.email || "";
+          userPhone =
+            parsed.user?.phone ||
+            parsed.user?.phoneNumber ||
+            parsed.phone ||
+            "";
+        } catch {
+          // ignore JSON errors
+        }
+      }
+
+      // 4️⃣ Open Razorpay checkout
+      const options = {
+        key,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: "Passiify",
+        description: event.name || "Passiify experience booking",
+        image: "/passiify-mark.png", // optional – replace/remove if needed
+        order_id: order.id,
+        prefill: {
+          name: userName,
+          email: userEmail,
+          contact: userPhone,
+        },
+        notes: {
+          eventId: event._id,
+          tickets: String(tickets),
+        },
+        theme: {
+          color: "#2563EB", // Passiify blue
+        },
+        handler: async function (response) {
+          try {
+            const verifyRes = await API.post(
+              "/payments/event/verify-payment",
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                eventId: event._id,
+                tickets,
+              }
+            );
+
+            const vData = verifyRes.data || {};
+            if (vData.success && vData.booking) {
+              navigate(`/booking-success/${vData.booking._id}`, {
+                state: { type: "event", name: event.name },
+              });
+            } else {
+              setBookingError(
+                vData.message ||
+                  "Payment captured but booking couldn’t be created. Please contact support."
+              );
+            }
+          } catch (err) {
+            console.error("❌ Error verifying event payment:", err);
+            setBookingError(
+              err?.response?.data?.message ||
+                "Payment succeeded but booking failed. Please contact support."
+            );
+          } finally {
+            setBookingLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setBookingLoading(false);
+          },
+        },
+      };
+
+      const razorpayObject = new window.Razorpay(options);
+      razorpayObject.open();
     } catch (err) {
-      console.error("Error booking event:", err);
-      const msg =
-        err.response?.data?.message ||
-        "We couldn’t complete your booking. Please try again.";
-      alert(msg);
-    } finally {
+      console.error(
+        "❌ Error during event payment init:",
+        err?.response?.data || err
+      );
+      setBookingError(
+        err?.response?.data?.message ||
+          "Failed to initiate payment. Please try again."
+      );
       setBookingLoading(false);
     }
   };
@@ -197,21 +388,29 @@ const BookEvent = () => {
     );
   }
 
-  if (error || !event) {
+  if (pageError || !event) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 px-4 text-center">
         <p className="text-lg text-slate-700 dark:text-slate-100 mb-3">
-          {error || "We couldn’t find this experience."}
+          {pageError || "We couldn’t find this experience."}
         </p>
         <Link
           to="/events"
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-md hover:shadow-xl hover:scale-[1.03] transition"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_18px_55px_rgba(15,23,42,0.65)] hover:shadow-[0_22px_70px_rgba(15,23,42,0.85)] hover:scale-[1.03] transition-transform"
         >
           Browse other experiences
         </Link>
       </div>
     );
   }
+
+  const locationLabel = getLocationLabel(event);
+
+  const coverImage =
+    event.bannerImage ||
+    event.image ||
+    (Array.isArray(event.images) && event.images[0]) ||
+    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=900&auto=format&fit=crop&q=80";
 
   // ─────────────────────────────────────────
   // Main UI
@@ -270,7 +469,7 @@ const BookEvent = () => {
               <p className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-200">
                 <span className="flex items-center gap-1.5">
                   <MapPin size={15} className="text-orange-300" />
-                  {event.location || "Location shared after booking"}
+                  {locationLabel}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-slate-900/70 border border-slate-700 text-slate-100">
                   <CalendarDays size={14} className="text-sky-300" />
@@ -288,11 +487,13 @@ const BookEvent = () => {
               <div className="inline-flex items-baseline gap-1 px-4 py-2 rounded-2xl bg-slate-900/80 border border-slate-700 text-slate-50">
                 <span className="text-[11px] text-slate-300">from</span>
                 <span className="text-xl sm:text-2xl font-extrabold text-orange-300">
-                  ₹{pricePerTicket || 0}
+                  {pricePerTicket ? `₹${pricePerTicket}` : "Price TBA"}
                 </span>
-                <span className="text-[11px] text-slate-300 ml-1">
-                  / person
-                </span>
+                {pricePerTicket && (
+                  <span className="text-[11px] text-slate-300 ml-1">
+                    / person
+                  </span>
+                )}
               </div>
               {typeof remainingSeats === "number" && (
                 <div
@@ -323,7 +524,7 @@ const BookEvent = () => {
           <div className="bg-white/90 dark:bg-slate-900/85 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-[0_18px_55px_rgba(15,23,42,0.15)] flex gap-4">
             <div className="hidden sm:block w-28 h-28 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0">
               <img
-                src={event.image || "/images/default-event.jpg"}
+                src={coverImage}
                 alt={event.name}
                 className="w-full h-full object-cover"
               />
@@ -341,7 +542,10 @@ const BookEvent = () => {
               </p>
               <div className="flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <Clock size={13} className="text-blue-500 dark:text-sky-400" />
+                  <Clock
+                    size={13}
+                    className="text-blue-500 dark:text-sky-400"
+                  />
                   Arrive 10–15 min early
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -387,7 +591,8 @@ const BookEvent = () => {
         {/* RIGHT: Booking card */}
         <aside className="md:sticky md:top-24 h-fit">
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-[0_26px_90px_rgba(15,23,42,0.22)] p-5 sm:p-6">
-            <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-50 mb-1">
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-50 mb-1 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-blue-600 dark:text-sky-400" />
               Confirm your booking
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -455,6 +660,13 @@ const BookEvent = () => {
               </div>
             </div>
 
+            {!pricePerTicket && (
+              <p className="mb-3 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-2xl px-3 py-2">
+                This event’s price is being updated by the host. You can browse
+                other experiences or check back in a bit.
+              </p>
+            )}
+
             {/* Status / date banner */}
             {!isPast ? (
               diffDays !== null && diffDays > 0 ? (
@@ -485,6 +697,13 @@ const BookEvent = () => {
               </p>
             )}
 
+            {/* Booking error (payment) */}
+            {bookingError && (
+              <p className="mb-3 text-xs sm:text-sm text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/40 border border-rose-200 dark:border-rose-800 rounded-2xl px-3 py-2">
+                {bookingError}
+              </p>
+            )}
+
             {/* Main CTA */}
             <button
               onClick={handleBookEvent}
@@ -492,7 +711,7 @@ const BookEvent = () => {
               className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm mt-1 transition-transform shadow-md ${
                 bookingDisabled
                   ? "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed shadow-none"
-                  : "bg-gradient-to-r from-blue-600 to-orange-500 text-white hover:shadow-lg hover:scale-[1.03]"
+                  : "bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 text-white hover:shadow-[0_18px_55px_rgba(15,23,42,0.55)] hover:scale-[1.03]"
               }`}
             >
               {bookingLoading ? (
@@ -503,9 +722,9 @@ const BookEvent = () => {
               ) : (
                 <>
                   <Ticket size={18} />
-                  {isPast || remainingSeats === 0
+                  {isPast || isSoldOut || !pricePerTicket
                     ? "Not available"
-                    : "Confirm & pay"}
+                    : "Confirm & pay securely"}
                 </>
               )}
             </button>
@@ -517,7 +736,14 @@ const BookEvent = () => {
                   size={16}
                   className="text-emerald-500 dark:text-emerald-400"
                 />
-                100% secure payment processed via Passiify.
+                100% secure payment processed via Passiify & Razorpay.
+              </p>
+              <p className="flex items-center gap-2">
+                <Lock
+                  size={16}
+                  className="text-slate-600 dark:text-slate-300"
+                />
+                Your card & UPI details are encrypted end-to-end by Razorpay.
               </p>
               <p className="flex items-center gap-2">
                 <Info

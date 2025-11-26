@@ -23,36 +23,93 @@ import {
 import API from "../utils/api";
 
 /* =========================================================
-   BRAND / THEME TOKENS — balanced blue x orange, glass
+   GLOBAL PASSIIFY THEME — same as Home / Explore / Booking
    ========================================================= */
 
-const BRAND = {
-  accentBlue: "#2563EB",
-  accentOrange: "#FB923C",
+const THEME = {
+  accentFrom: "#2563EB", // blue-600
+  accentMid: "#0EA5E9", // sky-500
+  accentTo: "#F97316", // orange-500
+
+  light: {
+    mode: "light",
+    bg: "#F4F5FB",
+    card: "rgba(255,255,255,0.96)",
+    cardSoft: "rgba(248,250,252,0.98)",
+    textMain: "#020617",
+    textMuted: "#6B7280",
+    borderSoft: "rgba(148,163,184,0.38)",
+    shadowStrong: "0 34px 110px rgba(15,23,42,0.22)",
+    shadowSoft: "0 20px 70px rgba(15,23,42,0.12)",
+  },
+  dark: {
+    mode: "dark",
+    bg: "#020617",
+    card: "rgba(15,23,42,0.96)",
+    cardSoft: "rgba(15,23,42,0.92)",
+    textMain: "#E5E7EB",
+    textMuted: "#9CA3AF",
+    borderSoft: "rgba(148,163,184,0.55)",
+    shadowStrong: "0 40px 140px rgba(0,0,0,0.9)",
+    shadowSoft: "0 24px 90px rgba(15,23,42,0.9)",
+  },
 };
 
-const LIGHT_THEME = {
-  mode: "light",
-  bg: "#F4F6FB",
-  card: "rgba(255,255,255,0.96)",
-  cardSoft: "rgba(248,250,252,0.98)",
-  textMain: "#0F172A",
-  textMuted: "#6B7280",
-  borderSoft: "rgba(148,163,184,0.38)",
-  shadowStrong: "0 34px 110px rgba(15,23,42,0.22)",
-  shadowSoft: "0 20px 70px rgba(15,23,42,0.12)",
+const buildTheme = (mode) => {
+  const base = mode === "light" ? THEME.light : THEME.dark;
+  return {
+    ...base,
+    accentFrom: THEME.accentFrom,
+    accentMid: THEME.accentMid,
+    accentTo: THEME.accentTo,
+    accentBlue: THEME.accentFrom,
+    accentOrange: THEME.accentTo,
+    accentMint: "#22C55E",
+  };
 };
 
-const DARK_THEME = {
-  mode: "dark",
-  bg: "#020617",
-  card: "rgba(15,23,42,0.96)",
-  cardSoft: "rgba(15,23,42,0.92)",
-  textMain: "#E5E7EB",
-  textMuted: "#9CA3AF",
-  borderSoft: "rgba(148,163,184,0.55)",
-  shadowStrong: "0 40px 140px rgba(0,0,0,0.9)",
-  shadowSoft: "0 24px 90px rgba(15,23,42,0.9)",
+/* ---------- 🔗 Media URL builder (backend + CDN) ---------- */
+
+const fallbackGalleryImages = [
+  "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  "https://images.pexels.com/photos/4754142/pexels-photo-4754142.jpeg?auto=compress&cs=tinysrgb&w=1200",
+];
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+
+  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+
+  try {
+    const base = (API?.defaults?.baseURL || "").replace(/\/$/, "");
+    const cleanPath = String(raw).replace(/^\//, "");
+    if (!base) return `/${cleanPath}`;
+    return `${base}/${cleanPath}`;
+  } catch {
+    return null;
+  }
+};
+
+const getGalleryImages = (gym) => {
+  if (!gym) return fallbackGalleryImages;
+
+  let candidates = [];
+  if (Array.isArray(gym.images) && gym.images.length) {
+    candidates = gym.images;
+  } else if (Array.isArray(gym.media) && gym.media.length) {
+    candidates = gym.media;
+  } else if (gym.coverImage) {
+    candidates = [gym.coverImage];
+  } else if (gym.image) {
+    candidates = [gym.image];
+  }
+
+  const mapped = candidates.map(buildMediaUrl).filter(Boolean);
+  if (mapped.length) return mapped;
+
+  return fallbackGalleryImages;
 };
 
 /* Helper: build next N dates for quick calendar chips */
@@ -77,44 +134,52 @@ const buildQuickDates = (days = 7) => {
   return arr;
 };
 
+/* Helper: load Razorpay SDK safely for SPA navigation */
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(false);
+      return;
+    }
+
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
+/* Helper: follow system dark / light */
+const getSystemMode = () => {
+  if (typeof window === "undefined" || !window.matchMedia) return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
+
 export default function GymDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   /* -------------------------------------------------------
-     THEME (light/dark) — respects system + localStorage
+     THEME (light/dark) — auto-follow system
      ------------------------------------------------------- */
-  const [mode, setMode] = useState("dark");
-  const theme = mode === "light" ? LIGHT_THEME : DARK_THEME;
+  const [mode, setMode] = useState(getSystemMode);
+  const theme = useMemo(() => buildTheme(mode), [mode]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("passiify-theme");
-      if (stored === "light" || stored === "dark") {
-        setMode(stored);
-        return;
-      }
-      if (
-        typeof window !== "undefined" &&
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: light)").matches
-      ) {
-        setMode("light");
-      } else {
-        setMode("dark");
-      }
-    } catch {
-      setMode("dark");
-    }
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const listener = (e) => setMode(e.matches ? "dark" : "light");
+    mq.addEventListener("change", listener);
+    return () => mq.removeEventListener("change", listener);
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("passiify-theme", mode);
-    } catch {
-      // ignore
-    }
-  }, [mode]);
 
   /* -------------------------------------------------------
      STATE
@@ -126,6 +191,7 @@ export default function GymDetails() {
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState("");
+  const [bookingError, setBookingError] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
@@ -185,11 +251,27 @@ export default function GymDetails() {
   }, [id]);
 
   /* -------------------------------------------------------
-     BOOKING HANDLER
+     BOOKING HANDLER — via Razorpay
      ------------------------------------------------------- */
   const handleBooking = async () => {
+    setBookingError("");
+
     try {
-      setBookingLoading(true);
+      if (!gym) {
+        setBookingError("Gym details are still loading. Please wait a moment.");
+        return;
+      }
+
+      if (!selectedPass) {
+        setBookingError("Please select a pass first.");
+        return;
+      }
+
+      if (!selectedDate) {
+        setBookingError("Please choose the date you want to train.");
+        return;
+      }
+
       const token = localStorage.getItem("token");
       if (!token) {
         alert("Please login first to book a pass.");
@@ -197,32 +279,141 @@ export default function GymDetails() {
         return;
       }
 
-      if (!selectedPass) {
-        alert("Please select a pass first.");
+      setBookingLoading(true);
+
+      // Ensure Razorpay SDK is available (SPA-safe)
+      const sdkLoaded = await loadRazorpayScript();
+      if (!sdkLoaded || !window.Razorpay) {
+        setBookingLoading(false);
+        setBookingError(
+          "Payment SDK couldn’t load. Check your connection and try again."
+        );
         return;
       }
 
       const gymId = gym?._id || id;
-      const bookingData = {
+
+      // 🔹 Step 1: Create Razorpay order via your backend
+      const createPayload = {
         gymId,
         date: selectedDate,
         duration: selectedPass.duration,
         price: selectedPass.price,
       };
 
-      const { data } = await API.post("/bookings", bookingData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      setShowSuccess(true);
-      setTimeout(
-        () => navigate(`/booking-success/${data.booking?._id || data._id}`),
-        1400
+      const { data } = await API.post(
+        "/payments/gym/create-order",
+        createPayload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
+
+      if (!data?.success || !data?.order) {
+        console.error("create-order failed:", data);
+        setBookingError(
+          data?.message || "Unable to start payment. Please try again."
+        );
+        setBookingLoading(false);
+        return;
+      }
+
+      const { order, key } = data;
+
+      // Try to prefill from stored user
+      let prefill = {};
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const u = parsed?.user || parsed;
+          prefill = {
+            name: u?.name || "",
+            email: u?.email || "",
+          };
+        }
+      } catch {
+        // ignore
+      }
+
+      // 🔹 Step 2: Open Razorpay checkout
+      const options = {
+        key: key,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: "Passiify",
+        description: `${selectedPass.duration}-day pass at ${gym.name}`,
+        order_id: order.id,
+        prefill,
+        notes: {
+          gymId,
+          date: selectedDate,
+          duration: String(selectedPass.duration),
+        },
+        theme: {
+          color: theme.accentFrom,
+        },
+        handler: async function (response) {
+          try {
+            // 🔹 Step 3: Verify payment & create booking
+            const verifyRes = await API.post(
+              "/payments/gym/verify-payment",
+              {
+                ...response,
+                gymId,
+                date: selectedDate,
+                duration: selectedPass.duration,
+                price: selectedPass.price,
+              },
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+
+            if (verifyRes.data?.success && verifyRes.data?.booking) {
+              setShowSuccess(true);
+              setTimeout(() => {
+                navigate(
+                  `/booking-success/${verifyRes.data.booking._id}`,
+                  {
+                    state: { type: "gym", name: gym.name },
+                  }
+                );
+              }, 1000);
+            } else {
+              console.error("verify-payment failed:", verifyRes.data);
+              setBookingError(
+                verifyRes.data?.message ||
+                  "Payment was captured but booking could not be created. Please contact support."
+              );
+            }
+          } catch (err) {
+            console.error("verify-payment error:", err);
+            setBookingError(
+              "Payment was captured but booking could not be completed. Please contact support with your payment ID."
+            );
+          } finally {
+            setBookingLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setBookingLoading(false);
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
     } catch (err) {
-      console.error("❌ Booking failed:", err);
-      alert("Booking failed. Please try again.");
-    } finally {
+      console.error(
+        "❌ Booking / payment init failed:",
+        err?.response?.data || err
+      );
+      setBookingError(
+        err?.response?.data?.message ||
+          "Something went wrong while starting payment. Please try again."
+      );
       setBookingLoading(false);
     }
   };
@@ -263,7 +454,7 @@ export default function GymDetails() {
         <div className="flex items-center gap-2 text-sm">
           <Loader2
             className="w-5 h-5 animate-spin"
-            style={{ color: BRAND.accentOrange }}
+            style={{ color: theme.accentTo }}
           />
           <span style={{ color: theme.textMuted }}>
             Loading gym details…
@@ -289,7 +480,7 @@ export default function GymDetails() {
           to="/explore"
           className="mt-1 rounded-full text-xs md:text-sm font-semibold px-5 py-2"
           style={{
-            backgroundImage: `linear-gradient(120deg, ${BRAND.accentBlue}, ${BRAND.accentOrange})`,
+            backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
             color: "#020617",
             boxShadow: theme.shadowSoft,
           }}
@@ -304,17 +495,7 @@ export default function GymDetails() {
      DERIVED DATA
      ------------------------------------------------------- */
 
-  const galleryImages =
-    gym.images && gym.images.length > 0
-      ? gym.images.map((img) =>
-          img.startsWith("http")
-            ? img
-            : `http://localhost:5000${img}`
-        )
-      : [
-          "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1200",
-          "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=1200",
-        ];
+  const galleryImages = getGalleryImages(gym);
 
   const minPassPrice =
     gym.passes && gym.passes.length
@@ -337,8 +518,7 @@ export default function GymDetails() {
     typeof gym.rating === "number"
       ? gym.rating
       : reviews.length
-      ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
-        reviews.length
+      ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length
       : null;
 
   const ratingCount = gym.ratingCount || reviews.length || 0;
@@ -350,6 +530,13 @@ export default function GymDetails() {
       : `radial-gradient(circle at top, rgba(37,99,235,0.12), transparent 55%),
          radial-gradient(circle at bottom right, rgba(249,115,22,0.12), transparent 60%)`;
 
+  const surfaceGradient =
+    mode === "dark"
+      ? "linear-gradient(to bottom, #020617, #020617)"
+      : "linear-gradient(to bottom, #E0F2FE, #FFFFFF, #F1F5F9)";
+
+  const primaryGradient = `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`;
+
   /* =======================================================
      RENDER
      ======================================================= */
@@ -359,7 +546,7 @@ export default function GymDetails() {
       className="min-h-screen"
       style={{
         backgroundColor: theme.bg,
-        backgroundImage,
+        backgroundImage: `${surfaceGradient}, ${backgroundImage}`,
       }}
     >
       {/* ===================================================
@@ -376,11 +563,11 @@ export default function GymDetails() {
         <div className="absolute inset-0 pointer-events-none">
           <div
             className="absolute -bottom-40 -right-40 w-[420px] h-[420px] rounded-full blur-3xl opacity-40"
-            style={{ background: BRAND.accentOrange }}
+            style={{ background: theme.accentTo }}
           />
           <div
             className="absolute -top-40 -left-40 w-[420px] h-[420px] rounded-full blur-3xl opacity-36"
-            style={{ background: BRAND.accentBlue }}
+            style={{ background: theme.accentFrom }}
           />
         </div>
 
@@ -477,7 +664,7 @@ export default function GymDetails() {
             <div className="flex items-center gap-2 mb-1">
               <Clock
                 className="w-3.5 h-3.5"
-                style={{ color: BRAND.accentOrange }}
+                style={{ color: theme.accentTo }}
               />
               <span
                 className="uppercase text-[10px] tracking-[0.18em]"
@@ -501,7 +688,7 @@ export default function GymDetails() {
             <div className="flex items-center gap-2 mb-1">
               <Dumbbell
                 className="w-3.5 h-3.5"
-                style={{ color: BRAND.accentBlue }}
+                style={{ color: theme.accentFrom }}
               />
               <span
                 className="uppercase text-[10px] tracking-[0.18em]"
@@ -525,7 +712,7 @@ export default function GymDetails() {
             <div className="flex items-center gap-2 mb-1">
               <Users
                 className="w-3.5 h-3.5"
-                style={{ color: BRAND.accentOrange }}
+                style={{ color: theme.accentTo }}
               />
               <span
                 className="uppercase text-[10px] tracking-[0.18em]"
@@ -549,7 +736,7 @@ export default function GymDetails() {
             <div className="flex items-center gap-2 mb-1">
               <Shield
                 className="w-3.5 h-3.5"
-                style={{ color: BRAND.accentBlue }}
+                style={{ color: theme.accentFrom }}
               />
               <span
                 className="uppercase text-[10px] tracking-[0.18em]"
@@ -582,7 +769,7 @@ export default function GymDetails() {
               Why this gym is perfect for{" "}
               <span
                 style={{
-                  backgroundImage: `linear-gradient(90deg, ${BRAND.accentBlue}, ${BRAND.accentOrange})`,
+                  backgroundImage: primaryGradient,
                   WebkitBackgroundClip: "text",
                   color: "transparent",
                 }}
@@ -664,7 +851,7 @@ export default function GymDetails() {
             >
               <Sparkles
                 className="w-4 h-4"
-                style={{ color: BRAND.accentOrange }}
+                style={{ color: theme.accentTo }}
               />
               Amenities & facilities
             </h3>
@@ -818,9 +1005,6 @@ export default function GymDetails() {
                 {gym.address || "Address not provided"}
               </p>
               <p style={{ color: theme.textMuted }}>{gym.city}</p>
-              <p className="mt-2" style={{ color: theme.textMuted }}>
-                📞 {gym.phone || "Contact not provided"}
-              </p>
               <p className="mt-1" style={{ color: theme.textMuted }}>
                 🕒 {gym.openingHours || "6:00 AM – 10:00 PM"}
               </p>
@@ -915,13 +1099,10 @@ export default function GymDetails() {
                   <Star
                     key={s}
                     className={`w-6 h-6 cursor-pointer transition-transform ${
-                      s <= rating
-                        ? "scale-110"
-                        : "hover:scale-110"
+                      s <= rating ? "scale-110" : "hover:scale-110"
                     }`}
                     style={{
-                      color:
-                        s <= rating ? "#FACC15" : theme.textMuted,
+                      color: s <= rating ? "#FACC15" : theme.textMuted,
                       fill: s <= rating ? "#FACC15" : "transparent",
                     }}
                     onClick={() => setRating(s)}
@@ -947,7 +1128,7 @@ export default function GymDetails() {
                 type="submit"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-full text-[11px] md:text-xs font-semibold"
                 style={{
-                  backgroundImage: `linear-gradient(120deg, ${BRAND.accentBlue}, ${BRAND.accentOrange})`,
+                  backgroundImage: primaryGradient,
                   color: "#020617",
                   boxShadow: theme.shadowStrong,
                 }}
@@ -959,7 +1140,7 @@ export default function GymDetails() {
         </section>
 
         {/* ================================================
-           RIGHT COLUMN — BOOKING (premium)
+           RIGHT COLUMN — BOOKING (premium + Razorpay)
            ================================================ */}
         <aside className="lg:sticky lg:top-24 h-fit">
           <div
@@ -980,48 +1161,47 @@ export default function GymDetails() {
             {/* PASS OPTIONS */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               {gym.passes && gym.passes.length > 0 ? (
-                gym.passes.map((p, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setSelectedPass(p)}
-                    className="relative border rounded-xl px-3 py-2 text-[11px] md:text-xs font-semibold text-left transition"
-                    style={{
-                      borderColor:
-                        selectedPass?.duration === p.duration
+                gym.passes.map((p, i) => {
+                  const isActive =
+                    selectedPass?.duration === p.duration &&
+                    selectedPass?.price === p.price;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedPass(p)}
+                      className="relative border rounded-xl px-3 py-2 text-[11px] md:text-xs font-semibold text-left transition"
+                      style={{
+                        borderColor: isActive
                           ? "transparent"
                           : theme.borderSoft,
-                      background:
-                        selectedPass?.duration === p.duration
-                          ? `linear-gradient(120deg, ${BRAND.accentBlue}, ${BRAND.accentOrange})`
+                        background: isActive
+                          ? primaryGradient
                           : mode === "dark"
                           ? "rgba(15,23,42,0.96)"
                           : "rgba(248,250,252,0.98)",
-                      color:
-                        selectedPass?.duration === p.duration
-                          ? "#020617"
-                          : theme.textMain,
-                    }}
-                  >
-                    <div>{p.duration}-day</div>
-                    <div
-                      className="text-[11px] mt-0.5"
-                      style={{
-                        color:
-                          selectedPass?.duration === p.duration
-                            ? "#111827"
-                            : theme.textMuted,
+                        color: isActive ? "#020617" : theme.textMain,
                       }}
                     >
-                      ₹{p.price}
-                    </div>
-                    {bestValue && bestValue.duration === p.duration && (
-                      <span className="absolute -top-2 right-2 text-[9px] bg-emerald-400 text-gray-900 px-2 py-[2px] rounded-full font-semibold">
-                        Best value
-                      </span>
-                    )}
-                  </button>
-                ))
+                      <div>{p.duration}-day</div>
+                      <div
+                        className="text-[11px] mt-0.5"
+                        style={{
+                          color: isActive ? "#111827" : theme.textMuted,
+                        }}
+                      >
+                        ₹{p.price}
+                      </div>
+                      {bestValue &&
+                        bestValue.duration === p.duration &&
+                        bestValue.price === p.price && (
+                          <span className="absolute -top-2 right-2 text-[9px] bg-emerald-400 text-gray-900 px-2 py-[2px] rounded-full font-semibold">
+                            Best value
+                          </span>
+                        )}
+                    </button>
+                  );
+                })
               ) : (
                 <p
                   className="text-[11px] col-span-2"
@@ -1041,7 +1221,8 @@ export default function GymDetails() {
                 >
                   ₹{selectedPass.price}
                 </div>
-                <span className="text-[10px] md:text-[11px] px-2 py-1 rounded-full border font-semibold"
+                <span
+                  className="text-[10px] md:text-[11px] px-2 py-1 rounded-full border font-semibold"
                   style={{
                     borderColor: "rgba(16,185,129,0.5)",
                     background: "rgba(16,185,129,0.08)",
@@ -1063,12 +1244,13 @@ export default function GymDetails() {
 
             {/* DATE PICKER */}
             <div className="mb-5">
-              <label className="flex items-center gap-2 text-[11px] md:text-xs font-medium mb-2"
+              <label
+                className="flex items-center gap-2 text-[11px] md:text-xs font-medium mb-2"
                 style={{ color: theme.textMain }}
               >
                 <CalendarDays
                   className="w-4 h-4"
-                  style={{ color: BRAND.accentOrange }}
+                  style={{ color: theme.accentTo }}
                 />
                 Choose when you want to train
               </label>
@@ -1087,7 +1269,7 @@ export default function GymDetails() {
                           ? "transparent"
                           : theme.borderSoft,
                         background: isActive
-                          ? `linear-gradient(120deg, ${BRAND.accentBlue}, ${BRAND.accentOrange})`
+                          ? primaryGradient
                           : mode === "dark"
                           ? "rgba(15,23,42,0.96)"
                           : "rgba(248,250,252,0.98)",
@@ -1097,7 +1279,9 @@ export default function GymDetails() {
                       <span className="font-semibold">{d.dayLabel}</span>
                       <span
                         className="text-[10px]"
-                        style={{ color: isActive ? "#111827" : theme.textMuted }}
+                        style={{
+                          color: isActive ? "#111827" : theme.textMuted,
+                        }}
                       >
                         {d.dateLabel} {d.monthLabel}
                       </span>
@@ -1145,7 +1329,7 @@ export default function GymDetails() {
               <li className="flex items-center gap-2">
                 <ThumbsUp
                   className="w-4 h-4"
-                  style={{ color: BRAND.accentOrange }}
+                  style={{ color: theme.accentTo }}
                 />{" "}
                 <span style={{ color: theme.textMuted }}>
                   Loved by travellers & locals
@@ -1154,23 +1338,38 @@ export default function GymDetails() {
               <li className="flex items-center gap-2">
                 <CreditCard
                   className="w-4 h-4"
-                  style={{ color: BRAND.accentBlue }}
+                  style={{ color: theme.accentFrom }}
                 />{" "}
                 <span style={{ color: theme.textMuted }}>
-                  UPI, cards & wallets — encrypted payments
+                  UPI, cards & wallets via Razorpay — encrypted payments
                 </span>
               </li>
             </ul>
 
-            {/* BOOK BUTTON */}
+            {/* BOOKING ERROR (if any) */}
+            {bookingError && (
+              <p
+                className="text-[11px] mb-3 rounded-lg px-3 py-2"
+                style={{
+                  backgroundColor:
+                    mode === "dark"
+                      ? "rgba(248,113,113,0.12)"
+                      : "rgba(254,226,226,0.95)",
+                  color: mode === "dark" ? "#fecaca" : "#b91c1c",
+                  border: "1px solid rgba(248,113,113,0.7)",
+                }}
+              >
+                {bookingError}
+              </p>
+            )}
+
+            {/* BOOK BUTTON (Razorpay) */}
             <button
               onClick={handleBooking}
               disabled={bookingLoading || !isApproved}
               className="w-full py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center justify-center transition"
               style={{
-                backgroundImage: isApproved
-                  ? `linear-gradient(120deg, ${BRAND.accentBlue}, ${BRAND.accentOrange})`
-                  : "none",
+                backgroundImage: isApproved ? primaryGradient : "none",
                 backgroundColor: !isApproved
                   ? "rgba(148,163,184,0.24)"
                   : undefined,
@@ -1187,7 +1386,7 @@ export default function GymDetails() {
               ) : !isApproved ? (
                 "Awaiting verification"
               ) : selectedPass ? (
-                `Book ${selectedPass.duration}-day pass`
+                `Confirm & pay for ${selectedPass.duration}-day pass`
               ) : (
                 "Select a pass to book"
               )}
@@ -1207,7 +1406,7 @@ export default function GymDetails() {
           <div>
             <Shield
               className="mx-auto w-7 h-7 mb-2"
-              style={{ color: BRAND.accentBlue }}
+              style={{ color: theme.accentFrom }}
             />
             <h4
               className="font-semibold mb-1"
@@ -1222,7 +1421,7 @@ export default function GymDetails() {
           <div>
             <CreditCard
               className="mx-auto w-7 h-7 mb-2"
-              style={{ color: BRAND.accentOrange }}
+              style={{ color: theme.accentTo }}
             />
             <h4
               className="font-semibold mb-1"
@@ -1237,7 +1436,7 @@ export default function GymDetails() {
           <div>
             <Award
               className="mx-auto w-7 h-7 mb-2"
-              style={{ color: BRAND.accentBlue }}
+              style={{ color: theme.accentFrom }}
             />
             <h4
               className="font-semibold mb-1"
@@ -1252,7 +1451,7 @@ export default function GymDetails() {
           <div>
             <Users
               className="mx-auto w-7 h-7 mb-2"
-              style={{ color: BRAND.accentOrange }}
+              style={{ color: theme.accentTo }}
             />
             <h4
               className="font-semibold mb-1"

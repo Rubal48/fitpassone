@@ -2,10 +2,16 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import dotenv from "dotenv";
+import { OAuth2Client } from "google-auth-library";
+
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
 import verifyToken from "../middleware/authMiddleware.js";
 import { updateUserProfile } from "../controllers/userController.js";
+
+dotenv.config(); // make sure .env is loaded
 
 const router = express.Router();
 
@@ -17,6 +23,29 @@ const generateToken = (id, expiresIn = "7d") =>
 
 const generateCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+
+/* ========================
+   🔵 GOOGLE OAUTH CLIENT (helper)
+========================= */
+const createGoogleClient = () => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } =
+    process.env;
+
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+    console.log("❌ Google OAuth env missing:", {
+      hasId: !!GOOGLE_CLIENT_ID,
+      hasSecret: !!GOOGLE_CLIENT_SECRET,
+      redirect: GOOGLE_REDIRECT_URI,
+    });
+    return null;
+  }
+
+  return new OAuth2Client(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI
+  );
+};
 
 /* ========================
    🟢 REGISTER USER + SEND EMAIL OTP
@@ -156,6 +185,188 @@ router.post("/login", async (req, res) => {
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: "Server error during login" });
+  }
+});
+
+/* ========================
+   🟦 GOOGLE LOGIN / SIGNUP (REDIRECT FLOW)
+========================= */
+
+// 1) Start Google OAuth – redirect user to Google
+router.get("/google", async (req, res) => {
+  try {
+    const googleClient = createGoogleClient();
+    if (!googleClient) {
+      return res
+        .status(500)
+        .send("Google OAuth is not configured on the server.");
+    }
+
+    const authUrl = googleClient.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+      ],
+    });
+
+    return res.redirect(authUrl);
+  } catch (error) {
+    console.error("Google OAuth init error:", error);
+    return res
+      .status(500)
+      .send("Failed to start Google authentication. Please try again.");
+  }
+});
+
+// 2) OAuth callback – Google redirects here with ?code=...
+router.get("/google/callback", async (req, res) => {
+  try {
+    const googleClient = createGoogleClient();
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+
+    if (!googleClient) {
+      return res.redirect(
+        `${clientUrl}/login?error=google_not_configured`
+      );
+    }
+
+    const { code } = req.query;
+    if (!code) {
+      return res.redirect(
+        `${clientUrl}/login?error=missing_google_code`
+      );
+    }
+
+    // Exchange code for tokens
+    const { tokens } = await googleClient.getToken(code);
+
+    if (!tokens) {
+      return res.redirect(
+        `${clientUrl}/login?error=no_tokens_from_google`
+      );
+    }
+
+    let payload = null;
+
+    // 🟢 Preferred: ID token
+    if (tokens.id_token) {
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: tokens.id_token,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        payload = ticket.getPayload();
+      } catch (err) {
+        console.error("verifyIdToken failed, will try userinfo:", err);
+      }
+    }
+
+    // 🔵 Fallback: use access token to call userinfo endpoint
+    if (!payload && tokens.access_token) {
+      const userInfoResponse = await googleClient.request({
+        url: "https://www.googleapis.com/oauth2/v3/userinfo",
+        headers: {
+          Authorization: `Bearer ${tokens.access_token}`,
+        },
+      });
+      payload = userInfoResponse.data;
+    }
+
+    if (!payload) {
+      return res.redirect(
+        `${clientUrl}/login?error=no_tokens_from_google`
+      );
+    }
+
+    const googleId = payload.sub;
+    const email = (payload.email || "").toLowerCase();
+    const name =
+      payload.name || (email ? email.split("@")[0] : "Passiify User");
+    const avatar = payload.picture || "";
+
+    if (!email) {
+      return res.redirect(
+        `${clientUrl}/login?error=no_email_from_google`
+      );
+    }
+
+    // Find existing user by googleId or email
+    let user = await User.findOne({
+      $or: [{ googleId }, { email }],
+    });
+
+    // If no user, create a new one
+    if (!user) {
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+
+      user = await User.create({
+        name,
+        email,
+        password: randomPassword, // will be hashed by pre-save
+        googleId,
+        avatar,
+        isVerified: true, // Google already verified email
+        verificationCode: null,
+        verificationCodeExpiresAt: null,
+      });
+    } else {
+      // Link googleId if not yet linked, and trust email
+      let needsSave = false;
+
+      if (!user.googleId) {
+        user.googleId = googleId;
+        needsSave = true;
+      }
+      if (!user.isVerified) {
+        user.isVerified = true;
+        user.verificationCode = null;
+        user.verificationCodeExpiresAt = null;
+        needsSave = true;
+      }
+      if (!user.avatar && avatar) {
+        user.avatar = avatar;
+        needsSave = true;
+      }
+
+      if (needsSave) {
+        await user.save();
+      }
+    }
+
+    // Track login
+    await user.markLogin();
+
+    // Issue JWT using your existing helper
+    const token = generateToken(user._id);
+
+    // Redirect to frontend with token in URL
+    const cleanedClientUrl = clientUrl.replace(/\/+$/, "");
+    const redirectUrl = `${cleanedClientUrl}/oauth/google?token=${token}`;
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    console.error("Google OAuth callback error:", error);
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    return res.redirect(
+      `${clientUrl}/login?error=google_auth_failed`
+    );
+  }
+});
+
+/* ========================
+   👤 CURRENT USER (for Google OAuth callback)
+========================= */
+router.get("/me", verifyToken, async (req, res) => {
+  try {
+    // verifyToken already attached req.user (without password)
+    return res.json(req.user);
+  } catch (err) {
+    console.error("Get current user error:", err);
+    return res.status(500).json({ message: "Failed to fetch current user" });
   }
 });
 

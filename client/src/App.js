@@ -31,7 +31,9 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
-
+import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 // 🧑‍💼 Admin Pages
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -89,11 +91,13 @@ const App = () => {
 
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
-
+         {/* legal pages */}
+        <Route path="/terms" element={<TermsAndConditions />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         {/* 👇 NEW: support both /register and /signup */}
         <Route path="/register" element={<SignupPage />} />
         <Route path="/signup" element={<SignupPage />} />
-
+        <Route path="/oauth/google" element={<GoogleOAuthCallback />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 

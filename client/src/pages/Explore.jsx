@@ -15,35 +15,54 @@ import {
 import API from "../utils/api";
 
 /* =========================================================
-   THEME TOKENS — blue x orange, glass, light + dark
+   GLOBAL PASSIIFY THEME — MIRROR Home + BookingPage
    ========================================================= */
 
-const LIGHT_THEME = {
-  mode: "light",
-  bg: "#F4F6FB",
-  card: "rgba(255,255,255,0.96)",
-  cardAlt: "rgba(248,250,252,0.98)",
-  textMain: "#0F172A",
-  textMuted: "#6B7280",
-  accentBlue: "#2563EB",
-  accentOrange: "#FB923C",
-  borderSoft: "rgba(148,163,184,0.38)",
-  shadowStrong: "0 34px 110px rgba(15,23,42,0.22)",
-  shadowSoft: "0 20px 70px rgba(15,23,42,0.12)",
+const THEME = {
+  accentFrom: "#2563EB", // blue-600
+  accentMid: "#0EA5E9", // sky-500
+  accentTo: "#F97316", // orange-500,
+
+  light: {
+    bg: "#F4F5FB",
+    border: "rgba(148,163,184,0.45)",
+    textMain: "#020617",
+    textMuted: "#6B7280",
+    chipBg: "#F9FAFB",
+    card: "rgba(255,255,255,0.96)",
+    cardAlt: "rgba(248,250,252,0.98)",
+  },
+  dark: {
+    bg: "#020617",
+    border: "rgba(31,41,55,0.9)",
+    textMain: "#E5E7EB",
+    textMuted: "#9CA3AF",
+    chipBg: "#020617",
+    card: "rgba(15,23,42,0.96)",
+    cardAlt: "rgba(15,23,42,0.92)",
+  },
 };
 
-const DARK_THEME = {
-  mode: "dark",
-  bg: "#020617",
-  card: "rgba(15,23,42,0.96)",
-  cardAlt: "rgba(15,23,42,0.92)",
-  textMain: "#E5E7EB",
-  textMuted: "#9CA3AF",
-  accentBlue: "#3B82F6",
-  accentOrange: "#FB923C",
-  borderSoft: "rgba(148,163,184,0.55)",
-  shadowStrong: "0 40px 140px rgba(0,0,0,0.9)",
-  shadowSoft: "0 24px 90px rgba(15,23,42,0.9)",
+const buildTheme = (mode) => {
+  const base = mode === "light" ? THEME.light : THEME.dark;
+  return {
+    ...base,
+    accentFrom: THEME.accentFrom,
+    accentMid: THEME.accentMid,
+    accentTo: THEME.accentTo,
+    accentBlue: THEME.accentFrom,
+    accentOrange: THEME.accentTo,
+    accentMint: "#22C55E",
+    borderSoft: base.border,
+    shadowStrong:
+      mode === "dark"
+        ? "0 40px 140px rgba(0,0,0,0.9)"
+        : "0 34px 110px rgba(15,23,42,0.22)",
+    shadowSoft:
+      mode === "dark"
+        ? "0 24px 90px rgba(15,23,42,0.9)"
+        : "0 20px 70px rgba(15,23,42,0.12)",
+  };
 };
 
 /* =========================================================
@@ -61,22 +80,96 @@ const quickChips = [
 
 const topCityChips = ["Goa", "Bali", "Bangkok", "Mumbai"];
 
-const getGymImage = (gym) => {
-  if (gym.image && gym.image.startsWith("http")) return gym.image;
-  if (gym.images && gym.images[0] && gym.images[0].startsWith("http"))
-    return gym.images[0];
+/* ---------- 🔗 Media URL builder (backend + CDN) ---------- */
 
-  const fallbacks = [
-    "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800",
-    "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=800",
-    "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=800",
-    "https://images.pexels.com/photos/4754142/pexels-photo-4754142.jpeg?auto=compress&cs=tinysrgb&w=800",
-  ];
-  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+
+  // Already a full URL
+  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+
+  // Relative path from backend (e.g. "/uploads/gyms/xyz.jpg")
+  try {
+    const base = (API?.defaults?.baseURL || "").replace(/\/$/, "");
+    const cleanPath = String(raw).replace(/^\//, ""); // remove starting '/'
+    if (!base) return `/${cleanPath}`;
+    return `${base}/${cleanPath}`;
+  } catch {
+    return null;
+  }
+};
+
+const fallbackImages = [
+  "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800",
+  "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=800",
+  "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=800",
+  "https://images.pexels.com/photos/4754142/pexels-photo-4754142.jpeg?auto=compress&cs=tinysrgb&w=800",
+];
+
+const getGymImage = (gym) => {
+  const raw =
+    gym.coverImage ||
+    gym.image ||
+    (Array.isArray(gym.images) && gym.images[0]) ||
+    (Array.isArray(gym.media) && gym.media[0]) ||
+    gym.thumbnail;
+
+  const url = buildMediaUrl(raw);
+  if (url) return url;
+
+  // fallback (deterministic by id to avoid flicker)
+  const key = gym._id || gym.id || Math.random();
+  const index =
+    Math.abs(
+      typeof key === "string"
+        ? key.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+        : key
+    ) % fallbackImages.length;
+  return fallbackImages[index];
 };
 
 /* =========================================================
-   HERO SECTION — search + city + ambient
+   TOP TRUST STRIP — unified with Home
+   ========================================================= */
+
+function TopTrustStrip({ theme, mode }) {
+  return (
+    <div
+      className="w-full border-b backdrop-blur-xl"
+      style={{
+        borderColor: theme.borderSoft,
+        background:
+          mode === "dark"
+            ? "rgba(2,6,23,0.9)"
+            : "rgba(255,255,255,0.88)",
+      }}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-[11px] md:text-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span style={{ color: theme.textMuted }}>
+            Curated day-pass gyms & studios for travellers, expats & Gen-Z.
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span style={{ color: theme.textMuted }}>Verified hosts only</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-orange-400" />
+            <span style={{ color: theme.textMuted }}>
+              Transparent pricing · No lock-ins
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   HERO SECTION — TRAIN ANYTHING ANYWHERE
    ========================================================= */
 
 function ExploreHero({
@@ -89,25 +182,39 @@ function ExploreHero({
   uniqueCities,
 }) {
   const allCityOptions = ["Anywhere", ...uniqueCities];
+  const primaryGradient = `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`;
 
   return (
     <section className="relative overflow-hidden">
-      {/* Ambient blobs */}
+      {/* Ambient blobs / background image / grid */}
       <div className="absolute inset-0 pointer-events-none">
         <div
-          className="absolute -top-40 -right-40 w-[420px] h-[420px] rounded-full blur-3xl opacity-45"
-          style={{ background: theme.accentBlue }}
-        />
-        <div
-          className="absolute -bottom-40 -left-36 w-[420px] h-[420px] rounded-full blur-3xl opacity-40"
-          style={{ background: theme.accentOrange }}
-        />
-        <div
-          className="absolute inset-0 opacity-15 mix-blend-soft-light bg-[url('https://images.pexels.com/photos/4162443/pexels-photo-4162443.jpeg?auto=compress&cs=tinysrgb&w=1600')] bg-cover bg-center"
-        />
-        <div
-          className="absolute inset-0 opacity-12 mix-blend-soft-light"
+          className="absolute -top-40 -right-40 w-[420px] h-[420px] rounded-full blur-3xl"
           style={{
+            opacity: mode === "dark" ? 0.55 : 0.35,
+            background: theme.accentBlue,
+          }}
+        />
+        <div
+          className="absolute -bottom-40 -left-36 w-[420px] h-[420px] rounded-full blur-3xl"
+          style={{
+            opacity: mode === "dark" ? 0.5 : 0.35,
+            background: theme.accentOrange,
+          }}
+        />
+        <div
+          className="absolute inset-0 mix-blend-soft-light bg-cover bg-center"
+          style={{
+            opacity: mode === "dark" ? 0.2 : 0.12,
+            backgroundImage:
+              "url('https://images.pexels.com/photos/4162443/pexels-photo-4162443.jpeg?auto=compress&cs=tinysrgb&w=1600')",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            opacity: mode === "dark" ? 0.14 : 0.1,
+            mixBlendMode: "soft-light",
             backgroundImage:
               "linear-gradient(to right, rgba(148,163,184,0.26) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.22) 1px, transparent 1px)",
             backgroundSize: "44px 44px",
@@ -115,75 +222,75 @@ function ExploreHero({
         />
       </div>
 
-      <div className="relative max-w-5xl mx-auto px-6 pt-28 pb-16 md:pt-32 md:pb-20 text-center">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-14 md:pt-24 md:pb-20 lg:pt-28 lg:pb-20">
         {/* Brand pill */}
-        <div
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border mb-4 backdrop-blur"
-          style={{
-            borderColor: theme.borderSoft,
-            background:
-              mode === "dark"
-                ? "rgba(15,23,42,0.9)"
-                : "rgba(255,255,255,0.96)",
-          }}
-        >
-          <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
-          <span
-            className="text-[11px] uppercase tracking-[0.22em]"
-            style={{ color: theme.textMuted }}
-          >
-            Day-pass gyms · studios · fight clubs
-          </span>
-        </div>
-
-        <h1
-          className="text-3xl md:text-4xl lg:text-[2.7rem] font-black tracking-tight"
-          style={{ color: theme.textMain }}
-        >
-          Drop into{" "}
-          <span
+        <div className="flex justify-center">
+          <div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border mb-4 backdrop-blur-xl shadow-[0_18px_60px_rgba(15,23,42,0.5)]"
             style={{
-              backgroundImage: `linear-gradient(90deg, ${theme.accentBlue}, ${theme.accentOrange})`,
-              WebkitBackgroundClip: "text",
-              color: "transparent",
+              borderColor: theme.borderSoft,
+              background:
+                mode === "dark"
+                  ? "rgba(15,23,42,0.95)"
+                  : "rgba(255,255,255,0.98)",
             }}
           >
-            gyms, yoga & studios
-          </span>{" "}
-          that actually welcome travellers.
-        </h1>
+            <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+            <span
+              className="text-[11px] uppercase tracking-[0.22em]"
+              style={{ color: theme.textMuted }}
+            >
+              Train anything · anywhere · on your terms
+            </span>
+          </div>
+        </div>
 
-        <p
-          className="mt-3 text-sm md:text-base max-w-2xl mx-auto"
-          style={{ color: theme.textMuted }}
-        >
-          Built for Gen-Z, expats and digital nomads. Transparent 1-day pricing,
-          verified spaces and instant passes — no contracts, no awkward tours.
-        </p>
+        {/* Copy */}
+        <div className="text-center max-w-3xl mx-auto">
+          <h1 className="text-3xl md:text-4xl lg:text-[2.7rem] font-black tracking-tight leading-tight">
+            <span
+              style={{
+                backgroundImage: primaryGradient,
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+                filter:
+                  mode === "dark"
+                    ? "drop-shadow(0 0 22px rgba(0,0,0,0.9))"
+                    : "drop-shadow(0 0 20px rgba(255,255,255,0.95))",
+              }}
+            >
+              Train anything, anywhere with day-pass access.
+            </span>
+          </h1>
+
+          <p
+            className="mt-3 text-sm md:text-base max-w-2xl mx-auto"
+            style={{ color: theme.textMuted }}
+          >
+            Drop into boxing, lifting, yoga or MMA in any city. One tap, one QR,
+            zero contracts — built for travellers, students and founders who
+            hate long-term gym deals.
+          </p>
+        </div>
 
         {/* Search + city row */}
         <form
           onSubmit={(e) => e.preventDefault()}
-          className="mt-8 max-w-2xl mx-auto"
+          className="mt-8 max-w-3xl mx-auto"
         >
           <div className="flex flex-col gap-3 sm:flex-row">
             {/* City selector */}
             <div
-              className="flex items-center justify-between rounded-2xl border px-3 py-2 text-left sm:w-40 backdrop-blur"
+              className="flex items-center justify-between rounded-2xl border px-3 py-2 text-left sm:w-40 backdrop-blur-xl"
               style={{
                 borderColor: theme.borderSoft,
-                background:
-                  mode === "dark"
-                    ? "rgba(15,23,42,0.96)"
-                    : "rgba(255,255,255,0.97)",
+                background: theme.card,
                 boxShadow: theme.shadowSoft,
               }}
             >
               <div className="flex items-center gap-2">
-                <MapPin
-                  size={16}
-                  style={{ color: theme.accentOrange }}
-                />
+                <MapPin size={16} style={{ color: theme.accentOrange }} />
                 <div className="flex flex-col">
                   <span
                     className="text-[10px] uppercase tracking-[0.2em]"
@@ -198,46 +305,33 @@ function ExploreHero({
                     style={{ color: theme.textMain }}
                   >
                     {allCityOptions.map((c) => (
-                      <option
-                        key={c}
-                        value={c}
-                        className="bg-slate-900 text-gray-100"
-                      >
+                      <option key={c} value={c}>
                         {c}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
-              <Globe2
-                size={16}
-                style={{ color: theme.textMuted }}
-              />
+              <Globe2 size={16} style={{ color: theme.textMuted }} />
             </div>
 
             {/* Search bar */}
             <div
-              className="flex-1 flex items-stretch rounded-2xl border backdrop-blur overflow-hidden"
+              className="flex-1 flex items-stretch rounded-2xl border backdrop-blur-xl overflow-hidden"
               style={{
                 borderColor: theme.borderSoft,
-                background:
-                  mode === "dark"
-                    ? "rgba(15,23,42,0.96)"
-                    : "rgba(255,255,255,0.97)",
+                background: theme.cardAlt,
                 boxShadow: theme.shadowStrong,
               }}
             >
               <div className="flex items-center px-3">
-                <Search
-                  size={18}
-                  style={{ color: theme.textMuted }}
-                />
+                <Search size={18} style={{ color: theme.textMuted }} />
               </div>
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search gym, yoga, MMA or neighbourhood"
+                placeholder="Search MMA, yoga, gym or neighbourhood"
                 className="flex-1 bg-transparent px-1 py-3 text-sm md:text-base outline-none"
                 style={{
                   color: theme.textMain,
@@ -246,13 +340,13 @@ function ExploreHero({
               />
               <button
                 type="button"
-                className="px-4 md:px-6 py-2.5 text-xs md:text-sm font-semibold"
+                className="px-4 md:px-6 py-2.5 text-xs md:text-sm font-semibold shadow-[0_20px_70px_rgba(15,23,42,0.9)] hover:scale-[1.02] active:scale-[0.99] transition-transform"
                 style={{
-                  backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
+                  backgroundImage: primaryGradient,
                   color: "#020617",
                 }}
               >
-                Show results
+                See matches
               </button>
             </div>
           </div>
@@ -264,13 +358,10 @@ function ExploreHero({
                 type="button"
                 key={chip}
                 onClick={() => setQuery(chip)}
-                className="px-3 py-1.5 rounded-full border text-[11px] md:text-xs transition"
+                className="px-3 py-1.5 rounded-full border text-[11px] md:text-xs transition hover:-translate-y-[1px]"
                 style={{
                   borderColor: theme.borderSoft,
-                  background:
-                    mode === "dark"
-                      ? "rgba(15,23,42,0.96)"
-                      : "rgba(255,255,255,0.98)",
+                  background: theme.card,
                   color: theme.textMain,
                 }}
               >
@@ -289,12 +380,13 @@ function ExploreHero({
                   setCityFilter("Anywhere");
                   setQuery(c);
                 }}
-                className="px-3 py-1 rounded-full bg-black/5"
+                className="px-3 py-1 rounded-full border backdrop-blur-sm"
                 style={{
+                  borderColor: "rgba(148,163,184,0.4)",
                   background:
                     mode === "dark"
                       ? "rgba(15,23,42,0.9)"
-                      : "rgba(255,255,255,0.9)",
+                      : "rgba(255,255,255,0.96)",
                   color: theme.textMuted,
                 }}
               >
@@ -304,30 +396,25 @@ function ExploreHero({
           </div>
         </form>
 
-        {/* trust strip */}
+        {/* trust strip under hero */}
         <div className="mt-6 flex flex-wrap justify-center gap-4 text-[11px] md:text-xs">
           <div className="flex items-center gap-2">
-            <ShieldCheck
-              size={16}
-              style={{ color: "#22C55E" }}
-            />
-            <span style={{ color: theme.textMuted }}>Verified hosts</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Star
-              size={16}
-              className="fill-yellow-300 text-yellow-300"
-            />
+            <ShieldCheck size={16} style={{ color: "#22C55E" }} />
             <span style={{ color: theme.textMuted }}>
-              Transparent 1-day pricing
+              Hosts reviewed for vibe, safety & cleanliness
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <CheckCircle2
-              size={16}
-              style={{ color: "#22C55E" }}
-            />
-            <span style={{ color: theme.textMuted }}>Instant QR passes</span>
+            <Star size={16} className="fill-yellow-300 text-yellow-300" />
+            <span style={{ color: theme.textMuted }}>
+              Transparent 1-day pricing, no hidden fees
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: "#22C55E" }} />
+            <span style={{ color: theme.textMuted }}>
+              Instant QR passes — just show up & train
+            </span>
           </div>
         </div>
       </div>
@@ -353,8 +440,10 @@ function ExploreControls({
 }) {
   if (loading) return null;
 
+  const primaryGradient = `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`;
+
   return (
-    <section className="max-w-7xl mx-auto px-6 pb-4">
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         {/* Summary */}
         <div className="flex flex-col gap-1">
@@ -362,16 +451,18 @@ function ExploreControls({
             <span style={{ color: theme.textMain }}>
               {total}{" "}
               <span style={{ color: theme.textMuted }}>
-                places ready for a 1-day pass
+                spaces ready for a 1-day pass
               </span>
             </span>
           </div>
           <div className="text-[11px]" style={{ color: theme.textMuted }}>
             {query
-              ? `Filtered by “${query}”${cityFilter !== "Anywhere" ? ` in ${cityFilter}` : ""}. Tune vibe, price or rating for the perfect match.`
+              ? `Filtered by “${query}”${
+                  cityFilter !== "Anywhere" ? ` in ${cityFilter}` : ""
+                }. Tune vibe, price or rating for your perfect match.`
               : cityFilter !== "Anywhere"
               ? `Showing gyms & studios in ${cityFilter}. Adjust filters for budget, rating and vibe.`
-              : "Showing recommended gyms & studios. Use filters to tune by budget and rating."}
+              : "Showing recommended gyms & studios. Use filters to tune by budget, rating and training style."}
           </div>
         </div>
 
@@ -388,20 +479,17 @@ function ExploreControls({
                 key={f.key}
                 type="button"
                 onClick={() => setActiveFilter(f.key)}
-                className="px-3 py-1.5 rounded-full border transition"
+                className="px-3 py-1.5 rounded-full border transition hover:-translate-y-[1px]"
                 style={{
                   borderColor:
-                    activeFilter === f.key
-                      ? "transparent"
-                      : theme.borderSoft,
+                    activeFilter === f.key ? "transparent" : theme.borderSoft,
                   background:
+                    activeFilter === f.key ? primaryGradient : theme.card,
+                  color: activeFilter === f.key ? "#020617" : theme.textMain,
+                  boxShadow:
                     activeFilter === f.key
-                      ? `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`
-                      : mode === "dark"
-                      ? "rgba(15,23,42,0.96)"
-                      : "rgba(255,255,255,0.98)",
-                  color:
-                    activeFilter === f.key ? "#020617" : theme.textMain,
+                      ? "0 18px 60px rgba(15,23,42,0.8)"
+                      : "none",
                 }}
               >
                 {f.label}
@@ -414,7 +502,10 @@ function ExploreControls({
               className="w-4 h-4"
               style={{ color: theme.textMuted }}
             />
-            <span className="hidden sm:inline" style={{ color: theme.textMuted }}>
+            <span
+              className="hidden sm:inline"
+              style={{ color: theme.textMuted }}
+            >
               Sort by:
             </span>
             <select
@@ -447,18 +538,17 @@ function ExploreControls({
    ========================================================= */
 
 function GymsGrid({ theme, mode, gyms, loading, error }) {
+  const primaryGradient = `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`;
+
   if (loading) {
     return (
-      <section className="max-w-7xl mx-auto px-6 pb-10">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-10">
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <Loader2
             className="w-6 h-6 animate-spin"
             style={{ color: theme.accentOrange }}
           />
-          <p
-            className="text-sm"
-            style={{ color: theme.textMuted }}
-          >
+          <p className="text-sm" style={{ color: theme.textMuted }}>
             Loading gyms & studios near you…
           </p>
         </div>
@@ -468,7 +558,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
 
   if (error && gyms.length === 0) {
     return (
-      <section className="max-w-7xl mx-auto px-6 pb-10">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-10">
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <p
             className="text-sm text-center"
@@ -484,23 +574,17 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
   if (gyms.length === 0) return null;
 
   return (
-    <section className="max-w-7xl mx-auto px-6 pb-10">
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-10">
       <div className="flex items-center justify-between mb-3">
-        <h2
-          className="text-lg font-semibold"
-          style={{ color: theme.textMain }}
-        >
+        <h2 className="text-lg font-semibold" style={{ color: theme.textMain }}>
           Gyms, studios & fight clubs
         </h2>
-        <p
-          className="text-[11px]"
-          style={{ color: theme.textMuted }}
-        >
+        <p className="text-[11px]" style={{ color: theme.textMuted }}>
           Tap a card to see photos, rules and check-in details.
         </p>
       </div>
 
-      <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {gyms.map((gym, index) => {
           const price = Number(gym.price) || 499;
           const rating = Number(gym.rating) || 4.7;
@@ -511,13 +595,13 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
           return (
             <article
               key={gym._id}
-              className="group rounded-2xl overflow-hidden border transition-all backdrop-blur"
+              className="group rounded-2xl overflow-hidden border transition-all backdrop-blur-xl hover:-translate-y-1"
               style={{
                 borderColor: theme.borderSoft,
                 background:
                   mode === "dark"
-                    ? "radial-gradient(circle at top, rgba(37,99,235,0.18), transparent 55%), rgba(15,23,42,0.96)"
-                    : "radial-gradient(circle at top, rgba(37,99,235,0.06), transparent 55%), rgba(255,255,255,0.97)",
+                    ? `radial-gradient(circle at top, rgba(37,99,235,0.22), transparent 55%), ${theme.card}`
+                    : `radial-gradient(circle at top, rgba(37,99,235,0.06), transparent 55%), ${theme.card}`,
                 boxShadow: theme.shadowSoft,
               }}
             >
@@ -548,7 +632,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                   <span
                     className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.9)]"
                     style={{
-                      backgroundImage: `linear-gradient(120deg, ${theme.accentOrange}, ${theme.accentBlue})`,
+                      backgroundImage: primaryGradient,
                       color: "#020617",
                     }}
                   >
@@ -669,7 +753,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                   <div className="flex flex-col items-end gap-1">
                     <Link
                       to={`/gyms/${gym._id}`}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full border transition"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full border transition hover:-translate-y-[1px]"
                       style={{
                         borderColor: theme.borderSoft,
                         color: theme.textMain,
@@ -683,9 +767,9 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                     </Link>
                     <Link
                       to={`/booking/${gym._id}`}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.9)]"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-[0_16px_50px_rgba(15,23,42,0.95)] hover:scale-[1.03] active:scale-[0.99] transition-transform"
                       style={{
-                        backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
+                        backgroundImage: primaryGradient,
                         color: "#020617",
                       }}
                     >
@@ -707,16 +791,15 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
    ========================================================= */
 
 function WhyPassiifyBand({ theme, mode }) {
+  const primaryGradient = `linear-gradient(90deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`;
+
   return (
-    <section className="max-w-7xl mx-auto px-6 pb-16">
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
       <div
-        className="rounded-3xl border px-5 py-6 md:px-8 md:py-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4 backdrop-blur"
+        className="rounded-3xl border px-5 py-6 md:px-8 md:py-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4 backdrop-blur-xl"
         style={{
           borderColor: theme.borderSoft,
-          background:
-            mode === "dark"
-              ? "rgba(15,23,42,0.96)"
-              : "rgba(255,255,255,0.98)",
+          background: theme.card,
           boxShadow: theme.shadowSoft,
         }}
       >
@@ -728,8 +811,9 @@ function WhyPassiifyBand({ theme, mode }) {
             Why movers, expats & Gen-Z locals trust{" "}
             <span
               style={{
-                backgroundImage: `linear-gradient(90deg, ${theme.accentBlue}, ${theme.accentOrange})`,
+                backgroundImage: primaryGradient,
                 WebkitBackgroundClip: "text",
+                backgroundClip: "text",
                 color: "transparent",
               }}
             >
@@ -753,10 +837,7 @@ function WhyPassiifyBand({ theme, mode }) {
               style={{ color: "#22C55E" }}
             />
             <div>
-              <div
-                className="font-semibold"
-                style={{ color: theme.textMain }}
-              >
+              <div className="font-semibold" style={{ color: theme.textMain }}>
                 Instant QR confirmation
               </div>
               <div style={{ color: theme.textMuted }}>
@@ -771,10 +852,7 @@ function WhyPassiifyBand({ theme, mode }) {
               style={{ color: theme.accentBlue }}
             />
             <div>
-              <div
-                className="font-semibold"
-                style={{ color: theme.textMain }}
-              >
+              <div className="font-semibold" style={{ color: theme.textMain }}>
                 Verified hosts only
               </div>
               <div style={{ color: theme.textMuted }}>
@@ -789,10 +867,7 @@ function WhyPassiifyBand({ theme, mode }) {
               style={{ color: theme.accentOrange }}
             />
             <div>
-              <div
-                className="font-semibold"
-                style={{ color: theme.textMain }}
-              >
+              <div className="font-semibold" style={{ color: theme.textMain }}>
                 Built for travellers
               </div>
               <div style={{ color: theme.textMuted }}>
@@ -811,11 +886,19 @@ function WhyPassiifyBand({ theme, mode }) {
    MAIN PAGE
    ========================================================= */
 
+const getSystemMode = () => {
+  if (typeof window === "undefined" || !window.matchMedia) return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
+
 export default function Explore() {
   const location = useLocation();
 
-  const [mode, setMode] = useState("dark");
-  const theme = mode === "light" ? LIGHT_THEME : DARK_THEME;
+  // 👇 always follow device theme
+  const [mode, setMode] = useState(getSystemMode);
+  const theme = useMemo(() => buildTheme(mode), [mode]);
 
   const [gyms, setGyms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -826,35 +909,14 @@ export default function Explore() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recommended");
 
-  /* Theme: respect device + stored preference */
+  /* Theme: react to system changes */
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("passiify-theme");
-      if (stored === "light" || stored === "dark") {
-        setMode(stored);
-        return;
-      }
-      if (
-        typeof window !== "undefined" &&
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: light)").matches
-      ) {
-        setMode("light");
-      } else {
-        setMode("dark");
-      }
-    } catch {
-      setMode("dark");
-    }
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const listener = (e) => setMode(e.matches ? "dark" : "light");
+    mq.addEventListener("change", listener);
+    return () => mq.removeEventListener("change", listener);
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("passiify-theme", mode);
-    } catch {
-      // ignore
-    }
-  }, [mode]);
 
   /* Fetch gyms once */
   useEffect(() => {
@@ -961,18 +1023,26 @@ export default function Explore() {
     mode === "dark"
       ? `radial-gradient(circle at top, rgba(37,99,235,0.32), transparent 55%),
          radial-gradient(circle at bottom right, rgba(249,115,22,0.23), transparent 60%)`
-      : `radial-gradient(circle at top, rgba(37,99,235,0.12), transparent 55%),
-         radial-gradient(circle at bottom right, rgba(249,115,22,0.12), transparent 60%)`;
+      : `radial-gradient(circle at top, rgba(14,165,233,0.16), transparent 55%),
+         radial-gradient(circle at bottom right, rgba(249,115,22,0.14), transparent 60%)`;
+
+  const surfaceGradient =
+    mode === "dark"
+      ? "linear-gradient(to bottom, #020617, #020617)"
+      : "linear-gradient(to bottom, #E0F2FE, #FFFFFF, #F1F5F9)";
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen w-full transition-colors duration-300"
       style={{
         backgroundColor: theme.bg,
-        backgroundImage,
+        backgroundImage: `${surfaceGradient}, ${backgroundImage}`,
         color: theme.textMain,
       }}
     >
+      {/* Unified trust strip */}
+      <TopTrustStrip theme={theme} mode={mode} />
+
       {/* HERO */}
       <ExploreHero
         theme={theme}
@@ -999,7 +1069,7 @@ export default function Explore() {
       />
 
       {/* Nothing found state */}
-      <section className="max-w-7xl mx-auto px-6 pb-4">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-4">
         {nothingFound && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <p
@@ -1023,9 +1093,9 @@ export default function Explore() {
                 setActiveFilter("all");
                 setSortBy("recommended");
               }}
-              className="px-4 py-2 rounded-full text-xs font-semibold"
+              className="px-4 py-2 rounded-full text-xs font-semibold shadow-[0_18px_60px_rgba(15,23,42,0.8)] hover:scale-[1.02] active:scale-[0.99] transition-transform"
               style={{
-                backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
+                backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                 color: "#020617",
               }}
             >
