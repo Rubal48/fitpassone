@@ -347,6 +347,20 @@ export default function MyBookings() {
                                 <QrCode className="w-4 h-4 text-slate-500 dark:text-slate-300" />
                               </div>
                             )}
+
+                            {/* 🎟 Ticket button – opens same premium ticket view as BookingSuccess */}
+                            <button
+                              onClick={() =>
+                                navigate(`/booking-success/${booking._id}`, {
+                                  state: { type: "gym", name: gym.name },
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-full bg-slate-100/90 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
+                            >
+                              <Ticket className="w-3.5 h-3.5" />
+                              Ticket
+                            </button>
+
                             <Link
                               to={`/booking-success/${booking._id}`}
                               state={{ type: "gym", name: gym.name }}
@@ -436,13 +450,28 @@ export default function MyBookings() {
                           <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
                             ₹{booking.price || gym.price || 499}
                           </p>
-                          <Link
-                            to={`/booking-success/${booking._id}`}
-                            state={{ type: "gym", name: gym.name }}
-                            className="inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full bg-slate-100/90 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/70 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
-                          >
-                            View pass
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            {/* 🎟 Ticket button for past visits as well */}
+                            <button
+                              onClick={() =>
+                                navigate(`/booking-success/${booking._id}`, {
+                                  state: { type: "gym", name: gym.name },
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-full bg-slate-100/90 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
+                            >
+                              <Ticket className="w-3.5 h-3.5" />
+                              Ticket
+                            </button>
+
+                            <Link
+                              to={`/booking-success/${booking._id}`}
+                              state={{ type: "gym", name: gym.name }}
+                              className="inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full bg-slate-100/90 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/70 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
+                            >
+                              View pass
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     </article>

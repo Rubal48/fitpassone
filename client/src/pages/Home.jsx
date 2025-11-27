@@ -41,7 +41,7 @@ const THEME = {
     bg: "#020617",
     border: "rgba(30,64,175,0.75)",
     textMain: "#E5E7EB",
-    textMuted: "#9CA3AF",
+    textMuted: "#D1D5DB",
     chipBg: "#020617",
   },
 };
@@ -146,9 +146,7 @@ function getGymDayPassPrice(gym) {
   }
 
   // 2️⃣ Otherwise choose the cheapest pass
-  const cheapest = passes.reduce((min, p) =>
-    p.price < min.price ? p : min
-  );
+  const cheapest = passes.reduce((min, p) => (p.price < min.price ? p : min));
   return cheapest.price ?? numericGymPrice;
 }
 
@@ -293,7 +291,7 @@ function Hero({
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span
-                  className="text-[9px] sm:text-[10px] md:text-[11px] uppercase tracking-[0.22em]"
+                  className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-[0.22em]"
                   style={{ color: theme.textMuted }}
                 >
                   one-day passes · verified hosts · travel-first
@@ -318,7 +316,7 @@ function Hero({
               </h1>
 
               <p
-                className="text-[11px] sm:text-xs md:text-[15px] max-w-xl"
+                className="text-xs sm:text-sm md:text-[15px] max-w-xl"
                 style={{ color: theme.textMuted }}
               >
                 Tap into MMA gyms, rooftop yoga, dance studios or strength clubs
@@ -341,7 +339,6 @@ function Hero({
                     background: isDark
                       ? "rgba(2,6,23,0.94)"
                       : "rgba(255,255,255,0.98)",
-                    // softer shadow so it glows less
                     boxShadow:
                       mode === "dark"
                         ? "0 16px 45px rgba(15,23,42,0.85)"
@@ -390,7 +387,7 @@ function Hero({
                       />
                     </div>
 
-                    {/* submit (Passiify gradient, very low glow) */}
+                    {/* submit (Passiify gradient) */}
                     <button
                       type="submit"
                       className="px-4 md:px-6 py-2.5 text-[11px] sm:text-sm font-semibold rounded-br-2xl xs:rounded-r-2xl xs:rounded-bl-none flex items-center gap-1.5 shadow-md hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition"
@@ -406,7 +403,7 @@ function Hero({
                 </div>
 
                 {/* quick chips + price highlight */}
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] sm:text-[11px]">
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] sm:text-xs">
                   <div className="flex flex-wrap gap-2">
                     {[
                       { label: "MMA gyms", type: "gyms" },
@@ -433,7 +430,7 @@ function Hero({
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className="px-3 py-1 rounded-full border font-medium"
+                      className="px-3 py-1 rounded-full border font-medium text-xs"
                       style={{
                         borderColor:
                           mode === "dark"
@@ -448,14 +445,14 @@ function Hero({
                     >
                       Day-pass from ₹{dayPassFrom}
                     </span>
-                    <span style={{ color: theme.textMuted }}>
+                    <span className="text-xs" style={{ color: theme.textMuted }}>
                       across select partner gyms
                     </span>
                   </div>
                 </div>
               </form>
 
-              {/* trust badges (icons now use Passiify colours) */}
+              {/* trust badges */}
               <div className="mt-3 sm:mt-4 flex flex-wrap gap-4 text-[11px] sm:text-xs">
                 <div className="flex items-center gap-2">
                   <Shield size={16} style={{ color: theme.accentFrom }} />
@@ -478,7 +475,7 @@ function Hero({
               </div>
 
               {/* compact metrics row */}
-              <div className="mt-3 flex flex-wrap gap-4 text-[10px] sm:text-[11px]">
+              <div className="mt-3 flex flex-wrap gap-4 text-[11px] sm:text-xs">
                 <div
                   className="px-3 py-2 rounded-xl border"
                   style={{
@@ -588,10 +585,10 @@ function Hero({
                       }}
                     >
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-[13px] sm:text-sm md:text-base font-semibold line-clamp-1 text-slate-50">
+                        <h3 className="text-sm md:text-base font-semibold line-clamp-1 text-slate-50">
                           {topEvent?.name || "Upcoming fitness experiences"}
                         </h3>
-                        <div className="mt-1 flex flex-wrap gap-2.5 text-[10px] sm:text-[11px] md:text-xs text-slate-300">
+                        <div className="mt-1 flex flex-wrap gap-2.5 text-[11px] md:text-xs text-slate-300">
                           <span className="inline-flex items-center gap-1">
                             <CalendarDays size={12} />
                             {topEvent?.date
@@ -611,9 +608,7 @@ function Hero({
                       </div>
 
                       <div className="flex flex-col items-end justify-between">
-                        <div className="text-[10px] sm:text-[11px] text-slate-300">
-                          From
-                        </div>
+                        <div className="text-[11px] text-slate-300">From</div>
                         <div
                           className="text-lg md:text-2xl font-extrabold"
                           style={{
@@ -631,7 +626,7 @@ function Hero({
                             <>
                               <Link
                                 to={`/events/${topEvent._id}`}
-                                className="px-2.5 sm:px-3 py-1 rounded-full border text-[10px] sm:text-[11px] md:text-xs text-slate-100 hover:bg-slate-800/80 transition"
+                                className="px-2.5 sm:px-3 py-1 rounded-full border text-[11px] md:text-xs text-slate-100 hover:bg-slate-800/80 transition"
                                 style={{
                                   borderColor: "rgba(148,163,184,0.7)",
                                 }}
@@ -640,7 +635,7 @@ function Hero({
                               </Link>
                               <Link
                                 to={`/book-event/${topEvent._id}`}
-                                className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                                className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
                                 style={{
                                   backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                                   color: "#020617",
@@ -652,7 +647,7 @@ function Hero({
                           ) : (
                             <Link
                               to="/events"
-                              className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                              className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
                               style={{
                                 backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                                 color: "#020617",
@@ -702,7 +697,7 @@ function Hero({
                         {featuredGym?.name || "Premium day-pass gyms"}
                       </h3>
                       <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]"
                         style={{
                           background: isDark
                             ? "rgba(37,99,235,0.2)"
@@ -715,14 +710,14 @@ function Hero({
                       </span>
                     </div>
                     <p
-                      className="text-[11px] line-clamp-2"
+                      className="text-xs line-clamp-2"
                       style={{ color: theme.textMuted }}
                     >
                       {featuredGym?.description ||
                         "Drop in once, no awkward membership pitches at the desk. Clean, transparent pricing every time."}
                     </p>
 
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex flex-wrap items-center gap-3">
                         {featuredGym && (
                           <span
@@ -747,7 +742,7 @@ function Hero({
                       <div className="flex items-center gap-2">
                         <div>
                           <span
-                            className="block text-[10px]"
+                            className="block text-[11px]"
                             style={{ color: theme.textMuted }}
                           >
                             From
@@ -758,7 +753,7 @@ function Hero({
                           >
                             ₹{heroGymPrice ?? "—"}
                             <span
-                              className="text-[10px] font-normal ml-1"
+                              className="text-[11px] font-normal ml-1"
                               style={{ color: theme.textMuted }}
                             >
                               / day-pass
@@ -786,7 +781,7 @@ function Hero({
               </div>
 
               {/* tiny bottom tags under card */}
-              <div className="hidden sm:flex mt-3 flex-wrap gap-3 text-[10px]">
+              <div className="hidden sm:flex mt-3 flex-wrap gap-3 text-[11px]">
                 <div
                   className="px-3 py-1.5 rounded-full border backdrop-blur flex items-center gap-1.5"
                   style={{
@@ -876,17 +871,11 @@ function StatsStrip({
               >
                 {item.value}
               </span>
-              <span
-                className="text-[11px]"
-                style={{ color: theme.textMuted }}
-              >
+              <span className="text-xs" style={{ color: theme.textMuted }}>
                 {item.label}
               </span>
               {item.extra && (
-                <span
-                  className="text-[10px]"
-                  style={{ color: theme.textMuted }}
-                >
+                <span className="text-xs" style={{ color: theme.textMuted }}>
                   {item.extra}
                 </span>
               )}
@@ -1002,7 +991,7 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                 Your upcoming tickets
               </h3>
               <p
-                className="text-[11px] md:text-xs mt-1"
+                className="text-xs mt-1"
                 style={{ color: theme.textMuted }}
               >
                 These are the next events you&apos;re booked into. Save them to
@@ -1050,14 +1039,14 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                       {title}
                     </p>
                     <p
-                      className="text-[10px] truncate mt-0.5"
+                      className="text-[11px] truncate mt-0.5"
                       style={{ color: theme.textMuted }}
                     >
                       {dateLabel} · {location}
                     </p>
                     {b.bookingCode && (
                       <p
-                        className="text-[10px] mt-0.5"
+                        className="text-[11px] mt-0.5"
                         style={{ color: theme.textMuted }}
                       >
                         Code: {b.bookingCode}
@@ -1066,7 +1055,7 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span
-                      className="inline-flex items-center gap-1 text-[10px]"
+                      className="inline-flex items-center gap-1 text-[11px]"
                       style={{ color: theme.accentMint }}
                     >
                       <CheckCircle2 size={12} />
@@ -1076,7 +1065,7 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                     {eventObj?._id && (
                       <Link
                         to={`/events/${eventObj._id}`}
-                        className="text-[10px] font-semibold hover:underline"
+                        className="text-[11px] font-semibold hover:underline"
                         style={{ color: theme.accentBlue }}
                       >
                         View event
@@ -1124,10 +1113,7 @@ function TravelCityStrip({ theme, mode }) {
           >
             Landing in a new city soon?
           </h2>
-          <p
-            className="text-sm max-w-md"
-            style={{ color: theme.textMuted }}
-          >
+          <p className="text-sm max-w-md" style={{ color: theme.textMuted }}>
             Line up a gym or event before you arrive. No more &quot;I&apos;ll
             start next week&quot; energy.
           </p>
@@ -1161,10 +1147,7 @@ function TravelCityStrip({ theme, mode }) {
                 >
                   {c.name}
                 </div>
-                <div
-                  className="mt-2 text-xs"
-                  style={{ color: theme.textMuted }}
-                >
+                <div className="mt-2 text-xs" style={{ color: theme.textMuted }}>
                   {c.tag}
                 </div>
               </div>
@@ -1203,10 +1186,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
             >
               Upcoming events & experiences
             </h2>
-            <p
-              className="text-sm mt-1"
-              style={{ color: theme.textMuted }}
-            >
+            <p className="text-sm mt-1" style={{ color: theme.textMuted }}>
               Runs, bootcamps, retreats and fight nights — all bookable in a few
               taps.
             </p>
@@ -1221,17 +1201,11 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
         </div>
 
         {loading ? (
-          <div
-            className="text-sm"
-            style={{ color: theme.textMuted }}
-          >
+          <div className="text-sm" style={{ color: theme.textMuted }}>
             Loading events…
           </div>
         ) : visible.length === 0 ? (
-          <div
-            className="text-sm"
-            style={{ color: theme.textMuted }}
-          >
+          <div className="text-sm" style={{ color: theme.textMuted }}>
             No events live right now — check back soon or explore gyms instead.
           </div>
         ) : (
@@ -1300,7 +1274,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                       {typeof ev.rating === "number" && (
                         <div className="absolute top-3 right-3">
                           <span
-                            className="px-2 py-1 rounded-full text-[10px] inline-flex items-center gap-1"
+                            className="px-2 py-1 rounded-full text-[11px] inline-flex items-center gap-1"
                             style={{
                               background: "rgba(15,23,42,0.9)",
                               color: "#EAB308",
@@ -1321,10 +1295,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                         >
                           {ev.name}
                         </h3>
-                        <p
-                          className="text-xs mt-1"
-                          style={{ color: theme.textMuted }}
-                        >
+                        <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
                           {ev.location || ev.city || "Location TBA"}
                         </p>
                       </div>
@@ -1426,10 +1397,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
             >
               Day-pass gyms & studios
             </h2>
-            <p
-              className="text-sm mt-1"
-              style={{ color: theme.textMuted }}
-            >
+            <p className="text-sm mt-1" style={{ color: theme.textMuted }}>
               Tap in today, leave tomorrow. No long forms, no binding contracts.
             </p>
           </div>
@@ -1443,17 +1411,11 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
         </div>
 
         {loading ? (
-          <div
-            className="text-sm"
-            style={{ color: theme.textMuted }}
-          >
+          <div className="text-sm" style={{ color: theme.textMuted }}>
             Loading gyms…
           </div>
         ) : visible.length === 0 ? (
-          <div
-            className="text-sm"
-            style={{ color: theme.textMuted }}
-          >
+          <div className="text-sm" style={{ color: theme.textMuted }}>
             No partner gyms live yet — we&apos;re onboarding hosts in your
             region.
           </div>
@@ -1538,10 +1500,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                           Day-pass
                         </span>
                       </div>
-                      <p
-                        className="text-xs"
-                        style={{ color: theme.textMuted }}
-                      >
+                      <p className="text-xs" style={{ color: theme.textMuted }}>
                         {featured.city || "City TBA"}
                       </p>
                       <p
@@ -1826,7 +1785,7 @@ function CategoryStrip({ theme, mode }) {
                 {c.name}
               </span>
               <span
-                className="mt-2 text-[10px] group-hover:underline"
+                className="mt-2 text-[11px] group-hover:underline"
                 style={{ color: theme.textMuted }}
               >
                 Tap to explore
@@ -1915,7 +1874,7 @@ function WhyPassiifySection({ theme, mode }) {
                   }}
                 >
                   <div
-                    className="text-[10px] uppercase tracking-[0.25em] mb-2"
+                    className="text-[11px] uppercase tracking-[0.25em] mb-2"
                     style={{ color: theme.textMuted }}
                   >
                     PASSIIFY
@@ -1926,10 +1885,7 @@ function WhyPassiifySection({ theme, mode }) {
                   >
                     {item.title}
                   </h3>
-                  <p
-                    className="mt-2 text-xs"
-                    style={{ color: theme.textMuted }}
-                  >
+                  <p className="mt-2 text-xs" style={{ color: theme.textMuted }}>
                     {item.desc}
                   </p>
                 </div>
@@ -1985,10 +1941,7 @@ function PartnerStrip({ theme, mode }) {
             </p>
           </div>
           <div className="flex flex-col gap-2 text-[11px] md:text-xs max-w-xs">
-            <ul
-              className="space-y-1.5"
-              style={{ color: theme.textMuted }}
-            >
+            <ul className="space-y-1.5" style={{ color: theme.textMuted }}>
               <li>• Transparent payouts (UPI/card)</li>
               <li>• Simple dashboard for passes, events & revenue</li>
               <li>• Trusted by young travellers & digital nomads</li>
@@ -2079,10 +2032,7 @@ function HowItWorksSection({ theme, mode }) {
               >
                 {step.title}
               </div>
-              <div
-                className="mt-2 text-xs"
-                style={{ color: theme.textMuted }}
-              >
+              <div className="mt-2 text-xs" style={{ color: theme.textMuted }}>
                 {step.desc}
               </div>
             </div>
@@ -2132,10 +2082,7 @@ function LocalDiscoveryInline({ theme, mode }) {
             >
               Discover something close tonight
             </h3>
-            <p
-              className="text-xs max-w-xs"
-              style={{ color: theme.textMuted }}
-            >
+            <p className="text-xs max-w-xs" style={{ color: theme.textMuted }}>
               Quick filters that work anywhere — perfect for last-minute plans
               after work or while travelling.
             </p>
@@ -2361,10 +2308,7 @@ function Footer({ theme, mode }) {
             >
               Support & legal
             </h5>
-            <p
-              className="text-xs"
-              style={{ color: theme.textMuted }}
-            >
+            <p className="text-xs" style={{ color: theme.textMuted }}>
               Drop us a mail any time:
             </p>
             <p
@@ -2429,59 +2373,37 @@ export default function Home() {
   const [loadingGyms, setLoadingGyms] = useState(true);
   const [topEvent, setTopEvent] = useState(null);
   const [startingDayPrice, setStartingDayPrice] = useState(null);
-  const [mode, setMode] = useState("dark"); // "light" | "dark"
+  const [mode, setMode] = useState("light"); // follow device
 
   const [eventBookings, setEventBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
 
-  // Theme: read stored preference, otherwise follow device
+  // Theme: follow device color scheme only
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("passiify-theme");
-      if (stored === "light" || stored === "dark") {
-        setMode(stored);
-        return;
-      }
       if (typeof window !== "undefined" && window.matchMedia) {
         const mq = window.matchMedia("(prefers-color-scheme: dark)");
         setMode(mq.matches ? "dark" : "light");
       } else {
-        setMode("dark");
+        setMode("light");
       }
     } catch {
-      setMode("dark");
+      setMode("light");
     }
   }, []);
 
-  // React to system theme changes when user has not forced a theme
+  // React to system theme changes
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
 
     const handleChange = (e) => {
-      try {
-        const stored = localStorage.getItem("passiify-theme");
-        if (stored === "light" || stored === "dark") {
-          return; // manual preference exists
-        }
-      } catch {
-        // ignore
-      }
       setMode(e.matches ? "dark" : "light");
     };
 
     mq.addEventListener("change", handleChange);
     return () => mq.removeEventListener("change", handleChange);
   }, []);
-
-  // Persist mode so Navbar / Dashboard stay in sync
-  useEffect(() => {
-    try {
-      localStorage.setItem("passiify-theme", mode);
-    } catch {
-      // ignore
-    }
-  }, [mode]);
 
   const theme = buildTheme(mode);
 
@@ -2629,9 +2551,7 @@ export default function Home() {
                 className="w-4 h-4"
                 style={{ color: theme.accentFrom }}
               />
-              <span style={{ color: theme.textMuted }}>
-                Verified hosts only
-              </span>
+              <span style={{ color: theme.textMuted }}>Verified hosts only</span>
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2

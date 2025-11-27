@@ -13,7 +13,6 @@ import {
   Ticket,
   ShieldCheck,
   Clock,
-  Info,
   Loader2,
   QrCode,
   Sparkles,
@@ -21,6 +20,36 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import API from "../utils/api";
+
+/* =========================================================
+   Helper — derive a generic activity label (yoga / MMA / etc.)
+   so the app is not "gym only"
+========================================================= */
+const getActivityLabel = (isEvent, item) => {
+  if (!item) return isEvent ? "Experience" : "Session";
+
+  const rawSource =
+    item.category ||
+    item.type ||
+    item.activityType ||
+    (Array.isArray(item.tags) && item.tags.join(" ")) ||
+    item.name ||
+    "";
+  const raw = rawSource.toString().toLowerCase();
+
+  if (raw.includes("yoga")) return "Yoga session";
+  if (raw.includes("mma")) return "MMA training";
+  if (raw.includes("boxing")) return "Boxing session";
+  if (raw.includes("kickboxing")) return "Kickboxing session";
+  if (raw.includes("crossfit")) return "CrossFit workout";
+  if (raw.includes("dance")) return "Dance session";
+  if (raw.includes("pilates")) return "Pilates session";
+  if (raw.includes("zumba")) return "Zumba class";
+  if (raw.includes("gym") || raw.includes("fitness"))
+    return isEvent ? "Fitness event" : "Gym workout";
+
+  return isEvent ? "Experience" : "Session";
+};
 
 export default function BookingSuccess() {
   const { id } = useParams();
@@ -34,6 +63,7 @@ export default function BookingSuccess() {
   const [type, setType] = useState(initialType);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false); // ✅ for PDF button
 
   /* 🎉 Confetti animation on mount */
   useEffect(() => {
@@ -98,115 +128,518 @@ export default function BookingSuccess() {
     if (id) fetchBooking();
   }, [id, initialType]);
 
-  /* 📄 Generate PDF Ticket */
+  /* 📄 Generate PREMIUM PDF Ticket (vector layout, Passiify theme, dark/light aware) */
   const handleDownload = () => {
     if (!booking) return;
 
-    const isEvent = type === "event";
-    const item = isEvent ? booking.event : booking.gym;
+    setDownloading(true);
 
-    const doc = new jsPDF();
+    try {
+      const isEvent = type === "event";
+      const item = isEvent ? booking.event : booking.gym;
+      const activityLabel = getActivityLabel(isEvent, item); // e.g. "Yoga session"
 
-    // Header band
-    doc.setFillColor(10, 16, 35);
-    doc.rect(0, 0, 210, 42, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text("Passiify", 15, 24);
-    doc.setFontSize(10);
-    doc.text(
-      isEvent
-        ? "Your Adventure, Your Story — Passiify Events"
-        : "Your Fitness, Your Way — Passiify Gym Pass",
-      15,
-      31
-    );
+      // Detect user theme for PDF palette
+      let prefersDark = false;
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+      ) {
+        prefersDark = true;
+      }
 
-    // White ticket card
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(10, 50, 190, 125, 5, 5, "F");
-    doc.setDrawColor(230, 230, 230);
+      const accentBlue = { r: 37, g: 99, b: 235 }; // #2563EB
+      const accentSky = { r: 14, g: 165, b: 233 }; // #0EA5E9
+      const accentOrange = { r: 249, g: 115, b: 22 }; // #F97316
 
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
-    doc.text(
-      isEvent ? "Event Booking Confirmation" : "Gym Pass Confirmation",
-      15,
-      66
-    );
+      const lightPalette = {
+        background: { r: 244, g: 245, b: 251 }, // F4F5FB
+        cardBg: { r: 255, g: 255, b: 255 },
+        cardBorder: { r: 226, g: 232, b: 240 }, // slate-200
+        textMain: { r: 15, g: 23, b: 42 }, // slate-900
+        textMuted: { r: 100, g: 116, b: 139 }, // slate-500
+        textSoft: { r: 148, g: 163, b: 184 }, // slate-400
+      };
 
-    doc.line(15, 70, 195, 70);
+      const darkPalette = {
+        background: { r: 3, g: 7, b: 18 }, // slate-950
+        cardBg: { r: 15, g: 23, b: 42 }, // slate-900
+        cardBorder: { r: 30, g: 64, b: 175 }, // blue-800
+        textMain: { r: 248, g: 250, b: 252 }, // slate-50
+        textMuted: { r: 148, g: 163, b: 184 }, // slate-400
+        textSoft: { r: 100, g: 116, b: 139 }, // slate-500
+      };
 
-    doc.setFontSize(12);
-    doc.setTextColor(55, 65, 81);
+      const palette = prefersDark ? darkPalette : lightPalette;
 
-    const bookingCode = booking.bookingCode || booking._id;
-    const tickets = booking.tickets || 1;
-    const dateRaw = isEvent ? item?.date : booking.date;
-    const dateLabel = dateRaw
-      ? new Date(dateRaw).toLocaleDateString("en-IN", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      : "TBA";
+      const doc = new jsPDF("p", "mm", "a4"); // portrait A4
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
 
-    if (isEvent) {
-      doc.text(`Event: ${item?.name || "Passiify Event"}`, 15, 86);
-      doc.text(`Location: ${item?.location || "Venue"}`, 15, 96);
-      doc.text(`Date: ${dateLabel}`, 15, 106);
-      doc.text(`Tickets: ${tickets}`, 15, 116);
-      doc.text(
-        `Total: ₹${booking.totalPrice || item?.price || "N/A"}`,
-        15,
-        126
+      // Background
+      doc.setFillColor(
+        palette.background.r,
+        palette.background.g,
+        palette.background.b
       );
-      if (bookingCode) doc.text(`Ticket Code: ${bookingCode}`, 15, 136);
-    } else {
-      doc.text(`Gym: ${item?.name || "Fitness Centre"}`, 15, 86);
-      doc.text(`City: ${item?.city || "City"}`, 15, 96);
-      doc.text(`Date: ${dateLabel}`, 15, 106);
+      doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+      // Ticket card dimensions (centered)
+      const cardMarginX = 12;
+      const cardMarginY = 28;
+      const cardW = pageWidth - cardMarginX * 2;
+      const cardH = 130;
+      const cardX = cardMarginX;
+      const cardY = cardMarginY;
+
+      // Outer card
+      doc.setFillColor(palette.cardBg.r, palette.cardBg.g, palette.cardBg.b);
+      doc.setDrawColor(
+        palette.cardBorder.r,
+        palette.cardBorder.g,
+        palette.cardBorder.b
+      );
+      doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "FD");
+
+      // Header gradient band inside card (Passiify blue → sky → orange)
+      const headerH = 30;
+      const h1W = cardW * 0.5;
+      const h2W = cardW * 0.25;
+      const h3W = cardW * 0.25;
+
+      doc.setFillColor(accentBlue.r, accentBlue.g, accentBlue.b);
+      doc.rect(cardX, cardY, h1W, headerH, "F");
+      doc.setFillColor(accentSky.r, accentSky.g, accentSky.b);
+      doc.rect(cardX + h1W, cardY, h2W, headerH, "F");
+      doc.setFillColor(accentOrange.r, accentOrange.g, accentOrange.b);
+      doc.rect(cardX + h1W + h2W, cardY, h3W, headerH, "F");
+
+      // Brand + header text
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      const headerTextX = cardX + 14;
+      let headerTextY = cardY + 11;
+      doc.text("Passiify", headerTextX, headerTextY);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      headerTextY += 5;
       doc.text(
-        `Pass: ${booking.duration || 1}-Day Access`,
-        15,
-        116
+        "Flexible passes for gyms, yoga, MMA & more",
+        headerTextX,
+        headerTextY
+      );
+
+      const bookingCode = booking.bookingCode || booking._id;
+      const shortId =
+        (bookingCode || "").toString().slice(-6).toUpperCase() || "TICKET";
+
+      // Right side header info
+      doc.setFontSize(7.5);
+      const headerRightX = cardX + cardW - 14;
+      doc.text(`Booking ID: ${shortId}`, headerRightX, cardY + 10, {
+        align: "right",
+      });
+      doc.text("Digital session pass", headerRightX, cardY + 16, {
+        align: "right",
+      });
+
+      // Perforation circles & dotted line (visual ticket feel)
+      const perfRadius = 3.5;
+      const perfXLeft = cardX + 18;
+      const perfXRight = cardX + cardW - 18;
+      const perfYMid = cardY + cardH / 2;
+
+      doc.setFillColor(
+        palette.background.r,
+        palette.background.g,
+        palette.background.b
+      );
+      doc.setDrawColor(
+        palette.cardBorder.r,
+        palette.cardBorder.g,
+        palette.cardBorder.b
+      );
+      doc.circle(perfXLeft, perfYMid, perfRadius, "FD");
+      doc.circle(perfXRight, perfYMid, perfRadius, "FD");
+
+      doc.setDrawColor(148, 163, 184);
+      doc.setLineWidth(0.25);
+      const dashStartX = perfXLeft + perfRadius;
+      const dashEndX = perfXRight - perfRadius;
+      for (let x = dashStartX; x < dashEndX; x += 3) {
+        doc.line(x, perfYMid, x + 1.5, perfYMid);
+      }
+
+      // Shared values
+      const locationLabel =
+        item?.location || item?.city || item?.area || "Location TBA";
+
+      const dateRaw = isEvent ? item?.date : booking.date;
+      const formattedDate = dateRaw
+        ? new Date(dateRaw).toLocaleDateString("en-IN", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })
+        : "Date not set";
+
+      const timeRaw =
+        (isEvent && (item?.startTime || item?.time)) ||
+        booking.startTime ||
+        null;
+
+      const formattedTime = timeRaw
+        ? new Date(timeRaw).toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : null;
+
+      const displayAmount =
+        booking?.totalPrice || booking?.price || item?.price || "—";
+
+      const ticketsCount = booking?.tickets || 1;
+      const passLabel = isEvent
+        ? `${ticketsCount} ticket${ticketsCount > 1 ? "s" : ""}`
+        : `${booking.duration || 1}-day flex pass`;
+
+      const bookingStatusLabel = (() => {
+        const status = booking?.status;
+        if (!status) return "Active";
+        return status
+          .replace(/-/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+      })();
+
+      const statusColor = (() => {
+        if (booking?.status === "cancelled") {
+          return { r: 248, g: 113, b: 113 }; // red-400
+        }
+        if (booking?.status === "checked-in" || booking?.status === "completed") {
+          return { r: 34, g: 197, b: 94 }; // green-500
+        }
+        return accentSky; // default sky
+      })();
+
+      const qrImage =
+        booking?.qrCodeImage ||
+        booking?.qrImage ||
+        booking?.qrCodeDataUrl ||
+        booking?.qrCode ||
+        null;
+
+      // Content columns
+      const contentPaddingX = cardX + 14;
+      const contentTopY = cardY + headerH + 10;
+      const rightColX = cardX + cardW * 0.62;
+
+      // Left column — main info
+      let y = contentTopY;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(
+        palette.textMain.r,
+        palette.textMain.g,
+        palette.textMain.b
+      );
+      doc.text("Booking confirmed", contentPaddingX, y);
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(
+        palette.textMuted.r,
+        palette.textMuted.g,
+        palette.textMuted.b
+      );
+      const subtitle = isEvent
+        ? `Your ${activityLabel.toLowerCase()} is locked in. Check in with this ticket.`
+        : `Your ${activityLabel.toLowerCase()} is active. Show this pass when you arrive.`;
+      doc.text(subtitle, contentPaddingX, y);
+      y += 10;
+
+      // Status pill + short ID
+      const pillX = contentPaddingX;
+      const pillY = y - 5;
+      const pillPaddingX = 3;
+      const pillHeight = 7;
+      const pillText = bookingStatusLabel.toUpperCase();
+      doc.setFontSize(7.5);
+      const pillTextWidth = doc.getTextWidth(pillText) + pillPaddingX * 2;
+
+      doc.setFillColor(statusColor.r, statusColor.g, statusColor.b);
+      doc.setDrawColor(statusColor.r, statusColor.g, statusColor.b);
+      doc.roundedRect(
+        pillX,
+        pillY,
+        pillTextWidth + 4,
+        pillHeight + 2,
+        3,
+        3,
+        "FD"
+      );
+      doc.setTextColor(255, 255, 255);
+      doc.text(pillText, pillX + pillPaddingX + 2, pillY + 5.2);
+
+      const shortPillText = `#${shortId}`;
+      const shortPillX = pillX + pillTextWidth + 10;
+      const shortPillWidth =
+        doc.getTextWidth(shortPillText) + pillPaddingX * 2;
+
+      doc.setFillColor(15, 23, 42);
+      doc.setDrawColor(15, 23, 42);
+      doc.roundedRect(
+        shortPillX,
+        pillY,
+        shortPillWidth + 4,
+        pillHeight + 2,
+        3,
+        3,
+        "FD"
+      );
+      doc.setTextColor(248, 250, 252);
+      doc.text(shortPillText, shortPillX + pillPaddingX + 2, pillY + 5.2);
+
+      y += 11;
+
+      // Activity name
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(
+        palette.textMain.r,
+        palette.textMain.g,
+        palette.textMain.b
       );
       doc.text(
-        `Price: ₹${booking.price || item?.price || "N/A"}`,
-        15,
-        126
+        item?.name ||
+          (isEvent ? "Passiify Experience" : "Passiify Partner Location"),
+        contentPaddingX,
+        y
       );
-      if (bookingCode) doc.text(`Booking Code: ${bookingCode}`, 15, 136);
+      y += 6;
+
+      // "Hosted by" / "Verified"
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(
+        palette.textMuted.r,
+        palette.textMuted.g,
+        palette.textMuted.b
+      );
+      doc.text(
+        isEvent
+          ? `Hosted by ${item?.organizer || "Passiify Community"}`
+          : "Verified by Passiify",
+        contentPaddingX,
+        y
+      );
+      y += 10;
+
+      // Details grid (2 columns)
+      doc.setFontSize(7.5);
+      doc.setTextColor(
+        palette.textSoft.r,
+        palette.textSoft.g,
+        palette.textSoft.b
+      );
+      const colGap = 68;
+      const col2X = contentPaddingX + colGap;
+
+      // Row 1: Location / Date & time
+      doc.text("LOCATION", contentPaddingX, y);
+      doc.setTextColor(
+        palette.textMain.r,
+        palette.textMain.g,
+        palette.textMain.b
+      );
+      doc.setFontSize(9);
+      doc.text(locationLabel, contentPaddingX, y + 5);
+
+      doc.setFontSize(7.5);
+      doc.setTextColor(
+        palette.textSoft.r,
+        palette.textSoft.g,
+        palette.textSoft.b
+      );
+      doc.text("DATE & TIME", col2X, y);
+      doc.setFontSize(9);
+      doc.setTextColor(
+        palette.textMain.r,
+        palette.textMain.g,
+        palette.textMain.b
+      );
+      const dtLine = formattedTime
+        ? `${formattedDate} · ${formattedTime}`
+        : formattedDate;
+      doc.text(dtLine, col2X, y + 5);
+
+      y += 15;
+
+      // Row 2: Access / Amount
+      doc.setFontSize(7.5);
+      doc.setTextColor(
+        palette.textSoft.r,
+        palette.textSoft.g,
+        palette.textSoft.b
+      );
+      doc.text(isEvent ? "TICKETS" : "ACCESS", contentPaddingX, y);
+      doc.setFontSize(9);
+      doc.setTextColor(
+        palette.textMain.r,
+        palette.textMain.g,
+        palette.textMain.b
+      );
+      doc.text(passLabel, contentPaddingX, y + 5);
+
+      doc.setFontSize(7.5);
+      doc.setTextColor(
+        palette.textSoft.r,
+        palette.textSoft.g,
+        palette.textSoft.b
+      );
+      doc.text("AMOUNT PAID", col2X, y);
+      doc.setFontSize(9.5);
+      doc.setTextColor(22, 163, 74); // green-ish for price
+      doc.text(`₹${displayAmount}`, col2X, y + 5);
+
+      // Right column — QR + summary
+      const qrBoxSize = 46;
+      const qrBoxX = rightColX + 6;
+      const qrBoxY = contentTopY + 4;
+
+      doc.setDrawColor(
+        palette.cardBorder.r,
+        palette.cardBorder.g,
+        palette.cardBorder.b
+      );
+      doc.setFillColor(
+        palette.background.r,
+        palette.background.g,
+        palette.background.b
+      );
+      doc.roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 3, 3, "FD");
+
+      if (
+        qrImage &&
+        typeof qrImage === "string" &&
+        qrImage.startsWith("data:")
+      ) {
+        try {
+          const type = qrImage.includes("image/jpeg") ? "JPEG" : "PNG";
+          doc.addImage(
+            qrImage,
+            type,
+            qrBoxX + 3,
+            qrBoxY + 3,
+            qrBoxSize - 6,
+            qrBoxSize - 6
+          );
+        } catch (e) {
+          console.warn("Could not embed QR in PDF:", e);
+          doc.setFontSize(7);
+          doc.setTextColor(
+            palette.textSoft.r,
+            palette.textSoft.g,
+            palette.textSoft.b
+          );
+          doc.text("QR unavailable", qrBoxX + 8, qrBoxY + qrBoxSize / 2);
+        }
+      } else {
+        doc.setFontSize(7);
+        doc.setTextColor(
+          palette.textSoft.r,
+          palette.textSoft.g,
+          palette.textSoft.b
+        );
+        doc.text("Show this ticket", qrBoxX + 7, qrBoxY + qrBoxSize / 2 - 2);
+        doc.text("at check-in", qrBoxX + 10, qrBoxY + qrBoxSize / 2 + 3);
+      }
+
+      // QR caption
+      doc.setFontSize(8);
+      doc.setTextColor(
+        palette.textMuted.r,
+        palette.textMuted.g,
+        palette.textMuted.b
+      );
+      doc.text(
+        "Scan at entry or show to the host.",
+        qrBoxX,
+        qrBoxY + qrBoxSize + 8
+      );
+
+      // Mini summary under QR
+      const summaryY = qrBoxY + qrBoxSize + 16;
+      doc.setFontSize(8);
+      doc.setTextColor(
+        palette.textSoft.r,
+        palette.textSoft.g,
+        palette.textSoft.b
+      );
+      doc.text("Summary", qrBoxX, summaryY);
+      doc.setFontSize(8.5);
+      doc.setTextColor(
+        palette.textMain.r,
+        palette.textMain.g,
+        palette.textMain.b
+      );
+      doc.text(
+        `${activityLabel} · ${isEvent ? "Experience" : "Pass"}`,
+        qrBoxX,
+        summaryY + 4
+      );
+      doc.setFontSize(8);
+      doc.setTextColor(
+        palette.textMuted.r,
+        palette.textMuted.g,
+        palette.textMuted.b
+      );
+      doc.text(`Booking code: ${shortId}`, qrBoxX, summaryY + 9);
+
+      // Fine print / footer
+      const footerY = cardY + cardH - 14;
+      doc.setFontSize(7.2);
+      doc.setTextColor(
+        palette.textSoft.r,
+        palette.textSoft.g,
+        palette.textSoft.b
+      );
+      doc.text(
+        "Carry a valid ID matching the name on this booking. Do not share this ticket publicly. For any issues, contact Passiify support with your booking code.",
+        cardX + 6,
+        footerY,
+        { maxWidth: cardW - 12 }
+      );
+
+      doc.setFontSize(7);
+      doc.text(
+        "© Passiify — India’s flexible fitness & experience pass platform.",
+        cardX + 6,
+        footerY + 6
+      );
+
+      doc.save(
+        `Passiify_${isEvent ? "Experience" : "Session"}_Ticket_${
+          bookingCode || "Booking"
+        }.pdf`
+      );
+    } catch (err) {
+      console.error("Error generating ticket PDF:", err);
+      alert("Could not generate your ticket PDF. Please try again.");
+    } finally {
+      setDownloading(false);
     }
-
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128);
-    doc.text(
-      "Please show this ticket at the venue. Verified via Passiify Dashboard.",
-      15,
-      154,
-      { maxWidth: 180 }
-    );
-
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    doc.text(
-      "© Passiify — India’s flexible fitness & experience pass platform.",
-      15,
-      192
-    );
-
-    doc.save(
-      `Passiify_${isEvent ? "Event" : "Gym"}_Ticket_${
-        bookingCode || "Booking"
-      }.pdf`
-    );
   };
 
-  /* 🔄 Shared computed values */
+  /* 🔄 Shared computed values for on-screen UI */
   const isEvent = type === "event";
   const item = isEvent ? booking?.event : booking?.gym;
+  const activityLabel = getActivityLabel(isEvent, item);
 
   const formattedDate = (() => {
     if (!booking || !item) return "Date not available";
@@ -310,7 +743,7 @@ export default function BookingSuccess() {
             to={isEventFromState ? "/events" : "/explore"}
             className="px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.03] transition"
           >
-            Browse {isEventFromState ? "events" : "gyms"}
+            Browse {isEventFromState ? "experiences" : "places"}
           </Link>
         </div>
       </div>
@@ -336,10 +769,10 @@ export default function BookingSuccess() {
             className="inline-flex items-center text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-orange-300 transition"
           >
             <ArrowLeft size={16} className="mr-1" />
-            Back to {isEvent ? "experiences" : "gyms"}
+            Back to {isEvent ? "experiences" : "places"}
           </button>
           <span className="hidden sm:inline text-[11px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-            Passiify · {isEvent ? "Experience ticket" : "Gym pass"}
+            Passiify · {isEvent ? "Experience ticket" : "Session pass"}
           </span>
         </div>
       </header>
@@ -356,12 +789,12 @@ export default function BookingSuccess() {
                     Passiify ticket
                   </p>
                   <h1 className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight">
-                    {isEvent ? "Event booked" : "Gym pass confirmed"}
+                    Booking confirmed
                   </h1>
                   <p className="text-[11px] sm:text-xs mt-1.5 opacity-85 max-w-xs">
                     {isEvent
-                      ? "Your spot is locked in. We just sent all details to your email."
-                      : "Your day pass is active. Show this at the front desk when you arrive."}
+                      ? `Your ${activityLabel.toLowerCase()} is locked in. We just sent all details to your email.`
+                      : `Your ${activityLabel.toLowerCase()} is active. Show this at the front desk or check-in desk when you arrive.`}
                   </p>
                 </div>
 
@@ -391,12 +824,15 @@ export default function BookingSuccess() {
                 <div>
                   <h2 className="text-lg sm:text-xl font-semibold leading-snug">
                     {item?.name ||
-                      (isEvent ? "Passiify Experience" : "Passiify Partner Gym")}
+                      (isEvent ? "Passiify Experience" : "Passiify Partner Location")}
                   </h2>
                   <p className="mt-1 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                     {isEvent
                       ? `Hosted by ${item?.organizer || "Passiify Community"}`
                       : "Verified by the Passiify team"}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                    {activityLabel}
                   </p>
                 </div>
                 {booking.bookingCode && (
@@ -436,7 +872,7 @@ export default function BookingSuccess() {
 
                 <div className="space-y-1.5">
                   <p className="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px]">
-                    {isEvent ? "Tickets" : "Pass type"}
+                    {isEvent ? "Tickets" : "Access"}
                   </p>
                   {isEvent ? (
                     <p className="flex items-center">
@@ -446,7 +882,7 @@ export default function BookingSuccess() {
                   ) : (
                     <p className="flex items-center">
                       <Dumbbell className="w-3.5 h-3.5 mr-1.5 text-emerald-500 dark:text-emerald-400" />
-                      {booking.duration || 1}-day pass
+                      {booking.duration || 1}-day flex pass
                     </p>
                   )}
                 </div>
@@ -540,7 +976,7 @@ export default function BookingSuccess() {
                     <p className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-100">
                       {isEvent
                         ? policySummary
-                        : "Gym passes may follow the gym’s own cancellation rules. For issues, contact Passiify support with your booking code."}
+                        : "Passes may follow the partner’s own cancellation rules. For issues, contact Passiify support with your booking code."}
                     </p>
                   </div>
                 </div>
@@ -550,17 +986,22 @@ export default function BookingSuccess() {
               <div className="mt-7 flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleDownload}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-400 text-white text-xs sm:text-sm font-semibold py-3 shadow-[0_18px_55px_rgba(15,23,42,0.65)] hover:scale-[1.02] hover:shadow-[0_22px_70px_rgba(15,23,42,0.8)] transition-transform"
+                  disabled={downloading}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-400 text-white text-xs sm:text-sm font-semibold py-3 shadow-[0_18px_55px_rgba(15,23,42,0.65)] hover:scale-[1.02] hover:shadow-[0_22px_70px_rgba(15,23,42,0.8)] transition-transform disabled:opacity-70 disabled:hover:scale-100"
                 >
-                  <Download className="w-4 h-4" />
-                  Download ticket
+                  {downloading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {downloading ? "Preparing ticket…" : "Download ticket"}
                 </button>
 
                 <Link
                   to={isEvent ? "/my-event-bookings" : "/my-bookings"}
                   className="flex-1 inline-flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold py-3 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 transition"
                 >
-                  View my {isEvent ? "event" : "gym"} bookings
+                  View my {isEvent ? "event" : "session"} bookings
                 </Link>
               </div>
 
@@ -586,12 +1027,12 @@ export default function BookingSuccess() {
                 One ticket, no membership.
                 <br />
                 <span className="opacity-85">
-                  Move, explore and meet people wherever you land.
+                  Drop into gyms, yoga, MMA, dance and more — on your terms.
                 </span>
               </p>
               <p className="text-xs opacity-85">
                 Built for travellers, expats and locals who hate lock-ins but
-                love good sessions, good hosts and good stories.
+                love great sessions, great hosts and great stories.
               </p>
             </div>
 
