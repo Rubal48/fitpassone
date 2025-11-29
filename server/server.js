@@ -18,28 +18,23 @@ import adminRoutes from "./routes/adminRoutes.js";
 import testEmailRoute from "./routes/testEmailRoute.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import eventBookingRoutes from "./routes/eventBookingRoutes.js";
-import adminEventRoutes from "./routes/adminEventRoutes.js"; // ⭐ Event admin routes
-import paymentRoutes from "./routes/paymentRoutes.js";       // ⭐ Razorpay payments
+import adminEventRoutes from "./routes/adminEventRoutes.js"; // Event admin routes
+import paymentRoutes from "./routes/paymentRoutes.js";       // Razorpay payments
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// =========================
-//       CORE MIDDLEWARE
-// =========================
-app.use(cors()); // (you can later restrict origins)
+// ---------- CORE MIDDLEWARE ----------
+app.use(cors());
 app.use(express.json());
 
-// ✅ Path setup (for static uploads)
+// ---------- STATIC UPLOADS ----------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Serve uploaded images
 app.use("/uploads", express.static(path.join(__dirname, "/uploads")));
 
-// =========================
-//       API ROUTES
-// =========================
+// ---------- API ROUTES ----------
 app.use("/api/auth", authRoutes);
 app.use("/api/gyms", gymRoutes);
 app.use("/api/bookings", bookingRoutes);
@@ -49,19 +44,13 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/test", testEmailRoute);
 app.use("/api/events", eventRoutes);
 app.use("/api/event-bookings", eventBookingRoutes);
-
-// ⭐ Razorpay payments (NEW)
 app.use("/api/payments", paymentRoutes);
-
-// ⭐ Admin event routes
 app.use("/api/admin/events", adminEventRoutes);
 
-// =========================
-//   HEALTH CHECK ROUTES
-// =========================
-app.get("/", (req, res) => res.send("🚀 Passiify Backend is Running"));
+// ---------- HEALTH CHECK ----------
+app.get("/", (_req, res) => res.send("🚀 Passiify Backend is Running"));
 
-app.get("/api/health", (req, res) => {
+app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
     message: "✅ Passiify backend is running fine!",
@@ -69,10 +58,8 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// =========================
-//       ERROR HANDLER
-// =========================
-app.use((err, req, res, next) => {
+// ---------- ERROR HANDLER ----------
+app.use((err, _req, res, _next) => {
   console.error(err.stack);
   const status = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(status).json({
@@ -81,33 +68,31 @@ app.use((err, req, res, next) => {
   });
 });
 
-// =========================
-//   DATABASE + SERVER
-// =========================
+// ---------- DB + SERVER START ----------
 async function startServer() {
-  console.log("🔧 Starting Passiify backend…");
-  console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
-  console.log("🔧 PORT env:", process.env.PORT);
-  console.log("🔧 MONGO_URI present?", !!process.env.MONGO_URI);
-  console.log("🔧 JWT_SECRET present?", !!process.env.JWT_SECRET);
-
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      // Helps Render fail fast if DB is unreachable
-      serverSelectionTimeoutMS: 20000,
-    });
+    console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
+    console.log("🔧 Render PORT env:", process.env.PORT);
+    console.log("🔧 Using PORT:", PORT);
+    console.log("🔧 MONGO_URI present?", !!process.env.MONGO_URI);
+    console.log("🔧 JWT_SECRET present?", !!process.env.JWT_SECRET);
+
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is not defined in environment variables");
+    }
+
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("✅ MongoDB Connected Successfully");
 
-    app.listen(PORT, () => {
+    // 🔑 IMPORTANT: bind to 0.0.0.0 so Render can see the port
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`⚡ Server running on port ${PORT}`);
     });
   } catch (err) {
-    console.error("❌ Failed to start server:", err);
-    // On Render, exit if we can't start properly
+    console.error("❌ Startup error:", err);
+    // On Render this will make the deploy fail instead of hanging with no port
     process.exit(1);
   }
 }
 
 startServer();
-
-export default app;
