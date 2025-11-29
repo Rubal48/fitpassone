@@ -2,7 +2,8 @@
 import axios from "axios";
 
 // ---------- BASE URL RESOLUTION (Vite + CRA + fallback) ----------
-let baseURL = "http://localhost:5000/api";
+// Default: production API on Render
+let baseURL = "https://passiify.onrender.com/api";
 
 try {
   // ✅ Vite style: import.meta.env.VITE_API_BASE_URL
@@ -19,8 +20,8 @@ try {
     baseURL = process.env.REACT_APP_API_BASE_URL.replace(/\/+$/, "") + "/api";
   }
 } catch (e) {
-  // If anything weird happens, just stay with localhost
-  baseURL = "http://localhost:5000/api";
+  // If anything weird happens, just stay with Render API
+  baseURL = "https://passiify.onrender.com/api";
 }
 
 const API = axios.create({
@@ -28,6 +29,7 @@ const API = axios.create({
 });
 
 // ---------- INTERCEPTOR: ATTACH TOKENS ----------
+
 API.interceptors.request.use(
   (config) => {
     const userToken = localStorage.getItem("token");
