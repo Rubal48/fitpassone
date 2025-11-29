@@ -24,17 +24,17 @@ import paymentRoutes from "./routes/paymentRoutes.js";       // Razorpay payment
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ---------- CORE MIDDLEWARE ----------
+// ---------- Core Middleware ----------
 app.use(cors());
 app.use(express.json());
 
-// ---------- STATIC UPLOADS ----------
+// ---------- Static uploads ----------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.use("/uploads", express.static(path.join(__dirname, "/uploads")));
 
-// ---------- API ROUTES ----------
+// ---------- API Routes ----------
 app.use("/api/auth", authRoutes);
 app.use("/api/gyms", gymRoutes);
 app.use("/api/bookings", bookingRoutes);
@@ -47,10 +47,10 @@ app.use("/api/event-bookings", eventBookingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin/events", adminEventRoutes);
 
-// ---------- HEALTH CHECK ----------
-app.get("/", (_req, res) => res.send("🚀 Passiify Backend is Running"));
+// ---------- Health Check ----------
+app.get("/", (req, res) => res.send("🚀 Passiify Backend is Running"));
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
     message: "✅ Passiify backend is running fine!",
@@ -58,8 +58,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// ---------- ERROR HANDLER ----------
-app.use((err, _req, res, _next) => {
+// ---------- Error Handler ----------
+app.use((err, req, res, next) => {
   console.error(err.stack);
   const status = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(status).json({
@@ -68,8 +68,8 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-// ---------- DB + SERVER START ----------
-async function startServer() {
+// ---------- DB Connection (after server starts) ----------
+async function connectDB() {
   try {
     console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
     console.log("🔧 Render PORT env:", process.env.PORT);
@@ -81,18 +81,19 @@ async function startServer() {
       throw new Error("MONGO_URI is not defined in environment variables");
     }
 
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ MongoDB Connected Successfully");
-
-    // 🔑 IMPORTANT: bind to 0.0.0.0 so Render can see the port
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`⚡ Server running on port ${PORT}`);
+    await mongoose.connect(process.env.MONGO_URI, {
+      // optional but helps timeouts
+      serverSelectionTimeoutMS: 20000,
     });
+    console.log("✅ MongoDB Connected Successfully");
   } catch (err) {
-    console.error("❌ Startup error:", err);
-    // On Render this will make the deploy fail instead of hanging with no port
-    process.exit(1);
+    console.error("❌ MongoDB Connection Error:", err);
+    // we don't exit here so Render still sees the port as open
   }
 }
 
-startServer();
+// ---------- Start Server FIRST ----------
+app.listen(PORT, () => {
+  console.log(`⚡ Server running on port ${PORT}`);
+  connectDB();
+});
