@@ -24,8 +24,10 @@ import paymentRoutes from "./routes/paymentRoutes.js";       // ⭐ Razorpay pay
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Core Middleware
-app.use(cors());
+// =========================
+//       CORE MIDDLEWARE
+// =========================
+app.use(cors()); // (you can later restrict origins)
 app.use(express.json());
 
 // ✅ Path setup (for static uploads)
@@ -51,8 +53,7 @@ app.use("/api/event-bookings", eventBookingRoutes);
 // ⭐ Razorpay payments (NEW)
 app.use("/api/payments", paymentRoutes);
 
-// ⭐ Correct way:
-// Frontend calls `/api/admin/events/...`, so backend must register same:
+// ⭐ Admin event routes
 app.use("/api/admin/events", adminEventRoutes);
 
 // =========================
@@ -69,7 +70,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // =========================
-//   ERROR HANDLER
+//       ERROR HANDLER
 // =========================
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -84,28 +85,29 @@ app.use((err, req, res, next) => {
 //   DATABASE + SERVER
 // =========================
 async function startServer() {
+  console.log("🔧 Starting Passiify backend…");
+  console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
+  console.log("🔧 PORT env:", process.env.PORT);
+  console.log("🔧 MONGO_URI present?", !!process.env.MONGO_URI);
+  console.log("🔧 JWT_SECRET present?", !!process.env.JWT_SECRET);
+
   try {
-    console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
-    console.log("🔧 Render PORT env:", process.env.PORT);
-    console.log("🔧 Using PORT:", PORT);
-    console.log("🔧 MONGO_URI present?", !!process.env.MONGO_URI);
-    console.log("🔧 JWT_SECRET present?", !!process.env.JWT_SECRET);
-
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI is not defined in environment variables");
-    }
-
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      // Helps Render fail fast if DB is unreachable
+      serverSelectionTimeoutMS: 20000,
+    });
     console.log("✅ MongoDB Connected Successfully");
 
     app.listen(PORT, () => {
       console.log(`⚡ Server running on port ${PORT}`);
     });
   } catch (err) {
-    console.error("❌ Startup error:", err);
-    // On Render this makes deploy fail fast instead of hanging
+    console.error("❌ Failed to start server:", err);
+    // On Render, exit if we can't start properly
     process.exit(1);
   }
 }
 
 startServer();
+
+export default app;
