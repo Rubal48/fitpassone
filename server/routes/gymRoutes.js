@@ -8,6 +8,48 @@ import verifyToken from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 /* ============================
+   Helper – map passes for dashboard
+============================ */
+
+const mapPassesForDashboard = (gym) => {
+  const raw = Array.isArray(gym.passes) ? gym.passes : [];
+
+  return raw.map((p, idx) => {
+    let basePrice = 0;
+    if (typeof p.basePrice === "number") basePrice = p.basePrice;
+    else if (typeof p.price === "number") basePrice = p.price;
+
+    let salePrice = 0;
+    if (typeof p.salePrice === "number") salePrice = p.salePrice;
+    else if (typeof p.price === "number") salePrice = p.price;
+    else salePrice = basePrice;
+
+    let discountPercent =
+      typeof p.discountPercent === "number" ? p.discountPercent : 0;
+
+    if (basePrice && salePrice && salePrice < basePrice && !discountPercent) {
+      discountPercent = Math.round(((basePrice - salePrice) / basePrice) * 100);
+    } else if (!basePrice || salePrice >= basePrice) {
+      discountPercent = 0;
+    }
+
+    return {
+      id: idx.toString(), // used by PartnerPasses.jsx
+      name: p.name || `${p.duration || 1}-Day Pass`,
+      durationDays: p.duration,
+      basePrice,
+      salePrice,
+      price: salePrice,
+      discountPercent,
+      offerLabel: p.offerLabel || "",
+      maxCheckIns: p.maxCheckIns ?? 0,
+      isActive: p.isActive ?? true,
+      description: p.description || "",
+    };
+  });
+};
+
+/* ============================
    1) PARTNER-OWNED GYM
    (used by Partner Dashboard)
 ============================ */
@@ -72,7 +114,6 @@ router.put(
 
 /* ----------------------------
    DEV HELPER — attach first gym to this user
-   (use once in dev, then remove)
 ---------------------------- */
 
 router.post(
@@ -113,16 +154,7 @@ router.get(
       return res.status(404).json({ message: "Gym not found for this owner." });
     }
 
-    const passes = (gym.passes || []).map((p, idx) => ({
-      id: idx.toString(),
-      name: p.name || `${p.duration || 1}-Day Pass`,
-      durationDays: p.duration,
-      price: p.price,
-      maxCheckIns: p.maxCheckIns ?? 0,
-      isActive: p.isActive ?? true,
-      description: p.description || "",
-    }));
-
+    const passes = mapPassesForDashboard(gym);
     res.json({ passes });
   })
 );
@@ -138,33 +170,107 @@ router.post(
       return res.status(404).json({ message: "Gym not found for this owner." });
     }
 
-    const { name, durationDays, price } = req.body;
+    const {
+      name,
+      durationDays,
+      basePrice,
+      salePrice,
+      price,
+      maxCheckIns,
+      isActive,
+      description,
+      offerLabel,
+    } = req.body;
 
-    if (!durationDays || !price) {
+    if (!durationDays) {
       return res.status(400).json({
-        message: "durationDays and price are required for a pass.",
+        message: "durationDays is required for a pass.",
       });
     }
 
+    const duration = Number(durationDays) || 1;
+
+    let base = basePrice !== undefined && basePrice !== null
+      ? Number(basePrice)
+      : undefined;
+    let sale = salePrice !== undefined && salePrice !== null
+      ? Number(salePrice)
+      : undefined;
+    const flatPrice =
+      price !== undefined && price !== null ? Number(price) : undefined;
+
+    // If only flat price is provided, treat as both
+    if (base === undefined && sale === undefined && flatPrice !== undefined) {
+      base = flatPrice;
+      sale = flatPrice;
+    }
+
+    if (base === undefined && sale !== undefined) base = sale;
+    if (sale === undefined && base !== undefined) sale = base;
+
+    const effectiveBase = base || sale || 0;
+    const effectiveSale = sale || base || 0;
+
+    if (!effectiveBase && !effectiveSale) {
+      return res
+        .status(400)
+        .json({ message: "At least one price (base or sale) is required." });
+    }
+
+    let discountPercent = 0;
+    if (effectiveBase && effectiveSale && effectiveSale < effectiveBase) {
+      discountPercent = Math.round(
+        ((effectiveBase - effectiveSale) / effectiveBase) * 100
+      );
+    }
+
     gym.passes.push({
-      duration: durationDays,
-      price,
+      name: name || `${duration}-Day Pass`,
+      description: description || "",
+      duration,
+      basePrice: effectiveBase,
+      salePrice: effectiveSale,
+      discountPercent,
+      offerLabel: offerLabel || "",
+      maxCheckIns: Number(maxCheckIns) || 0,
+      isActive: typeof isActive === "boolean" ? isActive : true,
+      price: effectiveSale,
     });
 
-    await gym.save();
+    await gym.save(); // pre-save will also recalc gym.price
 
-    const passes = (gym.passes || []).map((p, idx) => ({
-      id: idx.toString(),
-      name: p.name || `${p.duration || 1}-Day Pass`,
-      durationDays: p.duration,
-      price: p.price,
-      maxCheckIns: p.maxCheckIns ?? 0,
-      isActive: p.isActive ?? true,
-      description: p.description || "",
-    }));
+    const passes = mapPassesForDashboard(gym);
 
     res.status(201).json({
       message: "Pass created successfully.",
+      passes,
+    });
+  })
+);
+
+// ✅ DELETE /api/gyms/me/passes/:id -> remove a pass by index
+router.delete(
+  "/me/passes/:id",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const gym = await Gym.findOne({ owner: req.user._id });
+
+    if (!gym) {
+      return res.status(404).json({ message: "Gym not found for this owner." });
+    }
+
+    const index = parseInt(req.params.id, 10);
+    if (Number.isNaN(index) || index < 0 || index >= gym.passes.length) {
+      return res.status(404).json({ message: "Pass not found." });
+    }
+
+    gym.passes.splice(index, 1);
+    await gym.save();
+
+    const passes = mapPassesForDashboard(gym);
+
+    res.json({
+      message: "Pass deleted successfully.",
       passes,
     });
   })
@@ -197,7 +303,7 @@ router.get(
   "/me/stats",
   verifyToken,
   asyncHandler(async (req, res) => {
-    const gym = await Gym.findOne({ owner: req.user._id });
+    const gym = await Gym.findOne({ owner: req.user._._id });
 
     if (!gym) {
       return res.status(404).json({ message: "Gym not found for this owner." });

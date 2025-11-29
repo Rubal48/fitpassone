@@ -128,6 +128,107 @@ const getGymImage = (gym) => {
   return fallbackImages[index];
 };
 
+/* ---------- 🧮 Helper for safe numbers ---------- */
+
+const pickNumber = (...values) => {
+  for (let i = 0; i < values.length; i += 1) {
+    const raw = values[i];
+    if (raw !== undefined && raw !== null && raw !== "") {
+      const num = Number(raw);
+      if (!Number.isNaN(num)) return num;
+    }
+  }
+  return 0;
+};
+
+/* ---------- 🧮 Pricing meta from passes (discount-aware) ---------- */
+
+const getGymPricingMeta = (gym) => {
+  const passes = Array.isArray(gym.passes) ? gym.passes : [];
+
+  // pick the cheapest pass by salePrice (or price/basePrice as fallback)
+  let primaryPass = null;
+  if (passes.length > 0) {
+    primaryPass = passes.reduce((best, current) => {
+      const currentSale = pickNumber(
+        current.salePrice,
+        current.price,
+        current.basePrice
+      );
+
+      if (!best) return current;
+
+      const bestSale = pickNumber(
+        best.salePrice,
+        best.price,
+        best.basePrice
+      );
+
+      if (!bestSale && currentSale) return current;
+      return currentSale && currentSale < bestSale ? current : best;
+    }, null);
+  }
+
+  const baseFromPass = primaryPass
+    ? pickNumber(
+        primaryPass.basePrice,
+        primaryPass.price,
+        gym.basePrice,
+        gym.price
+      )
+    : 0;
+
+  const basePrice =
+    baseFromPass || pickNumber(gym.basePrice, gym.price) || 0;
+
+  let salePrice;
+  if (primaryPass) {
+    salePrice = pickNumber(
+      primaryPass.salePrice,
+      primaryPass.price,
+      basePrice
+    );
+  } else {
+    salePrice = pickNumber(
+      gym.salePrice,
+      gym.price,
+      basePrice
+    );
+  }
+
+  if (!salePrice && basePrice) salePrice = basePrice;
+
+  let discountPercent =
+    primaryPass && typeof primaryPass.discountPercent === "number"
+      ? primaryPass.discountPercent
+      : 0;
+
+  let hasDiscount = false;
+  let savings = 0;
+
+  if (basePrice && salePrice && salePrice < basePrice) {
+    hasDiscount = true;
+    savings = basePrice - salePrice;
+    if (!discountPercent) {
+      discountPercent = Math.round((savings / basePrice) * 100);
+    }
+  } else {
+    discountPercent = 0;
+  }
+
+  return {
+    basePrice: basePrice || 0,
+    salePrice: salePrice || 0,
+    hasDiscount,
+    discountPercent,
+    savings,
+    durationDays:
+      primaryPass && primaryPass.duration ? primaryPass.duration : 1,
+    offerLabel:
+      (primaryPass && primaryPass.offerLabel) || gym.offerLabel || "",
+  };
+};
+
 /* =========================================================
    TOP TRUST STRIP — unified with Home
    ========================================================= */
@@ -139,9 +240,7 @@ function TopTrustStrip({ theme, mode }) {
       style={{
         borderColor: theme.borderSoft,
         background:
-          mode === "dark"
-            ? "rgba(2,6,23,0.9)"
-            : "rgba(255,255,255,0.88)",
+          mode === "dark" ? "rgba(2,6,23,0.9)" : "rgba(255,255,255,0.88)",
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-[11px] md:text-xs">
@@ -586,11 +685,17 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
 
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {gyms.map((gym, index) => {
-          const price = Number(gym.price) || 499;
+          const pricing = getGymPricingMeta(gym);
+          const effectivePrice =
+            pricing.salePrice ||
+            pricing.basePrice ||
+            Number(gym.price) ||
+            499;
+
           const rating = Number(gym.rating) || 4.7;
           const isTrending = index < 3;
-          const isBudget = price <= 500;
-          const isPremium = price >= 900;
+          const isBudget = effectivePrice <= 500;
+          const isPremium = effectivePrice >= 900;
 
           return (
             <article
@@ -627,20 +732,35 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                   }}
                 />
 
-                {/* price pill */}
+                {/* price / offer pill */}
                 <div className="absolute top-3 left-3">
-                  <span
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.9)]"
+                  <div
+                    className="inline-flex flex-col gap-0.5 px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.9)]"
                     style={{
                       backgroundImage: primaryGradient,
                       color: "#020617",
                     }}
                   >
-                    ₹{price}
-                    <span className="text-[9px] uppercase tracking-[0.18em]">
-                      / 1-day pass
-                    </span>
-                  </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-bold">
+                        ₹{effectivePrice}
+                      </span>
+                      <span className="text-[9px] uppercase tracking-[0.18em]">
+                        / {pricing.durationDays || 1}-day pass
+                      </span>
+                    </div>
+                    {pricing.hasDiscount && pricing.basePrice > 0 && (
+                      <div className="flex items-center gap-1 text-[9px]">
+                        <span className="line-through opacity-80">
+                          ₹{pricing.basePrice}
+                        </span>
+                        <span>
+                          · Save ₹{pricing.savings} (
+                          {pricing.discountPercent}% OFF)
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* labels bottom-left */}
@@ -719,7 +839,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                       color: theme.textMuted,
                     }}
                   >
-                    1-day access
+                    {pricing.durationDays || 1}-day access
                   </span>
                 </div>
 
@@ -748,6 +868,14 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                     >
                       Traveller-rated
                     </span>
+                    {pricing.hasDiscount && pricing.savings > 0 && (
+                      <span
+                        className="text-[10px] mt-0.5"
+                        style={{ color: theme.textMuted }}
+                      >
+                        You save ₹{pricing.savings} on this pass today
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-col items-end gap-1">
@@ -967,16 +1095,16 @@ export default function Explore() {
     return Array.from(set);
   }, [gyms]);
 
-  /* Filtering + sorting */
+  /* Filtering + sorting (discount-aware) */
   const filteredGyms = useMemo(() => {
     let list = Array.isArray(gyms) ? [...gyms] : [];
 
     const q = query.toLowerCase().trim();
     if (q) {
       list = list.filter((gym) => {
-        const name = gym.name?.toLowerCase() || "";
-        const city = gym.city?.toLowerCase() || "";
-        const desc = gym.description?.toLowerCase() || "";
+        const name = (gym.name || "").toLowerCase();
+        const city = (gym.city || "").toLowerCase();
+        const desc = (gym.description || "").toLowerCase();
         return name.includes(q) || city.includes(q) || desc.includes(q);
       });
     }
@@ -988,8 +1116,11 @@ export default function Explore() {
       );
     }
 
+    // filter by price/rating using discounted price
     list = list.filter((gym) => {
-      const price = Number(gym.price) || 0;
+      const meta = getGymPricingMeta(gym);
+      const price =
+        meta.salePrice || meta.basePrice || Number(gym.price) || 0;
       const rating = Number(gym.rating) || 4.5;
 
       if (activeFilter === "budget") return price && price <= 500;
@@ -998,9 +1129,16 @@ export default function Explore() {
       return true;
     });
 
+    // sort using discounted price
     list.sort((a, b) => {
-      const priceA = Number(a.price) || 0;
-      const priceB = Number(b.price) || 0;
+      const metaA = getGymPricingMeta(a);
+      const metaB = getGymPricingMeta(b);
+
+      const priceA =
+        metaA.salePrice || metaA.basePrice || Number(a.price) || 0;
+      const priceB =
+        metaB.salePrice || metaB.basePrice || Number(b.price) || 0;
+
       const ratingA = Number(a.rating) || 4.5;
       const ratingB = Number(b.rating) || 4.5;
 

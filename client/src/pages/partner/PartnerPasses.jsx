@@ -9,28 +9,45 @@ const THEME = {
   borderSubtle: "rgba(255, 255, 255, 0.06)",
 };
 
+const initialFormState = {
+  name: "",
+  durationDays: "",
+  basePrice: "",
+  discountPercent: "",
+  maxCheckIns: "",
+  isActive: true,
+  offerLabel: "",
+};
+
 const PartnerPasses = () => {
-  const { gym, isGym, isEventHost } = useOutletContext();
+  const { gym, isGym } = useOutletContext();
+
   const [passes, setPasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    durationDays: "",
-    price: "",
-    maxCheckIns: "",
-    isActive: true,
-  });
+  const [saving, setSaving] = useState(false);
+  const [deletingIndex, setDeletingIndex] = useState(null);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [form, setForm] = useState(initialFormState);
 
+  /* ============================
+     Fetch passes
+  ============================ */
   const fetchPasses = async () => {
-    if (!isGym) return; // 🔒 do nothing if not a gym-type partner
+    if (!isGym) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
-      // Adjust to your backend:
-      // e.g. GET /gyms/me/passes  or  GET /passes?gymId=...
       const res = await API.get("/gyms/me/passes");
-      setPasses(res.data?.passes || res.data || []);
+      const raw = res.data?.passes || res.data || [];
+      // Make sure we always have an index to work with
+      const withIndex = raw.map((p, index) => ({
+        ...p,
+        _index: index,
+      }));
+      setPasses(withIndex);
     } catch (err) {
       console.error("Error loading passes:", err);
     } finally {
@@ -46,39 +63,150 @@ const PartnerPasses = () => {
     }
   }, [isGym]);
 
-  const handleCreate = async (e) => {
+  /* ============================
+     Derived preview values
+  ============================ */
+  const numericBasePrice = Number(form.basePrice) || 0;
+  const numericDiscountPercent = Number(form.discountPercent) || 0;
+
+  const clampedDiscount =
+    numericDiscountPercent < 0
+      ? 0
+      : numericDiscountPercent > 95
+      ? 95
+      : numericDiscountPercent;
+
+  const estimatedSalePrice =
+    numericBasePrice > 0
+      ? Math.round(
+          numericBasePrice - (numericBasePrice * clampedDiscount) / 100
+        )
+      : 0;
+
+  const estimatedSavings =
+    numericBasePrice > 0 && estimatedSalePrice > 0
+      ? numericBasePrice - estimatedSalePrice
+      : 0;
+
+  const resetForm = () => {
+    setForm(initialFormState);
+    setEditingIndex(null);
+  };
+
+  /* ============================
+     Create / update pass
+  ============================ */
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isGym) return;
 
-    setCreating(true);
+    setSaving(true);
     try {
+      const duration = Number(form.durationDays) || 1;
+      const basePrice = Number(form.basePrice) || 0;
+      const discountRaw = Number(form.discountPercent) || 0;
+
+      const discountPercent =
+        discountRaw < 0 ? 0 : discountRaw > 95 ? 95 : discountRaw;
+
+      const salePrice =
+        basePrice > 0
+          ? Math.round(basePrice - (basePrice * discountPercent) / 100)
+          : 0;
+
       const payload = {
-        name: form.name,
-        durationDays: Number(form.durationDays) || 1,
-        price: Number(form.price) || 0,
+        name: (form.name || "").trim(),
+        duration,
+        durationDays: duration, // compatibility
+        basePrice,
+        salePrice,
+        discountPercent,
+        price: salePrice, // legacy compatibility
         maxCheckIns: Number(form.maxCheckIns) || 0,
-        isActive: form.isActive,
+        isActive: !!form.isActive,
+        offerLabel: form.offerLabel?.trim() || undefined,
       };
 
-      // Adjust to your backend:
-      // e.g. POST /gyms/me/passes
-      await API.post("/gyms/me/passes", payload);
-      setForm({
-        name: "",
-        durationDays: "",
-        price: "",
-        maxCheckIns: "",
-        isActive: true,
-      });
+      if (editingIndex !== null && editingIndex !== undefined) {
+        // Update existing pass at this index
+        await API.put(`/gyms/me/passes/${editingIndex}`, payload);
+      } else {
+        // Create new pass
+        await API.post("/gyms/me/passes", payload);
+      }
+
+      resetForm();
       fetchPasses();
     } catch (err) {
-      console.error("Error creating pass:", err);
+      console.error("Error saving pass:", err);
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
 
-  // 🧱 If this is an event host, show info instead of passes UI
+  /* ============================
+     Edit existing pass
+  ============================ */
+  const handleEditClick = (p, index) => {
+    // Derive basePrice if it's missing but we have salePrice + discount
+    let basePrice = 0;
+    if (typeof p.basePrice === "number") {
+      basePrice = p.basePrice;
+    } else if (typeof p.mrp === "number") {
+      basePrice = p.mrp;
+    } else if (
+      typeof p.salePrice === "number" &&
+      typeof p.discountPercent === "number" &&
+      p.discountPercent > 0
+    ) {
+      basePrice = Math.round(
+        (p.salePrice * 100) / (100 - p.discountPercent)
+      );
+    } else if (typeof p.price === "number") {
+      basePrice = p.price;
+    }
+
+    setEditingIndex(index);
+    setForm({
+      name: p.name || "",
+      durationDays: p.durationDays || p.duration || "",
+      basePrice: basePrice || "",
+      discountPercent:
+        typeof p.discountPercent === "number" ? p.discountPercent : "",
+      maxCheckIns:
+        typeof p.maxCheckIns === "number" ? p.maxCheckIns : "",
+      isActive:
+        typeof p.isActive === "boolean" ? p.isActive : true,
+      offerLabel: p.offerLabel || "",
+    });
+  };
+
+  /* ============================
+     Delete pass
+  ============================ */
+  const handleDelete = async (index) => {
+    const confirmed = window.confirm(
+      "Remove this pass? It will no longer be visible to users."
+    );
+    if (!confirmed) return;
+
+    setDeletingIndex(index);
+    try {
+      await API.delete(`/gyms/me/passes/${index}`);
+      if (editingIndex === index) {
+        resetForm();
+      }
+      fetchPasses();
+    } catch (err) {
+      console.error("Error deleting pass:", err);
+    } finally {
+      setDeletingIndex(null);
+    }
+  };
+
+  /* ============================
+     Non-gym partners
+  ============================ */
   if (!isGym) {
     return (
       <div className="space-y-4">
@@ -91,10 +219,9 @@ const PartnerPasses = () => {
           </h1>
           <p className="text-xs text-gray-400 mt-1 max-w-xl">
             This account is set up as an event host. You can manage your events
-            and tickets from the{" "}
-            <span className="font-medium">My Events</span> and{" "}
-            <span className="font-medium">Ticket Sales</span> sections instead
-            of creating gym passes.
+            and tickets from the <span className="font-medium">My Events</span>{" "}
+            and <span className="font-medium">Ticket Sales</span> sections
+            instead of creating gym passes.
           </p>
         </div>
 
@@ -113,7 +240,9 @@ const PartnerPasses = () => {
     );
   }
 
-  // 🏋️ Gym partner view (full pass management)
+  /* ============================
+     Gym partner view
+  ============================ */
   return (
     <div className="space-y-5">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -122,29 +251,37 @@ const PartnerPasses = () => {
             passes
           </p>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-            Flexible passes for {gym?.name || "your gym"}
+            Flexible passes & discounts for {gym?.name || "your gym"}
           </h1>
           <p className="text-xs text-gray-400 mt-1 max-w-xl">
-            Create daily, weekly or pack-based passes and control pricing,
-            limits and availability.
+            Set MRP and discounts for day, week or pack-based passes. Members
+            will see the discounted price and how much they save on the Explore
+            & booking pages.
           </p>
         </div>
       </div>
 
-      {/* Create pass form */}
+      {/* Create / edit pass form */}
       <div
         className="rounded-2xl border p-4 space-y-3"
         style={{ backgroundColor: THEME.card, borderColor: THEME.borderSubtle }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">Create new pass</h2>
+          <h2 className="text-sm font-medium">
+            {editingIndex !== null && editingIndex !== undefined
+              ? "Edit pass"
+              : "Create new pass"}
+          </h2>
           <span className="text-[11px] text-gray-400">
-            Keep passes simple & clear for users
+            {editingIndex !== null && editingIndex !== undefined
+              ? "Update MRP or discount, then save."
+              : "Keep passes simple & clear for users"}
           </span>
         </div>
+
         <form
-          className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs"
-          onSubmit={handleCreate}
+          className="grid grid-cols-1 md:grid-cols-6 gap-3 text-xs"
+          onSubmit={handleSubmit}
         >
           <div className="md:col-span-2">
             <label className="block mb-1 text-[11px] text-gray-400">
@@ -170,7 +307,7 @@ const PartnerPasses = () => {
               type="number"
               min="1"
               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs outline-none focus:border-orange-500"
-              placeholder="7"
+              placeholder="1, 3, 7…"
               value={form.durationDays}
               onChange={(e) =>
                 setForm((f) => ({ ...f, durationDays: e.target.value }))
@@ -181,18 +318,50 @@ const PartnerPasses = () => {
 
           <div>
             <label className="block mb-1 text-[11px] text-gray-400">
-              Price (₹)
+              MRP (₹)
             </label>
             <input
               type="number"
               min="0"
               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs outline-none focus:border-orange-500"
-              placeholder="599"
-              value={form.price}
+              placeholder="e.g. 600"
+              value={form.basePrice}
               onChange={(e) =>
-                setForm((f) => ({ ...f, price: e.target.value }))
+                setForm((f) => ({ ...f, basePrice: e.target.value }))
               }
               required
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-[11px] text-gray-400">
+              Discount (%)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="95"
+              className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs outline-none focus:border-orange-500"
+              placeholder="e.g. 20"
+              value={form.discountPercent}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, discountPercent: e.target.value }))
+              }
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-[11px] text-gray-400">
+              Offer label (optional)
+            </label>
+            <input
+              type="text"
+              className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs outline-none focus:border-orange-500"
+              placeholder="Launch offer, Weekend deal…"
+              value={form.offerLabel}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, offerLabel: e.target.value }))
+              }
             />
           </div>
 
@@ -212,35 +381,73 @@ const PartnerPasses = () => {
             />
           </div>
 
-          <div className="flex items-end gap-2 md:col-span-5 justify-between">
-            <label className="inline-flex items-center gap-2 text-[11px] text-gray-300">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, isActive: e.target.checked }))
-                }
-                className="w-3.5 h-3.5 rounded border border-white/20 bg-black/60"
-              />
-              Active & visible to users
-            </label>
-            <button
-              type="submit"
-              disabled={creating}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs bg-gradient-to-r from-orange-500 to-amber-400 text-black font-medium shadow shadow-orange-500/40 disabled:opacity-60"
-            >
-              {creating ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Creating…
-                </>
-              ) : (
-                <>
-                  <Plus className="w-3.5 h-3.5" />
-                  Create pass
-                </>
+          {/* Preview + active toggle + submit */}
+          <div className="md:col-span-6 flex flex-col md:flex-row md:items-end md:justify-between gap-3 pt-1">
+            <div className="space-y-1 text-[11px] text-gray-300">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, isActive: e.target.checked }))
+                  }
+                  className="w-3.5 h-3.5 rounded border border-white/20 bg-black/60"
+                />
+                Active & visible to users
+              </label>
+
+              <div className="text-[11px] text-gray-300">
+                {numericBasePrice > 0 ? (
+                  <>
+                    User sees:{" "}
+                    <span className="font-semibold">
+                      ₹{estimatedSalePrice || numericBasePrice}
+                    </span>{" "}
+                    {clampedDiscount > 0 && estimatedSavings > 0 && (
+                      <span className="text-emerald-300">
+                        ({clampedDiscount}% OFF · You save ₹{estimatedSavings})
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  "Enter MRP and discount to see what users will pay."
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 md:justify-end">
+              {editingIndex !== null && editingIndex !== undefined && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-3 py-2 rounded-xl text-xs border border-white/15 text-gray-200 bg-black/40 hover:bg-black/60"
+                  disabled={saving}
+                >
+                  Cancel edit
+                </button>
               )}
-            </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs bg-gradient-to-r from-orange-500 to-amber-400 text-black font-medium shadow shadow-orange-500/40 disabled:opacity-60"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {editingIndex !== null && editingIndex !== undefined
+                      ? "Saving…"
+                      : "Creating…"}
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    {editingIndex !== null && editingIndex !== undefined
+                      ? "Save changes"
+                      : "Create pass"}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -253,7 +460,7 @@ const PartnerPasses = () => {
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <h2 className="text-sm font-medium">Existing passes</h2>
           <p className="text-[11px] text-gray-400">
-            {passes.length} {passes.length === 1 ? "pass" : "passes"} active
+            {passes.length} {passes.length === 1 ? "pass" : "passes"} total
           </p>
         </div>
 
@@ -273,7 +480,7 @@ const PartnerPasses = () => {
                 <tr>
                   <th className="text-left px-4 py-2 font-medium">Name</th>
                   <th className="text-left px-4 py-2 font-medium">Duration</th>
-                  <th className="text-left px-4 py-2 font-medium">Price</th>
+                  <th className="text-left px-4 py-2 font-medium">Pricing</th>
                   <th className="text-left px-4 py-2 font-medium">
                     Max check-ins
                   </th>
@@ -282,53 +489,125 @@ const PartnerPasses = () => {
                 </tr>
               </thead>
               <tbody>
-                {passes.map((p) => (
-                  <tr
-                    key={p._id || p.id}
-                    className="border-t border-white/5 hover:bg-white/5"
-                  >
-                    <td className="px-4 py-2">
-                      <div className="font-medium text-gray-100">
-                        {p.name}
-                      </div>
-                      <div className="text-[11px] text-gray-400">
-                        {p.description || "No description"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      {p.durationDays || p.duration || "-"} days
-                    </td>
-                    <td className="px-4 py-2">
-                      ₹{(p.price || 0).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-2">
-                      {p.maxCheckIns === 0 || p.maxCheckIns == null
-                        ? "Unlimited"
-                        : p.maxCheckIns}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${
-                          p.isActive
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40"
-                            : "bg-gray-500/10 text-gray-300 border border-gray-500/40"
-                        }`}
-                      >
-                        {p.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        <button className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button className="p-1.5 rounded-lg bg-white/5 hover:bg-red-600/40">
-                          <Trash2 className="w-3.5 h-3.5 text-red-300" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {passes.map((p, index) => {
+                  // derive pricing safely
+                  let basePrice =
+                    typeof p.basePrice === "number"
+                      ? p.basePrice
+                      : typeof p.mrp === "number"
+                      ? p.mrp
+                      : typeof p.price === "number"
+                      ? p.price
+                      : 0;
+
+                  let salePrice =
+                    typeof p.salePrice === "number"
+                      ? p.salePrice
+                      : typeof p.price === "number"
+                      ? p.price
+                      : basePrice;
+
+                  const hasDiscount =
+                    basePrice && salePrice && salePrice < basePrice;
+
+                  let discountPercent =
+                    typeof p.discountPercent === "number" &&
+                    p.discountPercent > 0
+                      ? p.discountPercent
+                      : hasDiscount
+                      ? Math.round(
+                          ((basePrice - salePrice) / basePrice) * 100
+                        )
+                      : 0;
+
+                  if (discountPercent < 0) discountPercent = 0;
+
+                  const savings =
+                    basePrice && salePrice && salePrice < basePrice
+                      ? basePrice - salePrice
+                      : 0;
+
+                  return (
+                    <tr
+                      key={index}
+                      className="border-t border-white/5 hover:bg-white/5"
+                    >
+                      <td className="px-4 py-2">
+                        <div className="font-medium text-gray-100">
+                          {p.name || "Unnamed pass"}
+                        </div>
+                        <div className="text-[11px] text-gray-400">
+                          {p.offerLabel
+                            ? p.offerLabel
+                            : p.description || "No description"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        {p.durationDays || p.duration || "-"} days
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-col">
+                          <div className="text-gray-100">
+                            ₹{(salePrice || 0).toLocaleString()}
+                          </div>
+                          {hasDiscount && (
+                            <div className="text-[11px] text-emerald-300">
+                              <span className="line-through text-gray-400 mr-1">
+                                ₹{(basePrice || 0).toLocaleString()}
+                              </span>
+                              {discountPercent}% OFF · Save ₹
+                              {savings.toLocaleString()}
+                            </div>
+                          )}
+                          {!hasDiscount && basePrice > 0 && (
+                            <div className="text-[11px] text-gray-400">
+                              Standard price (no discount)
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        {p.maxCheckIns === 0 || p.maxCheckIns == null
+                          ? "Unlimited"
+                          : p.maxCheckIns}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${
+                            p.isActive
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40"
+                              : "bg-gray-500/10 text-gray-300 border border-gray-500/40"
+                          }`}
+                        >
+                          {p.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(p, index)}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(index)}
+                            disabled={deletingIndex === index}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-red-600/40 disabled:opacity-60"
+                          >
+                            {deletingIndex === index ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-red-300" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5 text-red-300" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

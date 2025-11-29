@@ -55,7 +55,29 @@ const bookingSchema = new mongoose.Schema(
     /* --- Core Booking Info --- */
     date: { type: Date, required: true },
     duration: { type: Number, required: true },
+
+    /**
+     * FINAL amount the user pays for this booking
+     * after all offers/coupons/platform discounts.
+     */
     price: { type: Number, required: true },
+
+    /* --- Pricing Snapshot (MRP vs discount) --- */
+    /**
+     * basePrice  -> Original MRP / listed price at time of booking
+     * salePrice  -> Price after Passiify offer (before extra coupons)
+     * discountPercent -> (basePrice - salePrice) / basePrice * 100
+     * offerLabel -> e.g. "Launch Offer", "New Year Sale", "Early Bird"
+     *
+     * NOTE:
+     * - For old bookings or no-offer bookings, basePrice/salePrice may be equal.
+     * - Controllers should store a snapshot here so you always know
+     *   what discount was applied when the booking was created.
+     */
+    basePrice: { type: Number },
+    salePrice: { type: Number },
+    discountPercent: { type: Number, default: 0 },
+    offerLabel: String,
 
     /* --- Usage Window --- */
     startDate: { type: Date },
@@ -94,6 +116,12 @@ const bookingSchema = new mongoose.Schema(
     currency: { type: String, default: "INR" },
     platformFee: { type: Number, default: 0 },
     gymPayout: Number,
+
+    /**
+     * couponCode       -> any code applied (e.g. PASS10)
+     * discountAmount   -> total discount in ₹ applied on this booking
+     *                    (can include both offer + coupon if you want)
+     */
     couponCode: String,
     discountAmount: { type: Number, default: 0 },
 
@@ -151,6 +179,20 @@ bookingSchema.pre("save", function (next) {
     const expiry = new Date(this.startDate);
     expiry.setDate(expiry.getDate() + this.duration);
     this.expiresAt = expiry;
+  }
+
+  // 🧮 Backfill base/sale price for old bookings if missing
+  if (!this.basePrice && this.price && !this.salePrice) {
+    this.basePrice = this.price;
+    this.salePrice = this.price;
+  }
+
+  // 🧮 Auto-calc discountPercent if we have a real offer
+  if (this.basePrice && this.salePrice && this.salePrice < this.basePrice) {
+    const diff = this.basePrice - this.salePrice;
+    this.discountPercent = Math.round((diff / this.basePrice) * 100);
+  } else {
+    this.discountPercent = 0;
   }
 
   next();

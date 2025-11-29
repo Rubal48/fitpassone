@@ -1,9 +1,9 @@
 // src/utils/api.js
 import axios from "axios";
 
-// ---------- BASE URL RESOLUTION (Vite + CRA + fallback) ----------
-// Default: production API on Render
-let baseURL = "https://passiify.onrender.com/api";
+// ---------- BASE URL RESOLUTION (Dev vs Production) ----------
+
+let baseURL = "http://localhost:5000/api"; // default for localhost dev
 
 try {
   // ✅ Vite style: import.meta.env.VITE_API_BASE_URL
@@ -16,20 +16,39 @@ try {
     baseURL = import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, "") + "/api";
   }
   // ✅ CRA style: process.env.REACT_APP_API_BASE_URL
-  else if (process.env.REACT_APP_API_BASE_URL) {
+  else if (typeof process !== "undefined" && process.env.REACT_APP_API_BASE_URL) {
     baseURL = process.env.REACT_APP_API_BASE_URL.replace(/\/+$/, "") + "/api";
   }
+  // ✅ No env set → choose based on where the app is running
+  else if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+
+    const isLocal =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.endsWith(".local");
+
+    // 🖥 Local dev → talk to local backend
+    if (isLocal) {
+      baseURL = "http://localhost:5000/api";
+    } else {
+      // 🌐 Production (Vercel / custom domain) → talk to Render backend
+      baseURL = "https://passiify.onrender.com/api";
+    }
+  }
 } catch (e) {
-  // If anything weird happens, just stay with Render API
-  baseURL = "https://passiify.onrender.com/api";
+  // If anything weird happens, just stay with localhost (dev mode)
+  baseURL = "http://localhost:5000/api";
 }
+
+console.log("[Passiify] API baseURL =", baseURL);
 
 const API = axios.create({
   baseURL,
 });
 
 // ---------- INTERCEPTOR: ATTACH TOKENS ----------
-
 API.interceptors.request.use(
   (config) => {
     const userToken = localStorage.getItem("token");
