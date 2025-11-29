@@ -18,24 +18,17 @@ import adminRoutes from "./routes/adminRoutes.js";
 import testEmailRoute from "./routes/testEmailRoute.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import eventBookingRoutes from "./routes/eventBookingRoutes.js";
-import adminEventRoutes from "./routes/adminEventRoutes.js"; // Event admin routes
-import paymentRoutes from "./routes/paymentRoutes.js";       // Razorpay payments
+import adminEventRoutes from "./routes/adminEventRoutes.js"; // ⭐ Event admin routes
+import paymentRoutes from "./routes/paymentRoutes.js";       // ⭐ Razorpay payments
 
 const app = express();
-
-// 🔑 Render gives a random PORT in process.env.PORT.
-// Locally this falls back to 5000.
 const PORT = process.env.PORT || 5000;
 
-// =========================
-//      CORE MIDDLEWARE
-// =========================
+// ✅ Core Middleware
 app.use(cors());
 app.use(express.json());
 
-// =========================
-//   STATIC UPLOADS SETUP
-// =========================
+// ✅ Path setup (for static uploads)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -43,7 +36,7 @@ const __dirname = path.dirname(__filename);
 app.use("/uploads", express.static(path.join(__dirname, "/uploads")));
 
 // =========================
-//        API ROUTES
+//       API ROUTES
 // =========================
 app.use("/api/auth", authRoutes);
 app.use("/api/gyms", gymRoutes);
@@ -54,11 +47,16 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/test", testEmailRoute);
 app.use("/api/events", eventRoutes);
 app.use("/api/event-bookings", eventBookingRoutes);
+
+// ⭐ Razorpay payments (NEW)
 app.use("/api/payments", paymentRoutes);
+
+// ⭐ Correct way:
+// Frontend calls `/api/admin/events/...`, so backend must register same:
 app.use("/api/admin/events", adminEventRoutes);
 
 // =========================
-//     HEALTH CHECK
+//   HEALTH CHECK ROUTES
 // =========================
 app.get("/", (req, res) => res.send("🚀 Passiify Backend is Running"));
 
@@ -71,7 +69,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // =========================
- //     ERROR HANDLER
+//   ERROR HANDLER
 // =========================
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -86,29 +84,28 @@ app.use((err, req, res, next) => {
 //   DATABASE + SERVER
 // =========================
 async function startServer() {
-  console.log("🔧 Starting Passiify backend...");
-  console.log("   ➜ process.env.PORT:", process.env.PORT);
-  console.log("   ➜ Effective PORT:", PORT);
-  console.log("   ➜ NODE_ENV:", process.env.NODE_ENV);
-  console.log("   ➜ MONGO_URI present?", !!process.env.MONGO_URI);
-  console.log("   ➜ JWT_SECRET present?", !!process.env.JWT_SECRET);
-
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 30000, // fail fast if DB not reachable
-    });
+    console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
+    console.log("🔧 Render PORT env:", process.env.PORT);
+    console.log("🔧 Using PORT:", PORT);
+    console.log("🔧 MONGO_URI present?", !!process.env.MONGO_URI);
+    console.log("🔧 JWT_SECRET present?", !!process.env.JWT_SECRET);
+
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is not defined in environment variables");
+    }
+
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("✅ MongoDB Connected Successfully");
 
     app.listen(PORT, () => {
       console.log(`⚡ Server running on port ${PORT}`);
     });
   } catch (err) {
-    console.error("❌ MongoDB Connection Error:", err);
-    // On Render this will stop the process so the deploy clearly fails
+    console.error("❌ Startup error:", err);
+    // On Render this makes deploy fail fast instead of hanging
     process.exit(1);
   }
 }
 
 startServer();
-
-export default app;
