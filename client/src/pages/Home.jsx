@@ -562,7 +562,9 @@ function Hero({
                     className="text-sm font-semibold"
                     style={{ color: theme.textMain }}
                   >
-                    {gymsCount > 0 ? `${gymsCount} space${gymsCount > 1 ? "s" : ""}` : "Early partners joining"}
+                    {gymsCount > 0
+                      ? `${gymsCount} space${gymsCount > 1 ? "s" : ""}`
+                      : "Early partners joining"}
                   </div>
                 </div>
                 <div
@@ -1187,11 +1189,67 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
 }
 
 /* =========================================================
-   TRAVEL CITY STRIP
+   TRAVEL CITY STRIP — dynamic from gyms + events
    ========================================================= */
 
-function TravelCityStrip({ theme, mode }) {
-  const cities = [
+function TravelCityStrip({ theme, mode, gyms = [], events = [] }) {
+  // Build stats per city from backend gyms + events
+  const cityMap = new Map();
+
+  const addCity = (rawName, type, rating) => {
+    if (!rawName) return;
+    const name = String(rawName).trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+
+    const existing =
+      cityMap.get(key) || {
+        city: name,
+        gyms: 0,
+        events: 0,
+        ratingSum: 0,
+        ratingCount: 0,
+      };
+
+    if (type === "gym") existing.gyms += 1;
+    if (type === "event") existing.events += 1;
+
+    if (typeof rating === "number" && rating > 0) {
+      existing.ratingSum += rating;
+      existing.ratingCount += 1;
+    }
+
+    cityMap.set(key, existing);
+  };
+
+  (gyms || []).forEach((g) => {
+    addCity(g.city || g.location || g.area, "gym", g.rating);
+  });
+
+  (events || []).forEach((ev) => {
+    addCity(ev.city || ev.location, "event", ev.rating);
+  });
+
+  const cityStats = Array.from(cityMap.values())
+    .map((c) => ({
+      ...c,
+      total: c.gyms + c.events,
+      avgRating: c.ratingCount > 0 ? c.ratingSum / c.ratingCount : null,
+    }))
+    .filter((c) => c.total > 0);
+
+  cityStats.sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    const aRating = a.avgRating || 0;
+    const bRating = b.avgRating || 0;
+    if (bRating !== aRating) return bRating - aRating;
+    return a.city.localeCompare(b.city);
+  });
+
+  const topCities = cityStats.slice(0, 4);
+
+  // Fallback cities if no data yet
+  const fallbackCities = [
     { name: "Goa", tag: "Sunrise yoga & beach gyms" },
     { name: "Bangkok", tag: "Muay Thai fight camps" },
     { name: "Mumbai", tag: "Dance & boxing clubs" },
@@ -1215,48 +1273,117 @@ function TravelCityStrip({ theme, mode }) {
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {cities.map((c) => (
-            <Link
-              key={c.name}
-              to={`/explore?query=${encodeURIComponent(c.name)}`}
-              className="rounded-2xl border transition-all p-4 flex flex-col justify-between backdrop-blur-md md:backdrop-blur-xl cursor-pointer"
-              style={{
-                borderColor: theme.borderSoft,
-                background:
-                  mode === "dark"
-                    ? "rgba(15,23,42,0.96)"
-                    : "rgba(255,255,255,0.98)",
-                boxShadow: theme.shadowSoft,
-              }}
-            >
-              <div>
-                <div
-                  className="text-[11px] uppercase tracking-[0.2em]"
-                  style={{ color: theme.textMuted }}
+          {topCities.length > 0
+            ? topCities.map((c) => {
+                const statsLabel = `${c.gyms || 0} gym${
+                  (c.gyms || 0) === 1 ? "" : "s"
+                } · ${c.events || 0} event${
+                  (c.events || 0) === 1 ? "" : "s"
+                }`;
+                const ratingLabel = c.avgRating
+                  ? `${c.avgRating.toFixed(1)}★ avg rating`
+                  : "New on Passiify";
+
+                return (
+                  <Link
+                    key={c.city}
+                    to={`/explore?query=${encodeURIComponent(c.city)}`}
+                    className="rounded-2xl border transition-all p-4 flex flex-col justify-between backdrop-blur-md md:backdrop-blur-xl cursor-pointer"
+                    style={{
+                      borderColor: theme.borderSoft,
+                      background:
+                        mode === "dark"
+                          ? "rgba(15,23,42,0.96)"
+                          : "rgba(255,255,255,0.98)",
+                      boxShadow: theme.shadowSoft,
+                    }}
+                  >
+                    <div>
+                      <div
+                        className="text-[11px] uppercase tracking-[0.2em]"
+                        style={{ color: theme.textMuted }}
+                      >
+                        City
+                      </div>
+                      <div
+                        className="mt-1 text-lg font-semibold"
+                        style={{ color: theme.textMain }}
+                      >
+                        {c.city}
+                      </div>
+                      <div
+                        className="mt-2 text-xs"
+                        style={{ color: theme.textMuted }}
+                      >
+                        {statsLabel}
+                      </div>
+                      <div
+                        className="mt-1 text-[11px]"
+                        style={{ color: theme.textMuted }}
+                      >
+                        {ratingLabel}
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs flex items-center gap-1">
+                      <span
+                        className="font-medium"
+                        style={{ color: theme.accentBlue }}
+                      >
+                        Tap to explore
+                      </span>
+                      <ArrowRight
+                        size={12}
+                        style={{ color: theme.accentBlue }}
+                      />
+                    </div>
+                  </Link>
+                );
+              })
+            : fallbackCities.map((c) => (
+                <Link
+                  key={c.name}
+                  to={`/explore?query=${encodeURIComponent(c.name)}`}
+                  className="rounded-2xl border transition-all p-4 flex flex-col justify-between backdrop-blur-md md:backdrop-blur-xl cursor-pointer"
+                  style={{
+                    borderColor: theme.borderSoft,
+                    background:
+                      mode === "dark"
+                        ? "rgba(15,23,42,0.96)"
+                        : "rgba(255,255,255,0.98)",
+                    boxShadow: theme.shadowSoft,
+                  }}
                 >
-                  City
-                </div>
-                <div
-                  className="mt-1 text-lg font-semibold"
-                  style={{ color: theme.textMain }}
-                >
-                  {c.name}
-                </div>
-                <div className="mt-2 text-xs" style={{ color: theme.textMuted }}>
-                  {c.tag}
-                </div>
-              </div>
-              <div className="mt-4 text-xs flex items-center gap-1">
-                <span
-                  className="font-medium"
-                  style={{ color: theme.accentBlue }}
-                >
-                  Tap to explore
-                </span>
-                <ArrowRight size={12} style={{ color: theme.accentBlue }} />
-              </div>
-            </Link>
-          ))}
+                  <div>
+                    <div
+                      className="text-[11px] uppercase tracking-[0.2em]"
+                      style={{ color: theme.textMuted }}
+                    >
+                      City
+                    </div>
+                    <div
+                      className="mt-1 text-lg font-semibold"
+                      style={{ color: theme.textMain }}
+                    >
+                      {c.name}
+                    </div>
+                    <div
+                      className="mt-2 text-xs"
+                      style={{ color: theme.textMuted }}
+                    >
+                      {c.tag}
+                    </div>
+                  </div>
+                  <div className="mt-4 text-xs flex items-center gap-1">
+                    <span
+                      className="font-medium"
+                      style={{ color: theme.accentBlue }}
+                    >
+                      Tap to explore
+                    </span>
+                    <ArrowRight size={12} style={{ color: theme.accentBlue }} />
+                  </div>
+                </Link>
+              ))}
         </div>
       </div>
     </section>
@@ -2637,13 +2764,13 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen w-full overflow-x-hidden pb-16 pt-16 md:pt-20 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
+      className="min-h-screen w-full overflow-x-hidden pb-16 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
       style={{
         color: theme.textMain,
         touchAction: "manipulation", // ensure taps/scrolls work nicely on mobile
       }}
     >
-      {/* TOP TRUST STRIP (sits below fixed navbar thanks to pt-16 above) */}
+      {/* TOP TRUST STRIP under navbar */}
       <div
         className="w-full border-b backdrop-blur-xl transition-all duration-300"
         style={{
@@ -2713,7 +2840,7 @@ export default function Home() {
           loading={loadingBookings}
           events={events}
         />
-        <TravelCityStrip theme={theme} mode={mode} />
+        <TravelCityStrip theme={theme} mode={mode} gyms={gyms} events={events} />
         <UpcomingEventsSection
           theme={theme}
           mode={mode}
@@ -2734,7 +2861,7 @@ export default function Home() {
         <CTASection theme={theme} />
       </main>
 
-      {/* FOOTER (with visible Terms & Privacy links) */}
+      {/* FOOTER */}
       <Footer theme={theme} mode={mode} />
     </div>
   );
