@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.js
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
@@ -23,7 +23,7 @@ import EventsPage from "./pages/EventsPage";
 import EventDetail from "./pages/EventDetail";
 import BookEvent from "./pages/BookEvent";
 import MyEventBookings from "./pages/MyEventBookings";
-import HostEvent from "./pages/HostEvent"; // ⭐ added
+import HostEvent from "./pages/HostEvent";
 import AdminEventDetails from "./pages/AdminEventDetails";
 
 // 🔐 Auth Pages
@@ -34,6 +34,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import TermsAndConditions from "./pages/TermsAndConditions";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+
 // 🧑‍💼 Admin Pages
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -91,10 +92,10 @@ const App = () => {
 
         {/* 🔐 Authentication */}
         <Route path="/login" element={<LoginPage />} />
-         {/* legal pages */}
+        {/* legal pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
-        {/* 👇 NEW: support both /register and /signup */}
+        {/* support both /register and /signup */}
         <Route path="/register" element={<SignupPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/oauth/google" element={<GoogleOAuthCallback />} />
@@ -106,8 +107,6 @@ const App = () => {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/gym/:id" element={<AdminGymDetails />} />
         <Route path="/admin/event/:id" element={<AdminEventDetails />} />
-        
-
       </Routes>
     </>
   );
