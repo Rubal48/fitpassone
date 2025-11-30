@@ -14,52 +14,6 @@ import {
   LogIn,
 } from "lucide-react";
 
-/* -------------------------------------------------------
-   Helper: resolve correct OAuth base URL
-   - Local dev  → http://localhost:5000/api
-   - Live site  → https://passiify.onrender.com/api
-   ------------------------------------------------------- */
-const resolveAuthBaseURL = () => {
-  let base =
-    (API && API.defaults && API.defaults.baseURL) ||
-    process.env.REACT_APP_API_BASE_URL ||
-    "";
-
-  // If nothing from API/env, infer from window
-  if (!base && typeof window !== "undefined") {
-    const host = window.location.hostname;
-    const isLocal =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.startsWith("192.168.") ||
-      host.endsWith(".local");
-
-    base = isLocal
-      ? "http://localhost:5000/api"
-      : "https://passiify.onrender.com/api";
-  }
-
-  // SAFETY: if base still points to localhost but we are NOT on a local host,
-  // force it to Render so phones/tablets don't try to hit their own localhost.
-  if (
-    typeof window !== "undefined" &&
-    base.includes("localhost")
-  ) {
-    const host = window.location.hostname;
-    const isLocalHost =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.startsWith("192.168.") ||
-      host.endsWith(".local");
-
-    if (!isLocalHost) {
-      base = "https://passiify.onrender.com/api";
-    }
-  }
-
-  return base.replace(/\/+$/, ""); // remove trailing slashes
-};
-
 export default function LoginPage() {
   const navigate = useNavigate();
 
@@ -112,15 +66,20 @@ export default function LoginPage() {
   }, []);
 
   // -------------------------------------------------------
-  // GOOGLE LOGIN — use safe base URL
+  // GOOGLE LOGIN — use same base as Axios API
   // -------------------------------------------------------
   const handleGoogleLogin = () => {
     setError("");
     setGoogleLoading(true);
 
     try {
-      const base = resolveAuthBaseURL();
-      const redirectUrl = `${base}/auth/google`;
+      const base =
+        (API && API.defaults && API.defaults.baseURL) ||
+        process.env.REACT_APP_API_BASE_URL ||
+        "/api";
+
+      const cleanedBase = base.replace(/\/+$/, "");
+      const redirectUrl = `${cleanedBase}/auth/google`;
 
       console.log("▶️ Redirecting to Google OAuth (login):", redirectUrl);
       window.location.href = redirectUrl;
@@ -189,7 +148,7 @@ export default function LoginPage() {
         flex items-center justify-center 
         px-4 sm:px-6 
         pt-16 sm:pt-20
-        relative overflow-hidden
+        relative z-[60] overflow-hidden
       "
     >
       {/* Ambient glows */}
@@ -253,7 +212,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={loading || googleLoading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer touch-manipulation"
               >
                 <img
                   src="https://www.google.com/favicon.ico"

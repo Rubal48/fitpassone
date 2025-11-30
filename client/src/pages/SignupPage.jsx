@@ -14,47 +14,6 @@ import {
   Sparkles,
 } from "lucide-react";
 
-/* -------------------------------------------------------
-   Helper: resolve correct OAuth base URL
-   ------------------------------------------------------- */
-const resolveAuthBaseURL = () => {
-  let base =
-    (API && API.defaults && API.defaults.baseURL) ||
-    process.env.REACT_APP_API_BASE_URL ||
-    "";
-
-  if (!base && typeof window !== "undefined") {
-    const host = window.location.hostname;
-    const isLocal =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.startsWith("192.168.") ||
-      host.endsWith(".local");
-
-    base = isLocal
-      ? "http://localhost:5000/api"
-      : "https://passiify.onrender.com/api";
-  }
-
-  if (
-    typeof window !== "undefined" &&
-    base.includes("localhost")
-  ) {
-    const host = window.location.hostname;
-    const isLocalHost =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.startsWith("192.168.") ||
-      host.endsWith(".local");
-
-    if (!isLocalHost) {
-      base = "https://passiify.onrender.com/api";
-    }
-  }
-
-  return base.replace(/\/+$/, "");
-};
-
 export default function SignupPage() {
   const navigate = useNavigate();
 
@@ -71,7 +30,7 @@ export default function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // -------------------------------------------------------
-  // PASSWORD STRENGTH
+  // PASSWORD STRENGTH (simple but useful)
   // -------------------------------------------------------
   const passwordStrength = useMemo(() => {
     if (!password) return { label: "Too weak", score: 0 };
@@ -88,15 +47,20 @@ export default function SignupPage() {
   }, [password]);
 
   // -------------------------------------------------------
-  // GOOGLE SIGNUP — safe base URL
+  // GOOGLE SIGNUP — same base as Axios API
   // -------------------------------------------------------
   const handleGoogleSignup = () => {
     setError("");
     setGoogleLoading(true);
 
     try {
-      const base = resolveAuthBaseURL();
-      const redirectUrl = `${base}/auth/google`;
+      const base =
+        (API && API.defaults && API.defaults.baseURL) ||
+        process.env.REACT_APP_API_BASE_URL ||
+        "/api";
+
+      const cleanedBase = base.replace(/\/+$/, "");
+      const redirectUrl = `${cleanedBase}/auth/google`;
 
       console.log("▶️ Redirecting to Google OAuth (signup):", redirectUrl);
       window.location.href = redirectUrl;
@@ -110,12 +74,13 @@ export default function SignupPage() {
   };
 
   // -------------------------------------------------------
-  // HANDLE SIGNUP
+  // HANDLE SIGNUP (register + auto-login + go home)
   // -------------------------------------------------------
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
 
+    // basic validation before hitting backend
     if (!name.trim() || !email.trim() || !password) {
       setError("Please fill in all fields.");
       return;
@@ -143,6 +108,7 @@ export default function SignupPage() {
         password,
       });
 
+      // 🔑 Store auth info – match LoginPage
       const token = loginRes.data?.token;
       const userPayload = loginRes.data?.user || loginRes.data;
 
@@ -153,6 +119,7 @@ export default function SignupPage() {
         localStorage.setItem("user", JSON.stringify(userPayload));
       }
 
+      // clean old key if any
       localStorage.removeItem("userInfo");
 
       // 3️⃣ Go straight to Home
@@ -177,7 +144,7 @@ export default function SignupPage() {
         flex items-center justify-center 
         px-4 sm:px-6 
         pt-16 sm:pt-20
-        relative overflow-hidden
+        relative z-[60] overflow-hidden
       "
     >
       {/* Ambient glows */}
@@ -240,7 +207,7 @@ export default function SignupPage() {
                 type="button"
                 onClick={handleGoogleSignup}
                 disabled={loading || googleLoading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer touch-manipulation"
               >
                 <img
                   src="https://www.google.com/favicon.ico"
