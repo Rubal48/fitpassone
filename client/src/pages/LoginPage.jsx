@@ -26,7 +26,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 NEW
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Prefill remembered email if available
   useEffect(() => {
@@ -73,13 +73,15 @@ export default function LoginPage() {
     setGoogleLoading(true);
 
     try {
-      const base =
-        (API && API.defaults && API.defaults.baseURL) ||
-        process.env.REACT_APP_API_BASE_URL ||
-        "/api"; // relative works with dev proxy and production
+      const base = API?.defaults?.baseURL;
 
-      const cleanedBase = base.replace(/\/+$/, "");
-      const redirectUrl = `${cleanedBase}/auth/google`;
+      // If for some reason axios has no baseURL, fail gracefully
+      if (!base) {
+        throw new Error("Missing API base URL for Google OAuth");
+      }
+
+      const cleanedBase = base.replace(/\/+$/, ""); // trim trailing slashes
+      const redirectUrl = `${cleanedBase}/auth/google`; // base already includes /api
 
       console.log("▶️ Redirecting to Google OAuth (login):", redirectUrl);
       window.location.href = redirectUrl;
@@ -147,7 +149,8 @@ export default function LoginPage() {
         dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 
         flex items-center justify-center 
         px-4 sm:px-6 
-        pt-16 sm:pt-20       /* 🔹 space under fixed navbar on mobile */
+        pt-16 sm:pt-20
+        pb-8
         relative overflow-hidden
       "
     >

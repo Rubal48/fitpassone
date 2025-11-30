@@ -27,7 +27,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 NEW
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // -------------------------------------------------------
   // PASSWORD STRENGTH (simple but useful)
@@ -54,10 +54,11 @@ export default function SignupPage() {
     setGoogleLoading(true);
 
     try {
-      const base =
-        (API && API.defaults && API.defaults.baseURL) ||
-        process.env.REACT_APP_API_BASE_URL ||
-        "/api";
+      const base = API?.defaults?.baseURL;
+
+      if (!base) {
+        throw new Error("Missing API base URL for Google OAuth");
+      }
 
       const cleanedBase = base.replace(/\/+$/, "");
       const redirectUrl = `${cleanedBase}/auth/google`;
@@ -143,7 +144,8 @@ export default function SignupPage() {
         dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 
         flex items-center justify-center 
         px-4 sm:px-6 
-        pt-16 sm:pt-20        /* 🔹 same navbar spacing as Login */
+        pt-16 sm:pt-20
+        pb-8
         relative overflow-hidden
       "
     >
