@@ -14,7 +14,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import API from "../utils/api";
+import API, { getAssetUrl } from "../utils/api";
+
 
 /* =========================================================
    THEME TOKENS — Passiify global (same for all pages)

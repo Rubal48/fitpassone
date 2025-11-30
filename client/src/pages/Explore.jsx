@@ -82,18 +82,26 @@ const topCityChips = ["Goa", "Bali", "Bangkok", "Mumbai"];
 
 /* ---------- 🔗 Media URL builder (backend + CDN) ---------- */
 
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
 const buildMediaUrl = (raw) => {
   if (!raw) return null;
 
   // Already a full URL
   if (typeof raw === "string" && raw.startsWith("http")) return raw;
 
-  // Relative path from backend (e.g. "/uploads/gyms/xyz.jpg")
   try {
-    const base = (API?.defaults?.baseURL || "").replace(/\/$/, "");
-    const cleanPath = String(raw).replace(/^\//, ""); // remove starting '/'
-    if (!base) return `/${cleanPath}`;
-    return `${base}/${cleanPath}`;
+    const origin = getBackendOrigin();
+    const cleanPath = String(raw).replace(/^\/+/, ""); // remove starting "/"
+
+    // If for some reason we don't know backend origin, fall back to same-origin
+    if (!origin) return `/${cleanPath}`;
+
+    return `${origin}/${cleanPath}`;
   } catch {
     return null;
   }
@@ -189,11 +197,7 @@ const getGymPricingMeta = (gym) => {
       basePrice
     );
   } else {
-    salePrice = pickNumber(
-      gym.salePrice,
-      gym.price,
-      basePrice
-    );
+    salePrice = pickNumber(gym.salePrice, gym.price, basePrice);
   }
 
   if (!salePrice && basePrice) salePrice = basePrice;
@@ -230,7 +234,7 @@ const getGymPricingMeta = (gym) => {
 };
 
 /* =========================================================
-   TOP TRUST STRIP — unified with Home
+   TOP TRUST STRIP — unified with Home (no Gen-Z word)
    ========================================================= */
 
 function TopTrustStrip({ theme, mode }) {
@@ -247,7 +251,7 @@ function TopTrustStrip({ theme, mode }) {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span style={{ color: theme.textMuted }}>
-            Curated day-pass gyms & studios for travellers, expats & Gen-Z.
+            Curated day-pass gyms & studios as we roll out city by city.
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -359,7 +363,7 @@ function ExploreHero({
                     : "drop-shadow(0 0 20px rgba(255,255,255,0.95))",
               }}
             >
-              Train anything, anywhere with day-pass access.
+              Day-pass access to real gyms in real cities.
             </span>
           </h1>
 
@@ -367,9 +371,9 @@ function ExploreHero({
             className="mt-3 text-sm md:text-base max-w-2xl mx-auto"
             style={{ color: theme.textMuted }}
           >
-            Drop into boxing, lifting, yoga or MMA in any city. One tap, one QR,
-            zero contracts — built for travellers, students and founders who
-            hate long-term gym deals.
+            Drop into boxing, lifting, yoga or MMA in the cities we&apos;ve
+            already launched. One tap, one QR, zero contracts — perfect for
+            travellers, students and anyone who hates long-term gym deals.
           </p>
         </div>
 
@@ -560,8 +564,8 @@ function ExploreControls({
                   cityFilter !== "Anywhere" ? ` in ${cityFilter}` : ""
                 }. Tune vibe, price or rating for your perfect match.`
               : cityFilter !== "Anywhere"
-              ? `Showing gyms & studios in ${cityFilter}. Adjust filters for budget, rating and vibe.`
-              : "Showing recommended gyms & studios. Use filters to tune by budget, rating and training style."}
+              ? `Showing gyms & studios in ${cityFilter}. We’re adding more spaces city by city — adjust filters for budget, rating and vibe.`
+              : "Showing recommended gyms & studios in cities where Passiify is live. Use filters to tune by budget, rating and training style."}
           </div>
         </div>
 
@@ -648,7 +652,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
             style={{ color: theme.accentOrange }}
           />
           <p className="text-sm" style={{ color: theme.textMuted }}>
-            Loading gyms & studios near you…
+            Loading gyms & studios where Passiify is live…
           </p>
         </div>
       </section>
@@ -848,7 +852,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                   style={{ color: theme.textMuted }}
                 >
                   {gym.description ||
-                    "Modern training space with solid equipment, clean changing rooms and traveller-friendly staff."}
+                    "Modern training space with solid equipment, clean changing rooms and staff who understand you may only be in town for a few days."}
                 </p>
 
                 <div className="flex items-center justify-between mt-1">
@@ -915,7 +919,7 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
 }
 
 /* =========================================================
-   CONVERSION BAND — trust + benefits
+   CONVERSION BAND — trust + benefits (no Gen-Z word)
    ========================================================= */
 
 function WhyPassiifyBand({ theme, mode }) {
@@ -936,7 +940,7 @@ function WhyPassiifyBand({ theme, mode }) {
             className="text-sm md:text-base font-semibold"
             style={{ color: theme.textMain }}
           >
-            Why movers, expats & Gen-Z locals trust{" "}
+            Why movers, travellers & locals trust{" "}
             <span
               style={{
                 backgroundImage: primaryGradient,
@@ -996,11 +1000,11 @@ function WhyPassiifyBand({ theme, mode }) {
             />
             <div>
               <div className="font-semibold" style={{ color: theme.textMain }}>
-                Built for travellers
+                Built for city-hopping
               </div>
               <div style={{ color: theme.textMuted }}>
                 Land in a new city, open Passiify, and find somewhere that feels
-                like your home gym.
+                close to your home gym — we&apos;re expanding city by city.
               </div>
             </div>
           </div>
@@ -1063,7 +1067,7 @@ export default function Explore() {
         console.error("❌ Error fetching gyms:", err);
         if (!mounted) return;
         setGyms([]);
-        setErrorGyms("Unable to load gyms. Please try again later.");
+        setErrorGyms("Unable to load gyms right now. Please refresh in a bit.");
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -1214,14 +1218,15 @@ export default function Explore() {
               className="text-sm text-center"
               style={{ color: theme.textMuted }}
             >
-              No gyms or studios match your search yet.
+              We&apos;re still onboarding spaces for this search.
             </p>
             <p
               className="text-xs max-w-sm text-center"
               style={{ color: theme.textMuted }}
             >
               Try a broader term like “gym”, “yoga”, “MMA” or just a city name —
-              or reset filters to see everything available.
+              or reset filters to see every city where Passiify is currently
+              live.
             </p>
             <button
               type="button"
@@ -1237,7 +1242,7 @@ export default function Explore() {
                 color: "#020617",
               }}
             >
-              Clear filters & show all
+              Clear filters & show all live cities
             </button>
           </div>
         )}

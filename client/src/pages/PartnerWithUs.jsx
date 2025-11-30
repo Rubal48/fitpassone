@@ -43,6 +43,32 @@ const STEPS = [
   { id: 3, label: "Media", sub: "Visuals & submit" },
 ];
 
+/* ---------- Media URL helper (handles /api + relative paths) ---------- */
+
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+
+  if (typeof raw === "string" && raw.startsWith("http")) {
+    return raw;
+  }
+
+  const origin = getBackendOrigin();
+  const cleanPath = String(raw).replace(/^\/+/, ""); // remove starting "/"
+
+  if (!origin) {
+    // fallback to same-origin (dev with proxy)
+    return `/${cleanPath}`;
+  }
+
+  return `${origin}/${cleanPath}`;
+};
+
 export default function PartnerWithUs() {
   /* -------------------------------------------------------
      STATE
@@ -63,7 +89,11 @@ export default function PartnerWithUs() {
   });
 
   const [passes, setPasses] = useState([{ duration: 1, price: "" }]);
-  const [images, setImages] = useState([]);
+
+  // 🖼️ Media
+  const [heroImage, setHeroImage] = useState(null); // main banner / cover image
+  const [galleryImages, setGalleryImages] = useState([]); // inside / preview photos
+
   const [businessProof, setBusinessProof] = useState(null);
   const [ownerIdProof, setOwnerIdProof] = useState(null);
   const [video, setVideo] = useState(null);
@@ -87,9 +117,7 @@ export default function PartnerWithUs() {
     if (!numeric.length) return { min: 0, max: 0, avg: 0 };
     const min = Math.min(...numeric);
     const max = Math.max(...numeric);
-    const avg = Math.round(
-      numeric.reduce((a, b) => a + b, 0) / numeric.length
-    );
+    const avg = Math.round(numeric.reduce((a, b) => a + b, 0) / numeric.length);
     return { min, max, avg };
   }, [passes]);
 
@@ -125,8 +153,37 @@ export default function PartnerWithUs() {
     );
   };
 
-  // 📸 Main centre images (uses /upload with field "images")
-  const handleFileChange = async (e) => {
+  // 🖼️ HERO / COVER IMAGE (single)
+  const handleHeroChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const formDataUpload = new FormData();
+    formDataUpload.append("images", file);
+
+    try {
+      setUploadingImages(true);
+      setGlobalError("");
+      setFieldErrors((prev) => ({ ...prev, heroImage: "" }));
+
+      const res = await API.post("/upload", formDataUpload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const uploaded = (res.data.images && res.data.images[0]) || null;
+      if (!uploaded) throw new Error("No file returned");
+
+      setHeroImage(uploaded);
+    } catch (err) {
+      console.error("Hero image upload failed:", err);
+      setGlobalError("Hero image upload failed. Please try again.");
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  // 🖼️ GALLERY IMAGES (multiple)
+  const handleGalleryChange = async (e) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (!files.length) return;
 
@@ -136,12 +193,18 @@ export default function PartnerWithUs() {
     try {
       setUploadingImages(true);
       setGlobalError("");
+      setFieldErrors((prev) => ({ ...prev, images: "" }));
+
       const res = await API.post("/upload", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setImages(res.data.images || []);
+
+      const uploaded = res.data.images || [];
+      if (!uploaded.length) throw new Error("No files returned");
+
+      setGalleryImages((prev) => [...prev, ...uploaded]);
     } catch (err) {
-      console.error("Image upload failed:", err);
+      console.error("Gallery upload failed:", err);
       setGlobalError("Image upload failed. Please try again.");
     } finally {
       setUploadingImages(false);
@@ -159,6 +222,7 @@ export default function PartnerWithUs() {
     try {
       setUploadingDocs(true);
       setGlobalError("");
+
       const res = await API.post("/upload", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -166,8 +230,14 @@ export default function PartnerWithUs() {
       const uploaded = (res.data.images && res.data.images[0]) || null;
       if (!uploaded) throw new Error("No file returned");
 
-      if (type === "business") setBusinessProof(uploaded);
-      if (type === "owner") setOwnerIdProof(uploaded);
+      if (type === "business") {
+        setBusinessProof(uploaded);
+        setFieldErrors((prev) => ({ ...prev, businessProof: "" }));
+      }
+      if (type === "owner") {
+        setOwnerIdProof(uploaded);
+        setFieldErrors((prev) => ({ ...prev, ownerIdProof: "" }));
+      }
       if (type === "video") setVideo(uploaded);
     } catch (err) {
       console.error("Document upload failed:", err);
@@ -195,7 +265,11 @@ export default function PartnerWithUs() {
         errors.passes = "Add at least one pass";
       } else if (
         passes.some(
-          (p) => !p.duration || Number(p.duration) <= 0 || !p.price || Number(p.price) <= 0
+          (p) =>
+            !p.duration ||
+            Number(p.duration) <= 0 ||
+            !p.price ||
+            Number(p.price) <= 0
         )
       ) {
         errors.passes = "Each pass needs a valid duration (days) and price";
@@ -203,7 +277,9 @@ export default function PartnerWithUs() {
     }
 
     if (targetStep === 3) {
-      if (!images.length) errors.images = "Upload at least one centre image";
+      if (!heroImage) errors.heroImage = "Upload a hero / banner image";
+      if (!galleryImages.length)
+        errors.images = "Upload at least one inside / gallery image";
       if (!businessProof) errors.businessProof = "Business proof is required";
       if (!ownerIdProof) errors.ownerIdProof = "Owner ID proof is required";
     }
@@ -246,6 +322,7 @@ export default function PartnerWithUs() {
       } else if (fieldErrors.passes) {
         setStep(1);
       } else if (
+        fieldErrors.heroImage ||
         fieldErrors.images ||
         fieldErrors.businessProof ||
         fieldErrors.ownerIdProof
@@ -270,7 +347,9 @@ export default function PartnerWithUs() {
           ? formData.tags.split(",").map((t) => t.trim())
           : [],
         facilities,
-        images,
+        // 👇 new media contract: cover + gallery
+        coverImage: heroImage,
+        images: galleryImages,
         businessProof,
         ownerIdProof,
         video,
@@ -293,7 +372,8 @@ export default function PartnerWithUs() {
           googleMapLink: "",
         });
         setFacilities([]);
-        setImages([]);
+        setHeroImage(null);
+        setGalleryImages([]);
         setBusinessProof(null);
         setOwnerIdProof(null);
         setVideo(null);
@@ -591,7 +671,10 @@ export default function PartnerWithUs() {
                   </p>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6 text-xs md:text-sm">
+                <form
+                  onSubmit={handleSubmit}
+                  className="space-y-6 text-xs md:text-sm"
+                >
                   {/* STEP 0 – BUSINESS DETAILS */}
                   {step === 0 && (
                     <div className="space-y-5">
@@ -943,7 +1026,7 @@ export default function PartnerWithUs() {
                           </p>
                           <p>
                             Verification documents are kept private and used only
-                            for checks. Users see your rating, photos and passes —
+                            for checks. Users see your rating, photos and passes — 
                             not your internal paperwork.
                           </p>
                         </div>
@@ -1019,22 +1102,95 @@ export default function PartnerWithUs() {
                     </div>
                   )}
 
-                  {/* STEP 3 – IMAGES & SUBMIT */}
+                  {/* STEP 3 – HERO + GALLERY IMAGES & SUBMIT */}
                   {step === 3 && (
-                    <div className="space-y-5">
-                      <div>
-                        <label className="block font-semibold mb-1.5 text-slate-100">
-                          Upload centre images *
+                    <div className="space-y-6">
+                      {/* HERO / BANNER IMAGE */}
+                      <div className="space-y-2">
+                        <label className="block font-semibold text-slate-100">
+                          Hero / banner image *
                         </label>
-                        <p className="text-[11px] text-slate-500 mb-2">
-                          Add your best angles: exterior, floor, equipment,
-                          classes. These appear on your public listing.
+                        <p className="text-[11px] text-slate-500 mb-1.5">
+                          This is the{" "}
+                          <span className="font-semibold text-slate-300">
+                            main cover photo
+                          </span>{" "}
+                          that appears on your Passiify detail page and on Explore
+                          cards — just like the big image on Booking.com.
+                          Choose a bright, wide shot that captures the overall
+                          vibe of your space.
+                        </p>
+
+                        <div className="grid md:grid-cols-[1.3fr,0.9fr] gap-3 items-center">
+                          <div className="w-full">
+                            <div className="aspect-video rounded-2xl border bg-slate-900/70 border-slate-700/70 overflow-hidden flex items-center justify-center relative">
+                              {heroImage ? (
+                                <img
+                                  src={buildMediaUrl(heroImage)}
+                                  alt="Hero banner"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src =
+                                      "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800";
+                                  }}
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center text-[11px] text-slate-400 gap-1 px-4 text-center">
+                                  <ImageIcon className="w-5 h-5 text-slate-500 mb-1" />
+                                  <span>
+                                    No hero image yet. Upload a wide shot of your
+                                    main floor or best angle.
+                                  </span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-2 left-2 rounded-full bg-slate-900/80 border border-slate-700/80 px-3 py-1 text-[10px] text-slate-200 flex items-center gap-1.5">
+                                <Sparkles className="w-3 h-3 text-orange-300" />
+                                Main banner on Passiify
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleHeroChange}
+                              className="w-full text-[11px] bg-slate-950/70 border border-slate-600/60 rounded-xl px-2 py-2 text-slate-200 file:text-slate-300"
+                            />
+                            {fieldErrors.heroImage && (
+                              <p className="text-[11px] text-red-400">
+                                {fieldErrors.heroImage}
+                              </p>
+                            )}
+                            <p className="text-[10px] text-slate-500">
+                              Tip: Use a{" "}
+                              <span className="font-semibold">
+                                horizontal 16:9 image
+                              </span>{" "}
+                              (landscape) with good lighting and minimal clutter.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* GALLERY / INSIDE IMAGES */}
+                      <div className="space-y-2">
+                        <label className="block font-semibold mb-1.5 text-slate-100">
+                          Inside / gallery images *
+                        </label>
+                        <p className="text-[11px] text-slate-500 mb-1.5">
+                          Show members what it{" "}
+                          <span className="font-semibold text-slate-300">
+                            actually feels like inside
+                          </span>
+                          : equipment rows, lifting platforms, cardio area,
+                          mirrors, changing rooms, group class zone, etc. These
+                          appear in the photo carousel on your listing.
                         </p>
                         <input
                           type="file"
                           multiple
                           accept="image/*"
-                          onChange={handleFileChange}
+                          onChange={handleGalleryChange}
                           className="w-full text-[11px] bg-slate-950/70 border border-slate-600/60 rounded-xl px-2 py-2 text-slate-200 file:text-slate-300"
                         />
                         {fieldErrors.images && (
@@ -1045,37 +1201,41 @@ export default function PartnerWithUs() {
                         {uploadingImages && (
                           <p className="text-sky-200 text-[11px] mt-1 flex items-center gap-2">
                             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading
-                            images...
+                            image(s)...
                           </p>
                         )}
-                        {images.length > 0 && (
+                        {galleryImages.length > 0 && (
                           <p className="text-emerald-300 text-[11px] mt-1">
-                            {images.length} image(s) uploaded successfully.
+                            {galleryImages.length} image(s) uploaded successfully.
                           </p>
+                        )}
+
+                        {galleryImages.length > 0 && (
+                          <div className="grid grid-cols-3 gap-2 mt-3">
+                            {galleryImages.slice(0, 3).map((img, idx) => (
+                              <div
+                                key={idx}
+                                className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 border border-slate-700/70"
+                              >
+                                <img
+                                  src={buildMediaUrl(img)}
+                                  alt={`centre-${idx}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src =
+                                      "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800";
+                                  }}
+                                />
+                              </div>
+                            ))}
+                            {galleryImages.length > 3 && (
+                              <div className="flex items-center justify-center text-[11px] text-slate-300 bg-slate-900/70 border border-slate-700/70 rounded-xl">
+                                +{galleryImages.length - 3} more
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
-
-                      {images.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                          {images.slice(0, 3).map((img, idx) => (
-                            <div
-                              key={idx}
-                              className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 border border-slate-700/70"
-                            >
-                              <img
-                                src={img}
-                                alt={`centre-${idx}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          ))}
-                          {images.length > 3 && (
-                            <div className="flex items-center justify-center text-[11px] text-slate-300 bg-slate-900/70 border border-slate-700/70 rounded-xl">
-                              +{images.length - 3} more
-                            </div>
-                          )}
-                        </div>
-                      )}
 
                       <div className="rounded-2xl bg-slate-950/80 border border-slate-600/70 px-4 py-3 text-[11px] text-slate-300 flex gap-2">
                         <ImageIcon className="w-4 h-4 text-orange-300 mt-0.5" />
@@ -1086,6 +1246,9 @@ export default function PartnerWithUs() {
                           <p>
                             Bright, clear photos perform best — especially wide
                             shots that show the full layout, equipment and vibe.
+                            Think like a travel platform: would you book{" "}
+                            <span className="font-semibold">your own space</span>{" "}
+                            based only on these photos?
                           </p>
                         </div>
                       </div>

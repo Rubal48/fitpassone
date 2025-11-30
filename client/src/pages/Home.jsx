@@ -70,6 +70,34 @@ const buildTheme = (mode) => {
 };
 
 /* =========================================================
+   MEDIA HELPERS — match PartnerWithUs + backend uploads
+   ========================================================= */
+
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+
+  if (typeof raw === "string" && raw.startsWith("http")) {
+    return raw;
+  }
+
+  const origin = getBackendOrigin();
+  const cleanPath = String(raw).replace(/^\/+/, ""); // remove starting "/"
+
+  if (!origin) {
+    // dev fallback — same-origin (proxy)
+    return `/${cleanPath}`;
+  }
+
+  return `${origin}/${cleanPath}`;
+};
+
+/* =========================================================
    PRICE HELPERS — always prefer 1-day pass
    ========================================================= */
 
@@ -171,7 +199,7 @@ function getEventDisplayPrice(event) {
 }
 
 /* =========================================================
-   FALLBACK IMAGES
+   FALLBACK IMAGES + HERO IMAGE HELPERS
    ========================================================= */
 
 const fallbackEventImage = () =>
@@ -179,6 +207,31 @@ const fallbackEventImage = () =>
 
 const fallbackGymImage = () =>
   "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1400";
+
+const getGymHeroImage = (gym) => {
+  if (!gym) return fallbackGymImage();
+  const candidate =
+    gym.heroImage ||
+    gym.mainImage ||
+    gym.bannerImage ||
+    gym.coverImage ||
+    (Array.isArray(gym.images) && gym.images[0]) ||
+    gym.image;
+
+  return buildMediaUrl(candidate) || fallbackGymImage();
+};
+
+const getEventHeroImage = (event) => {
+  if (!event) return fallbackEventImage();
+  const candidate =
+    event.heroImage ||
+    event.mainImage ||
+    event.bannerImage ||
+    (Array.isArray(event.images) && event.images[0]) ||
+    event.image;
+
+  return buildMediaUrl(candidate) || fallbackEventImage();
+};
 
 /* =========================================================
    HERO SECTION — fully Passiify themed
@@ -219,11 +272,18 @@ function Hero({
     navigate(`/explore?${params.toString()}`);
   };
 
-  const dayPassFrom = startingDayPrice ?? 249;
-  const heroGymPrice =
-    getGymDayPassPrice(featuredGym) ?? startingDayPrice ?? null;
+  const hasDayPassPrice =
+    typeof startingDayPrice === "number" &&
+    !Number.isNaN(startingDayPrice) &&
+    startingDayPrice > 0;
 
+  const heroGymPrice = getGymDayPassPrice(featuredGym);
   const heroEventPrice = getEventDisplayPrice(topEvent);
+
+  const heroEventImageSrc = topEvent
+    ? getEventHeroImage(topEvent)
+    : fallbackEventImage();
+  const heroGymImageSrc = getGymHeroImage(featuredGym);
 
   return (
     <header className="relative w-full pt-4 sm:pt-6">
@@ -279,7 +339,7 @@ function Hero({
           <div className="relative px-4 sm:px-6 md:px-8 py-6 sm:py-8 md:py-10 grid gap-6 lg:gap-10 items-center md:grid-cols-[1.6fr,1.1fr]">
             {/* LEFT — copy + search + trust */}
             <div className="space-y-4 sm:space-y-5">
-              {/* micro trust strip */}
+              {/* micro launch strip */}
               <div
                 className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-full border backdrop-blur-xl"
                 style={{
@@ -294,7 +354,7 @@ function Hero({
                   className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-[0.22em]"
                   style={{ color: theme.textMuted }}
                 >
-                  one-day passes · verified hosts · travel-first
+                  launching city by city · one-day passes · verified hosts
                 </span>
               </div>
 
@@ -302,7 +362,7 @@ function Hero({
                 className="text-[1.55rem] xs:text-[1.7rem] sm:text-[2rem] md:text-[2.3rem] lg:text-[2.6rem] font-extrabold leading-tight tracking-tight"
                 style={{ color: theme.textMain }}
               >
-                One-day{" "}
+                Drop-in{" "}
                 <span
                   style={{
                     backgroundImage: `linear-gradient(90deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
@@ -310,9 +370,9 @@ function Hero({
                     color: "transparent",
                   }}
                 >
-                  gym passes & events
+                  gym passes & fitness events
                 </span>{" "}
-                for how Gen-Z actually trains.
+                in the cities you land in.
               </h1>
 
               <p
@@ -320,8 +380,8 @@ function Hero({
                 style={{ color: theme.textMuted }}
               >
                 Tap into MMA gyms, rooftop yoga, dance studios or strength clubs
-                in any city. Book clean, honest 1-day passes — no sales tours,
-                no lock-ins, no cringe.
+                in each city as we roll out. Book clear, honest 1-day passes —
+                no sales tours, no lock-ins.
               </p>
 
               {/* Search bar */}
@@ -432,21 +492,27 @@ function Hero({
                     <span
                       className="px-3 py-1 rounded-full border font-medium text-xs"
                       style={{
-                        borderColor:
-                          mode === "dark"
+                        borderColor: hasDayPassPrice
+                          ? mode === "dark"
                             ? `${theme.accentFrom}66`
-                            : `${theme.accentFrom}55`,
-                        background:
-                          mode === "dark"
+                            : `${theme.accentFrom}55`
+                          : theme.borderSoft,
+                        background: hasDayPassPrice
+                          ? mode === "dark"
                             ? "rgba(15,23,42,0.9)"
-                            : "rgba(239,246,255,0.96)",
-                        color: theme.accentFrom,
+                            : "rgba(239,246,255,0.96)"
+                          : "transparent",
+                        color: hasDayPassPrice
+                          ? theme.accentFrom
+                          : theme.textMuted,
                       }}
                     >
-                      Day-pass from ₹{dayPassFrom}
+                      {hasDayPassPrice
+                        ? `Day-pass from ₹${startingDayPrice}`
+                        : "Day-pass pricing set by partners"}
                     </span>
                     <span className="text-xs" style={{ color: theme.textMuted }}>
-                      across select partner gyms
+                      Clear pricing shown before you pay
                     </span>
                   </div>
                 </div>
@@ -469,7 +535,7 @@ function Hero({
                 <div className="flex items-center gap-2">
                   <Heart size={16} style={{ color: theme.accentTo }} />
                   <span style={{ color: theme.textMuted }}>
-                    Built for travellers & Gen-Z
+                    Designed for people who move between cities
                   </span>
                 </div>
               </div>
@@ -490,13 +556,13 @@ function Hero({
                     className="text-xs font-medium"
                     style={{ color: theme.textMuted }}
                   >
-                    Gyms & studios live
+                    Partner spaces live
                   </span>
                   <div
                     className="text-sm font-semibold"
                     style={{ color: theme.textMain }}
                   >
-                    {gymsCount || "—"}
+                    {gymsCount > 0 ? `${gymsCount} space${gymsCount > 1 ? "s" : ""}` : "Early partners joining"}
                   </div>
                 </div>
                 <div
@@ -519,7 +585,7 @@ function Hero({
                     className="text-sm font-semibold"
                     style={{ color: theme.textMain }}
                   >
-                    {eventsCount || "—"}
+                    {eventsCount > 0 ? `${eventsCount} live` : "Rolling out city by city"}
                   </div>
                 </div>
               </div>
@@ -550,15 +616,13 @@ function Hero({
                 {/* TOP: hero event */}
                 <div className="relative h-52 sm:h-60 md:h-64">
                   <img
-                    src={
-                      topEvent?.image ||
-                      topEvent?.bannerImage ||
-                      topEvent?.images?.[0] ||
-                      fallbackEventImage()
-                    }
+                    src={heroEventImageSrc}
                     alt={topEvent?.name || "Passiify event"}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.src = fallbackEventImage();
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
 
@@ -572,7 +636,7 @@ function Hero({
                       }}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      Event spotlight
+                      {topEvent ? "Event spotlight" : "Events rolling out"}
                     </span>
                   </div>
 
@@ -586,7 +650,7 @@ function Hero({
                     >
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm md:text-base font-semibold line-clamp-1 text-slate-50">
-                          {topEvent?.name || "Upcoming fitness experiences"}
+                          {topEvent?.name || "Fitness runs, retreats & camps"}
                         </h3>
                         <div className="mt-1 flex flex-wrap gap-2.5 text-[11px] md:text-xs text-slate-300">
                           <span className="inline-flex items-center gap-1">
@@ -596,19 +660,21 @@ function Hero({
                                   "en-IN",
                                   { day: "numeric", month: "short" }
                                 )
-                              : "New dates every week"}
+                              : "New dates as we launch"}
                           </span>
                           {topEvent && (
                             <span className="inline-flex items-center gap-1">
                               <MapPin size={12} />
-                              {topEvent.location || topEvent.city || "TBA"}
+                              {topEvent.location || topEvent.city || "Location TBA"}
                             </span>
                           )}
                         </div>
                       </div>
 
                       <div className="flex flex-col items-end justify-between">
-                        <div className="text-[11px] text-slate-300">From</div>
+                        <div className="text-[11px] text-slate-300">
+                          {heroEventPrice ? "From" : "Pricing"}
+                        </div>
                         <div
                           className="text-lg md:text-2xl font-extrabold"
                           style={{
@@ -617,9 +683,9 @@ function Hero({
                             color: "transparent",
                           }}
                         >
-                          {topEvent && (heroEventPrice ?? null)
+                          {topEvent && heroEventPrice
                             ? `₹${heroEventPrice}`
-                            : "₹399"}
+                            : "Coming soon"}
                         </div>
                         <div className="mt-1 flex gap-1.5 sm:gap-2">
                           {topEvent ? (
@@ -653,7 +719,7 @@ function Hero({
                                 color: "#020617",
                               }}
                             >
-                              Browse events
+                              See upcoming events
                             </Link>
                           )}
                         </div>
@@ -677,15 +743,13 @@ function Hero({
                     }}
                   >
                     <img
-                      src={
-                        featuredGym?.images?.[0] ||
-                        featuredGym?.coverImage ||
-                        featuredGym?.image ||
-                        fallbackGymImage()
-                      }
+                      src={heroGymImageSrc}
                       alt={featuredGym?.name || "Featured gym"}
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = fallbackGymImage();
+                      }}
                     />
                   </div>
                   <div className="flex-1 w-full">
@@ -694,7 +758,7 @@ function Hero({
                         className="text-sm font-semibold line-clamp-1"
                         style={{ color: theme.textMain }}
                       >
-                        {featuredGym?.name || "Premium day-pass gyms"}
+                        {featuredGym?.name || "Day-pass friendly gyms"}
                       </h3>
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]"
@@ -714,7 +778,7 @@ function Hero({
                       style={{ color: theme.textMuted }}
                     >
                       {featuredGym?.description ||
-                        "Drop in once, no awkward membership pitches at the desk. Clean, transparent pricing every time."}
+                        "Drop in for a single session, without getting stuck in long contracts or awkward sales pitches."}
                     </p>
 
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -725,19 +789,23 @@ function Hero({
                             style={{ color: theme.textMuted }}
                           >
                             <MapPin size={12} />
-                            {featuredGym.city || "City TBA"}
+                            {featuredGym.city || "Launching soon"}
                           </span>
                         )}
-                        <span
-                          className="inline-flex items-center gap-1"
-                          style={{ color: theme.textMuted }}
-                        >
-                          <Star
-                            size={12}
-                            className="text-yellow-300 fill-yellow-300"
-                          />
-                          {featuredGym?.rating ?? "4.7"} rating
-                        </span>
+                        {featuredGym && (
+                          <span
+                            className="inline-flex items-center gap-1"
+                            style={{ color: theme.textMuted }}
+                          >
+                            <Star
+                              size={12}
+                              className="text-yellow-300 fill-yellow-300"
+                            />
+                            {typeof featuredGym.rating === "number"
+                              ? `${featuredGym.rating.toFixed(1)} rating`
+                              : "New on Passiify"}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <div>
@@ -745,19 +813,21 @@ function Hero({
                             className="block text-[11px]"
                             style={{ color: theme.textMuted }}
                           >
-                            From
+                            {heroGymPrice ? "From" : "Pricing"}
                           </span>
                           <span
                             className="text-sm font-bold"
                             style={{ color: theme.textMain }}
                           >
-                            ₹{heroGymPrice ?? "—"}
-                            <span
-                              className="text-[11px] font-normal ml-1"
-                              style={{ color: theme.textMuted }}
-                            >
-                              / day-pass
-                            </span>
+                            {heroGymPrice ? `₹${heroGymPrice}` : "Coming soon"}
+                            {heroGymPrice && (
+                              <span
+                                className="text-[11px] font-normal ml-1"
+                                style={{ color: theme.textMuted }}
+                              >
+                                / day-pass
+                              </span>
+                            )}
                           </span>
                         </div>
                         <Link
@@ -772,7 +842,7 @@ function Hero({
                             color: "#020617",
                           }}
                         >
-                          Book pass
+                          {featuredGym ? "Book pass" : "Explore spaces"}
                         </Link>
                       </div>
                     </div>
@@ -806,7 +876,7 @@ function Hero({
                   }}
                 >
                   <Globe2 size={13} />
-                  <span>Perfect for travellers & expats</span>
+                  <span>Perfect for trips, moves & workations</span>
                 </div>
               </div>
             </div>
@@ -825,27 +895,55 @@ function StatsStrip({
   theme,
   mode,
   gymsCount,
+  eventsCount,
   globalRating,
   globalRatingCount,
+  cityCount,
 }) {
-  const stats = [
-    { label: "Day-pass sessions booked", value: "5k+" },
-    {
-      label: "Gyms & studios onboarded",
-      value: gymsCount ? `${gymsCount}` : "150+",
-    },
-  ];
+  const stats = [];
 
+  // 1) Partner spaces
+  if (gymsCount > 0) {
+    stats.push({
+      label: "Partner gyms & studios live",
+      value: gymsCount === 1 ? "1 space" : `${gymsCount} spaces`,
+    });
+  } else {
+    stats.push({
+      label: "Partner gyms & studios live",
+      value: "Early partners joining",
+    });
+  }
+
+  // 2) Events
+  if (eventsCount > 0) {
+    stats.push({
+      label: "Upcoming fitness events",
+      value: eventsCount === 1 ? "1 event" : `${eventsCount} events`,
+    });
+  } else {
+    stats.push({
+      label: "Upcoming fitness events",
+      value: "Rolling out city by city",
+    });
+  }
+
+  // 3) Rating OR cities rollout
   if (globalRating) {
     stats.push({
       label: "Community rating",
       value: `${globalRating.toFixed(1)}/5`,
       extra: globalRatingCount ? `${globalRatingCount}+ reviews` : "",
     });
+  } else if (cityCount > 0) {
+    stats.push({
+      label: "Cities we’re unlocking",
+      value: cityCount === 1 ? "1 city" : `${cityCount} cities`,
+    });
   } else {
     stats.push({
-      label: "Cities explored by movers",
-      value: "40+",
+      label: "Cities we’re unlocking",
+      value: "Launching soon",
     });
   }
 
@@ -889,14 +987,14 @@ function StatsStrip({
             className="text-[11px] uppercase tracking-[0.25em] font-semibold"
             style={{ color: theme.textMuted }}
           >
-            Trusted by people training on the move
+            Built for people training while they travel, move or study
           </p>
           <div className="flex flex-wrap gap-4 text-xs">
             {[
-              "Remote founders",
-              "Digital nomads",
-              "Exchange students",
-              "Weekend travellers",
+              "Remote workers & founders",
+              "Students on exchange",
+              "City-hoppers & travellers",
+              "Locals trying new vibes",
             ].map((label) => (
               <span
                 key={label}
@@ -1185,7 +1283,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
             </h2>
             <p className="text-sm mt-1" style={{ color: theme.textMuted }}>
               Runs, bootcamps, retreats and fight nights — all bookable in a few
-              taps.
+              taps as cities go live.
             </p>
           </div>
           <Link
@@ -1203,17 +1301,20 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
           </div>
         ) : visible.length === 0 ? (
           <div className="text-sm" style={{ color: theme.textMuted }}>
-            No events live right now — check back soon or explore gyms instead.
+            We&apos;re lining up events in new cities. Check back soon or explore
+            partner gyms meanwhile.
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {visible.map((ev) => {
-              const price = getEventDisplayPrice(ev) ?? ev.price ?? null;
+              const price = getEventDisplayPrice(ev) ?? null;
               const date = ev.date ? new Date(ev.date) : null;
               const dateLabel =
                 date && !Number.isNaN(date.getTime())
                   ? date.toLocaleDateString()
                   : "Date TBA";
+
+              const imgSrc = getEventHeroImage(ev);
 
               return (
                 <article key={ev._id} className="relative group">
@@ -1237,15 +1338,13 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                   >
                     <div className="relative h-44 sm:h-48">
                       <img
-                        src={
-                          ev.image ||
-                          ev.bannerImage ||
-                          ev.images?.[0] ||
-                          fallbackEventImage()
-                        }
+                        src={imgSrc}
                         alt={ev.name}
                         className="w-full h-full object-cover"
                         loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.src = fallbackEventImage();
+                        }}
                       />
                       <div
                         className="absolute inset-0"
@@ -1320,7 +1419,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                             className="text-[11px]"
                             style={{ color: theme.textMuted }}
                           >
-                            From
+                            {price ? "From" : "Pricing"}
                           </div>
                           <div
                             className="text-sm font-bold"
@@ -1330,13 +1429,15 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                               color: "transparent",
                             }}
                           >
-                            {price ? `₹${price}` : "₹—"}
-                            <span
-                              className="text-[11px] font-normal ml-1"
-                              style={{ color: theme.textMuted }}
-                            >
-                              / ticket
-                            </span>
+                            {price ? `₹${price}` : "Coming soon"}
+                            {price && (
+                              <span
+                                className="text-[11px] font-normal ml-1"
+                                style={{ color: theme.textMuted }}
+                              >
+                                / ticket
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -1413,8 +1514,8 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
           </div>
         ) : visible.length === 0 ? (
           <div className="text-sm" style={{ color: theme.textMuted }}>
-            No partner gyms live yet — we&apos;re onboarding hosts in your
-            region.
+            We&apos;re onboarding high-quality spaces city by city. Check back soon
+            or share Passiify with a gym you love.
           </div>
         ) : (
           <div className="space-y-6">
@@ -1441,15 +1542,13 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                 >
                   <div className="relative md:w-1/2 h-52 md:h-64">
                     <img
-                      src={
-                        featured.images?.[0] ||
-                        featured.coverImage ||
-                        featured.image ||
-                        fallbackGymImage()
-                      }
+                      src={getGymHeroImage(featured)}
                       alt={featured.name}
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = fallbackGymImage();
+                      }}
                     />
                     <div
                       className="absolute inset-0"
@@ -1498,14 +1597,14 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                         </span>
                       </div>
                       <p className="text-xs" style={{ color: theme.textMuted }}>
-                        {featured.city || "City TBA"}
+                        {featured.city || "Launching soon"}
                       </p>
                       <p
                         className="mt-2 text-xs line-clamp-2"
                         style={{ color: theme.textMuted }}
                       >
                         {featured.description ||
-                          "A clean, well-equipped space with trainers who get that you&apos;re just passing through — but still serious about your training."}
+                          "A clean, well-equipped space that understands you might be in town for a week, a month or a single session."}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
                         <span
@@ -1513,7 +1612,9 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                           style={{ color: theme.textMuted }}
                         >
                           <Star size={13} className="text-yellow-300" />
-                          {featured.rating ?? "4.7"} rating
+                          {typeof featured.rating === "number"
+                            ? `${featured.rating.toFixed(1)} rating`
+                            : "New on Passiify"}
                         </span>
                         {featured.openingHours && (
                           <span
@@ -1533,7 +1634,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                           className="text-[11px]"
                           style={{ color: theme.textMuted }}
                         >
-                          Day-pass from
+                          {getGymDayPassPrice(featured) ? "Day-pass from" : "Pricing"}
                         </div>
                         <div
                           className="text-2xl font-extrabold"
@@ -1543,7 +1644,9 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                             color: "transparent",
                           }}
                         >
-                          ₹{getGymDayPassPrice(featured) ?? "—"}
+                          {getGymDayPassPrice(featured)
+                            ? `₹${getGymDayPassPrice(featured)}`
+                            : "Coming soon"}
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -1579,6 +1682,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {rest.map((g) => {
                   const price = getGymDayPassPrice(g);
+
                   return (
                     <article key={g._id} className="relative group">
                       {/* Ambient halo behind gym card */}
@@ -1601,15 +1705,13 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                       >
                         <div className="relative h-40">
                           <img
-                            src={
-                              g.images?.[0] ||
-                              g.coverImage ||
-                              g.image ||
-                              fallbackGymImage()
-                            }
+                            src={getGymHeroImage(g)}
                             alt={g.name}
                             className="w-full h-full object-cover"
                             loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.src = fallbackGymImage();
+                            }}
                           />
                           <div
                             className="absolute inset-0"
@@ -1646,7 +1748,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                               className="text-[11px] mt-1"
                               style={{ color: theme.textMuted }}
                             >
-                              {g.city || "City TBA"}
+                              {g.city || "Launching soon"}
                             </p>
                           </div>
 
@@ -1663,7 +1765,9 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                               style={{ color: theme.textMuted }}
                             >
                               <Star size={14} className="text-yellow-300" />
-                              {g.rating ?? "4.6"}
+                              {typeof g.rating === "number"
+                                ? g.rating.toFixed(1)
+                                : "New"}
                             </span>
                           </div>
 
@@ -1673,20 +1777,22 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                                 className="text-[11px]"
                                 style={{ color: theme.textMuted }}
                               >
-                                From
+                                {price ? "From" : "Pricing"}
                               </div>
                               <div
                                 className="text-sm font-bold"
                                 style={{ color: theme.textMain }}
                               >
-                                ₹{price ?? "—"}
-                                <span
-                                  className="text-[11px] font-normal"
-                                  style={{ color: theme.textMuted }}
-                                >
-                                  {" "}
-                                  / day
-                                </span>
+                                {price ? `₹${price}` : "Coming soon"}
+                                {price && (
+                                  <span
+                                    className="text-[11px] font-normal"
+                                    style={{ color: theme.textMuted }}
+                                  >
+                                    {" "}
+                                    / day
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -1796,7 +1902,7 @@ function CategoryStrip({ theme, mode }) {
 }
 
 /* =========================================================
-   WHY PASSIIFY & GEN-Z ANGLE
+   WHY PASSIIFY & GEN-Z ANGLE (copy updated to be broader)
    ========================================================= */
 
 function WhyPassiifySection({ theme, mode }) {
@@ -1806,8 +1912,8 @@ function WhyPassiifySection({ theme, mode }) {
       desc: "Commit to the workout, not a 12-month plan. Every pass is clean, short and flexible.",
     },
     {
-      title: "Travel-first design.",
-      desc: "Swap between fight clubs, yoga rooftops and strength clubs in any city with zero friction.",
+      title: "Travel-and-life first.",
+      desc: "Swap between fight clubs, rooftops and strength clubs in any city without re-explaining your story every time.",
     },
     {
       title: "Verified hosts only.",
@@ -1853,7 +1959,8 @@ function WhyPassiifySection({ theme, mode }) {
               >
                 Passiify lets you experiment with Muay Thai, rooftop yoga, dance
                 cardio or strength clubs — with honest pricing and instant
-                booking. No awkward sales desk chats. No guilt when you travel.
+                booking. No awkward sales desk chats. No guilt when you travel or
+                change cities.
               </p>
             </div>
 
@@ -1932,16 +2039,16 @@ function PartnerStrip({ theme, mode }) {
               className="text-xs md:text-sm mt-2"
               style={{ color: theme.textMuted }}
             >
-              List your gym or event on Passiify and get paid for one-day
-              passes, drop-ins and curated events. You control capacity, pricing
-              and availability.
+              List your gym or event on Passiify and get paid for one-day passes,
+              drop-ins and curated events. You control capacity, pricing and
+              availability as we expand city by city.
             </p>
           </div>
           <div className="flex flex-col gap-2 text-[11px] md:text-xs max-w-xs">
             <ul className="space-y-1.5" style={{ color: theme.textMuted }}>
               <li>• Transparent payouts (UPI/card)</li>
               <li>• Simple dashboard for passes, events & revenue</li>
-              <li>• Trusted by young travellers & digital nomads</li>
+              <li>• Early access to travellers and city-hoppers</li>
             </ul>
             <div className="mt-3 flex gap-3 flex-wrap">
               <Link
@@ -2181,14 +2288,15 @@ function Footer({ theme, mode }) {
               className="text-xs mt-3 max-w-xs"
               style={{ color: theme.textMuted }}
             >
-              One-day fitness passes and curated events for travellers, expats
-              and locals who hate long-term contracts and hidden extras.
+              One-day fitness passes and curated events for travellers,
+              city-hoppers and locals who hate long-term contracts and hidden
+              extras.
             </p>
             <p
               className="text-[11px] mt-3"
               style={{ color: theme.textMuted }}
             >
-              Built for people who treat every city like a playground.
+              Built like a startup, rolling out city by city.
             </p>
           </div>
 
@@ -2350,8 +2458,8 @@ function Footer({ theme, mode }) {
             className="text-[11px]"
             style={{ color: theme.textMuted }}
           >
-            Made for travellers, students & wanderers who still need a serious
-            workout.
+            Made for travellers, students and anyone who wants a serious
+            workout while life keeps moving.
           </p>
         </div>
       </div>
@@ -2517,6 +2625,16 @@ export default function Home() {
   const globalAvgRating = ratingN > 0 ? ratingSum / ratingN : null;
   const globalRatingCount = ratingN;
 
+  // Unique cities (for stats)
+  const citySet = new Set();
+  gyms.forEach((g) => {
+    if (g?.city) citySet.add(String(g.city).trim());
+  });
+  events.forEach((ev) => {
+    if (ev?.city) citySet.add(String(ev.city).trim());
+  });
+  const cityCount = citySet.size;
+
   return (
     <div
       className="min-h-screen w-full overflow-x-hidden pb-16 pt-16 md:pt-20 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
@@ -2540,7 +2658,8 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span style={{ color: theme.textMuted }}>
-              Curated day-pass gyms & fitness experiences across Indian cities.
+              Curated day-pass gyms & fitness experiences, rolling out city by
+              city.
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -2582,8 +2701,10 @@ export default function Home() {
           theme={theme}
           mode={mode}
           gymsCount={gyms.length}
+          eventsCount={events.length}
           globalRating={globalAvgRating}
           globalRatingCount={globalRatingCount}
+          cityCount={cityCount}
         />
         <ForYouStrip
           theme={theme}

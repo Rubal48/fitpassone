@@ -61,6 +61,73 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+/* ======================================
+   MEDIA / ASSET URL HELPERS
+   ====================================== */
+
+// Root of backend: e.g. "https://passiify.onrender.com" or "http://localhost:5000"
+const getBackendRoot = () => {
+  const base = API?.defaults?.baseURL || BASE_URL || "";
+  if (!base) return "";
+  let root = base.replace(/\/$/, "");   // remove trailing slash
+  root = root.replace(/\/api$/i, "");   // drop trailing /api
+  return root;
+};
+
+// Only allow images that come from our backend (or old localhost data)
+const normalizeImagePath = (rawPath) => {
+  if (!rawPath) return null;
+
+  let path = String(rawPath).trim();
+  if (!path) return null;
+
+  // If it's an absolute URL, only accept localhost or our backend host
+  if (/^https?:\/\//i.test(path)) {
+    const backendRoot = getBackendRoot();
+    let backendHost = "";
+    try {
+      if (backendRoot) {
+        backendHost = new URL(backendRoot).host;
+      }
+    } catch {
+      backendHost = "";
+    }
+
+    try {
+      const url = new URL(path);
+      const isLocalhost =
+        url.hostname === "localhost" || url.hostname === "127.0.0.1";
+      const isBackendHost = backendHost && url.host === backendHost;
+
+      if (isLocalhost || isBackendHost) {
+        // Normalize to relative path like "/uploads/gyms/xxx.jpg"
+        path = url.pathname + url.search + url.hash;
+      } else {
+        // External random image/CDN => ignore so UI uses our brand fallback
+        return null;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  if (!path.startsWith("/")) {
+    path = `/${path}`;
+  }
+  return path;
+};
+
+// 🔥 Use THIS everywhere on frontend when you render images from backend
+export const getAssetUrl = (rawPath) => {
+  const normalized = normalizeImagePath(rawPath);
+  if (!normalized) return null;
+
+  const root = getBackendRoot();
+  if (!root) return normalized; // dev fallback
+
+  return `${root}${normalized}`;
+};
+
 /**
  * 🛡️ Admin-only API — ALWAYS tries to send admin token
  */
@@ -78,10 +145,8 @@ adminAPI.interceptors.request.use(
 
     if (adminToken) {
       config.headers.Authorization = `Bearer ${adminToken}`;
-      // Optional debug:
       // console.log("[ADMIN API] attaching token", adminToken.slice(0, 15));
     } else {
-      // Optional debug:
       // console.log("[ADMIN API] no adminToken in localStorage");
     }
 

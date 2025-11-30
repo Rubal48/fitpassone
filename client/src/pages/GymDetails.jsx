@@ -77,16 +77,21 @@ const fallbackGalleryImages = [
   "https://images.pexels.com/photos/4754142/pexels-photo-4754142.jpeg?auto=compress&cs=tinysrgb&w=1200",
 ];
 
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
 const buildMediaUrl = (raw) => {
   if (!raw) return null;
-
   if (typeof raw === "string" && raw.startsWith("http")) return raw;
 
   try {
-    const base = (API?.defaults?.baseURL || "").replace(/\/$/, "");
-    const cleanPath = String(raw).replace(/^\//, "");
-    if (!base) return `/${cleanPath}`;
-    return `${base}/${cleanPath}`;
+    const origin = getBackendOrigin();
+    const cleanPath = String(raw).replace(/^\/+/, "");
+    if (!origin) return `/${cleanPath}`;
+    return `${origin}/${cleanPath}`;
   } catch {
     return null;
   }
@@ -110,6 +115,78 @@ const getGalleryImages = (gym) => {
   if (mapped.length) return mapped;
 
   return fallbackGalleryImages;
+};
+
+/* ---------- 🧮 Helpers for numbers & passes ---------- */
+
+const pickNumber = (...values) => {
+  for (let i = 0; i < values.length; i += 1) {
+    const raw = values[i];
+    if (raw !== undefined && raw !== null && raw !== "") {
+      const num = Number(raw);
+      if (!Number.isNaN(num)) return num;
+    }
+  }
+  return 0;
+};
+
+const normalizePasses = (rawPasses, gym) => {
+  const passes = Array.isArray(rawPasses) ? rawPasses : [];
+  if (!passes.length && gym?.customPrice) {
+    // Old customPrice → passes shape
+    return Object.entries(gym.customPrice).map(([duration, price]) => {
+      const d = Number(duration) || 1;
+      const basePrice = pickNumber(price, gym.basePrice, gym.price);
+      return {
+        duration: d,
+        durationDays: d,
+        basePrice,
+        salePrice: basePrice,
+        price: basePrice,
+        discountPercent: 0,
+        isActive: true,
+        label: `${d}-day pass`,
+      };
+    });
+  }
+
+  return passes
+    .filter((p) => p && p.isActive !== false) // treat undefined as active
+    .map((p) => {
+      const duration =
+        pickNumber(p.durationDays, p.duration) || 1;
+
+      const basePrice = pickNumber(
+        p.basePrice,
+        p.price,
+        gym?.basePrice,
+        gym?.price
+      );
+
+      let salePrice = pickNumber(p.salePrice, p.price, basePrice);
+      if (!salePrice && basePrice) salePrice = basePrice;
+
+      let discountPercent =
+        typeof p.discountPercent === "number" ? p.discountPercent : 0;
+
+      if (basePrice && salePrice && salePrice < basePrice && !discountPercent) {
+        discountPercent = Math.round(((basePrice - salePrice) / basePrice) * 100);
+      }
+
+      const label =
+        p.name || p.offerLabel || gym?.offerLabel || `${duration}-day pass`;
+
+      return {
+        ...p,
+        duration,
+        durationDays: duration,
+        basePrice,
+        salePrice,
+        price: salePrice || basePrice,
+        discountPercent,
+        label,
+      };
+    });
 };
 
 /* Helper: build next N dates for quick calendar chips */
@@ -217,17 +294,11 @@ export default function GymDetails() {
 
         if (!mounted) return;
 
-        const gymData = gymRes.data;
+        const gymData = gymRes.data || {};
 
-        // Normalise customPrice → passes
-        if (gymData.customPrice && !gymData.passes) {
-          gymData.passes = Object.entries(gymData.customPrice).map(
-            ([duration, price]) => ({
-              duration: Number(duration),
-              price: Number(price),
-            })
-          );
-        }
+        // Normalise passes to new model (with fallback for old customPrice)
+        const normalisedPasses = normalizePasses(gymData.passes, gymData);
+        gymData.passes = normalisedPasses;
 
         setGym(gymData);
         setReviews(reviewRes.data || []);
@@ -292,13 +363,20 @@ export default function GymDetails() {
       }
 
       const gymId = gym?._id || id;
+      const passDuration =
+        selectedPass.duration || selectedPass.durationDays || 1;
+      const effectivePrice = pickNumber(
+        selectedPass.salePrice,
+        selectedPass.price,
+        selectedPass.basePrice
+      );
 
       // 🔹 Step 1: Create Razorpay order via your backend
       const createPayload = {
         gymId,
         date: selectedDate,
-        duration: selectedPass.duration,
-        price: selectedPass.price,
+        duration: passDuration,
+        price: effectivePrice,
       };
 
       const { data } = await API.post(
@@ -342,13 +420,13 @@ export default function GymDetails() {
         amount: order.amount,
         currency: order.currency || "INR",
         name: "Passiify",
-        description: `${selectedPass.duration}-day pass at ${gym.name}`,
+        description: `${passDuration}-day pass at ${gym.name}`,
         order_id: order.id,
         prefill,
         notes: {
           gymId,
           date: selectedDate,
-          duration: String(selectedPass.duration),
+          duration: String(passDuration),
         },
         theme: {
           color: theme.accentFrom,
@@ -362,8 +440,8 @@ export default function GymDetails() {
                 ...response,
                 gymId,
                 date: selectedDate,
-                duration: selectedPass.duration,
-                price: selectedPass.price,
+                duration: passDuration,
+                price: effectivePrice,
               },
               {
                 headers: { Authorization: `Bearer ${token}` },
@@ -497,18 +575,50 @@ export default function GymDetails() {
 
   const galleryImages = getGalleryImages(gym);
 
-  const minPassPrice =
-    gym.passes && gym.passes.length
-      ? Math.min(...gym.passes.map((p) => Number(p.price) || 0))
-      : null;
+  // Cheapest pass (for hero "From ₹")
+  let minPass = null;
+  if (Array.isArray(gym.passes) && gym.passes.length) {
+    minPass = gym.passes.reduce((best, current) => {
+      const currentPrice = pickNumber(
+        current.salePrice,
+        current.price,
+        current.basePrice
+      );
+      if (!best) return current;
+      const bestPrice = pickNumber(
+        best.salePrice,
+        best.price,
+        best.basePrice
+      );
+      if (!bestPrice && currentPrice) return current;
+      return currentPrice && currentPrice < bestPrice ? current : best;
+    }, null);
+  }
 
+  const minPassPrice = minPass
+    ? pickNumber(minPass.salePrice, minPass.price, minPass.basePrice)
+    : null;
+
+  const minPassDuration =
+    minPass?.duration || minPass?.durationDays || (minPass ? 1 : null);
+
+  // Best value (lowest per-day)
   let bestValue = null;
-  if (gym.passes?.length > 1) {
-    const withPerDay = gym.passes.map((p) => ({
-      ...p,
-      perDay: p.price / p.duration,
-    }));
-    bestValue = withPerDay.reduce((a, b) => (a.perDay < b.perDay ? a : b));
+  if (Array.isArray(gym.passes) && gym.passes.length > 1) {
+    bestValue = gym.passes.reduce((best, current) => {
+      const duration =
+        current.duration || current.durationDays || 1;
+      const price = pickNumber(
+        current.salePrice,
+        current.price,
+        current.basePrice
+      );
+      const perDay = duration ? price / duration : price;
+      const curWithPerDay = { ...current, perDay };
+
+      if (!best) return curWithPerDay;
+      return perDay < best.perDay ? curWithPerDay : best;
+    }, null);
   }
 
   const isApproved =
@@ -522,6 +632,14 @@ export default function GymDetails() {
       : null;
 
   const ratingCount = gym.ratingCount || reviews.length || 0;
+
+  const selectedPrice = selectedPass
+    ? pickNumber(
+        selectedPass.salePrice,
+        selectedPass.price,
+        selectedPass.basePrice
+      )
+    : 0;
 
   const backgroundImage =
     mode === "dark"
@@ -626,7 +744,7 @@ export default function GymDetails() {
                     ₹{minPassPrice}
                   </span>
                   <span className="text-[10px] text-gray-300 uppercase tracking-[0.18em]">
-                    / 1-day pass
+                    / {minPassDuration || 1}-day pass
                   </span>
                 </div>
               )}
@@ -1162,9 +1280,48 @@ export default function GymDetails() {
             <div className="grid grid-cols-2 gap-3 mb-4">
               {gym.passes && gym.passes.length > 0 ? (
                 gym.passes.map((p, i) => {
+                  const passDuration =
+                    p.duration || p.durationDays || 1;
+                  const salePrice = pickNumber(
+                    p.salePrice,
+                    p.price,
+                    p.basePrice
+                  );
+                  const basePrice =
+                    p.basePrice && salePrice && p.basePrice > salePrice
+                      ? p.basePrice
+                      : null;
+
+                  const selectedPriceForCompare = selectedPass
+                    ? pickNumber(
+                        selectedPass.salePrice,
+                        selectedPass.price,
+                        selectedPass.basePrice
+                      )
+                    : null;
+
                   const isActive =
-                    selectedPass?.duration === p.duration &&
-                    selectedPass?.price === p.price;
+                    selectedPass &&
+                    (selectedPass._id
+                      ? selectedPass._id === p._id
+                      : selectedPass.duration === passDuration &&
+                        selectedPriceForCompare === salePrice);
+
+                  const bestValuePrice = bestValue
+                    ? pickNumber(
+                        bestValue.salePrice,
+                        bestValue.price,
+                        bestValue.basePrice
+                      )
+                    : null;
+
+                  const isBestValue =
+                    bestValue &&
+                    (bestValue._id
+                      ? bestValue._id === p._id
+                      : bestValue.duration === passDuration &&
+                        bestValuePrice === salePrice);
+
                   return (
                     <button
                       key={i}
@@ -1183,22 +1340,35 @@ export default function GymDetails() {
                         color: isActive ? "#020617" : theme.textMain,
                       }}
                     >
-                      <div>{p.duration}-day</div>
+                      <div>{passDuration}-day</div>
                       <div
                         className="text-[11px] mt-0.5"
                         style={{
-                          color: isActive ? "#111827" : theme.textMuted,
+                          color: isActive ? "#111827" : theme.textMain,
                         }}
                       >
-                        ₹{p.price}
+                        ₹{salePrice}
                       </div>
-                      {bestValue &&
-                        bestValue.duration === p.duration &&
-                        bestValue.price === p.price && (
-                          <span className="absolute -top-2 right-2 text-[9px] bg-emerald-400 text-gray-900 px-2 py-[2px] rounded-full font-semibold">
-                            Best value
+                      {basePrice && (
+                        <div
+                          className="text-[9px] flex items-center gap-1 mt-0.5"
+                          style={{
+                            color: isActive ? "#111827" : theme.textMuted,
+                          }}
+                        >
+                          <span className="line-through opacity-80">
+                            ₹{basePrice}
                           </span>
-                        )}
+                          {p.discountPercent ? (
+                            <span>· {p.discountPercent}% OFF</span>
+                          ) : null}
+                        </div>
+                      )}
+                      {isBestValue && (
+                        <span className="absolute -top-2 right-2 text-[9px] bg-emerald-400 text-gray-900 px-2 py-[2px] rounded-full font-semibold">
+                          Best value
+                        </span>
+                      )}
                     </button>
                   );
                 })
@@ -1219,7 +1389,7 @@ export default function GymDetails() {
                   className="text-2xl font-bold"
                   style={{ color: theme.textMain }}
                 >
-                  ₹{selectedPass.price}
+                  ₹{selectedPrice}
                 </div>
                 <span
                   className="text-[10px] md:text-[11px] px-2 py-1 rounded-full border font-semibold"
@@ -1229,7 +1399,11 @@ export default function GymDetails() {
                     color: "#6EE7B7",
                   }}
                 >
-                  {selectedPass.duration}-day pass
+                  {(selectedPass.duration ||
+                    selectedPass.durationDays ||
+                    1)
+                    .toString()
+                    .concat("-day pass")}
                 </span>
               </div>
             )}
@@ -1386,7 +1560,11 @@ export default function GymDetails() {
               ) : !isApproved ? (
                 "Awaiting verification"
               ) : selectedPass ? (
-                `Confirm & pay for ${selectedPass.duration}-day pass`
+                `Confirm & pay for ${
+                  selectedPass.duration ||
+                  selectedPass.durationDays ||
+                  1
+                }-day pass`
               ) : (
                 "Select a pass to book"
               )}
