@@ -14,6 +14,47 @@ import {
   Sparkles,
 } from "lucide-react";
 
+/* -------------------------------------------------------
+   Helper: resolve correct OAuth base URL
+   ------------------------------------------------------- */
+const resolveAuthBaseURL = () => {
+  let base =
+    (API && API.defaults && API.defaults.baseURL) ||
+    process.env.REACT_APP_API_BASE_URL ||
+    "";
+
+  if (!base && typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isLocal =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.endsWith(".local");
+
+    base = isLocal
+      ? "http://localhost:5000/api"
+      : "https://passiify.onrender.com/api";
+  }
+
+  if (
+    typeof window !== "undefined" &&
+    base.includes("localhost")
+  ) {
+    const host = window.location.hostname;
+    const isLocalHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.endsWith(".local");
+
+    if (!isLocalHost) {
+      base = "https://passiify.onrender.com/api";
+    }
+  }
+
+  return base.replace(/\/+$/, "");
+};
+
 export default function SignupPage() {
   const navigate = useNavigate();
 
@@ -30,7 +71,7 @@ export default function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // -------------------------------------------------------
-  // PASSWORD STRENGTH (simple but useful)
+  // PASSWORD STRENGTH
   // -------------------------------------------------------
   const passwordStrength = useMemo(() => {
     if (!password) return { label: "Too weak", score: 0 };
@@ -47,21 +88,15 @@ export default function SignupPage() {
   }, [password]);
 
   // -------------------------------------------------------
-  // GOOGLE SIGNUP — same base as Axios API
+  // GOOGLE SIGNUP — safe base URL
   // -------------------------------------------------------
   const handleGoogleSignup = () => {
     setError("");
     setGoogleLoading(true);
 
     try {
-      const base = API?.defaults?.baseURL;
-
-      if (!base) {
-        throw new Error("Missing API base URL for Google OAuth");
-      }
-
-      const cleanedBase = base.replace(/\/+$/, "");
-      const redirectUrl = `${cleanedBase}/auth/google`;
+      const base = resolveAuthBaseURL();
+      const redirectUrl = `${base}/auth/google`;
 
       console.log("▶️ Redirecting to Google OAuth (signup):", redirectUrl);
       window.location.href = redirectUrl;
@@ -75,13 +110,12 @@ export default function SignupPage() {
   };
 
   // -------------------------------------------------------
-  // HANDLE SIGNUP (register + auto-login + go home)
+  // HANDLE SIGNUP
   // -------------------------------------------------------
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
 
-    // basic validation before hitting backend
     if (!name.trim() || !email.trim() || !password) {
       setError("Please fill in all fields.");
       return;
@@ -109,7 +143,6 @@ export default function SignupPage() {
         password,
       });
 
-      // 🔑 Store auth info – match LoginPage
       const token = loginRes.data?.token;
       const userPayload = loginRes.data?.user || loginRes.data;
 
@@ -120,7 +153,6 @@ export default function SignupPage() {
         localStorage.setItem("user", JSON.stringify(userPayload));
       }
 
-      // clean old key if any
       localStorage.removeItem("userInfo");
 
       // 3️⃣ Go straight to Home
@@ -145,7 +177,6 @@ export default function SignupPage() {
         flex items-center justify-center 
         px-4 sm:px-6 
         pt-16 sm:pt-20
-        pb-8
         relative overflow-hidden
       "
     >

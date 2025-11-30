@@ -14,6 +14,52 @@ import {
   LogIn,
 } from "lucide-react";
 
+/* -------------------------------------------------------
+   Helper: resolve correct OAuth base URL
+   - Local dev  → http://localhost:5000/api
+   - Live site  → https://passiify.onrender.com/api
+   ------------------------------------------------------- */
+const resolveAuthBaseURL = () => {
+  let base =
+    (API && API.defaults && API.defaults.baseURL) ||
+    process.env.REACT_APP_API_BASE_URL ||
+    "";
+
+  // If nothing from API/env, infer from window
+  if (!base && typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isLocal =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.endsWith(".local");
+
+    base = isLocal
+      ? "http://localhost:5000/api"
+      : "https://passiify.onrender.com/api";
+  }
+
+  // SAFETY: if base still points to localhost but we are NOT on a local host,
+  // force it to Render so phones/tablets don't try to hit their own localhost.
+  if (
+    typeof window !== "undefined" &&
+    base.includes("localhost")
+  ) {
+    const host = window.location.hostname;
+    const isLocalHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.endsWith(".local");
+
+    if (!isLocalHost) {
+      base = "https://passiify.onrender.com/api";
+    }
+  }
+
+  return base.replace(/\/+$/, ""); // remove trailing slashes
+};
+
 export default function LoginPage() {
   const navigate = useNavigate();
 
@@ -66,22 +112,15 @@ export default function LoginPage() {
   }, []);
 
   // -------------------------------------------------------
-  // GOOGLE LOGIN — use same base as Axios API
+  // GOOGLE LOGIN — use safe base URL
   // -------------------------------------------------------
   const handleGoogleLogin = () => {
     setError("");
     setGoogleLoading(true);
 
     try {
-      const base = API?.defaults?.baseURL;
-
-      // If for some reason axios has no baseURL, fail gracefully
-      if (!base) {
-        throw new Error("Missing API base URL for Google OAuth");
-      }
-
-      const cleanedBase = base.replace(/\/+$/, ""); // trim trailing slashes
-      const redirectUrl = `${cleanedBase}/auth/google`; // base already includes /api
+      const base = resolveAuthBaseURL();
+      const redirectUrl = `${base}/auth/google`;
 
       console.log("▶️ Redirecting to Google OAuth (login):", redirectUrl);
       window.location.href = redirectUrl;
@@ -150,7 +189,6 @@ export default function LoginPage() {
         flex items-center justify-center 
         px-4 sm:px-6 
         pt-16 sm:pt-20
-        pb-8
         relative overflow-hidden
       "
     >
