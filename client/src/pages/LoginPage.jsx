@@ -26,7 +26,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 new: separate loading for Google
+  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 NEW
 
   // Prefill remembered email if available
   useEffect(() => {
@@ -66,37 +66,22 @@ export default function LoginPage() {
   }, []);
 
   // -------------------------------------------------------
-  // GOOGLE LOGIN — real redirect to backend
+  // GOOGLE LOGIN — use same base as Axios API
   // -------------------------------------------------------
   const handleGoogleLogin = () => {
     setError("");
     setGoogleLoading(true);
 
     try {
-      // Prefer same base URL as your Axios instance
-      const axiosBase = API?.defaults?.baseURL;
-      const envBase = process.env.REACT_APP_API_BASE_URL;
+      const base =
+        (API && API.defaults && API.defaults.baseURL) ||
+        process.env.REACT_APP_API_BASE_URL ||
+        "/api"; // relative works with dev proxy and production
 
-      let apiBase =
-        axiosBase ||
-        envBase ||
-        (window.location.origin.includes("localhost")
-          ? "http://localhost:5000/api"
-          : `${window.location.origin}/api`);
-
-      if (!apiBase) {
-        console.error("No API base URL configured for Google OAuth");
-        setError(
-          "Google login is temporarily unavailable. Please log in with email."
-        );
-        setGoogleLoading(false);
-        return;
-      }
-
-      const cleanedBase = apiBase.replace(/\/+$/, "");
+      const cleanedBase = base.replace(/\/+$/, "");
       const redirectUrl = `${cleanedBase}/auth/google`;
-      console.log("▶️ Redirecting to Google OAuth:", redirectUrl);
 
+      console.log("▶️ Redirecting to Google OAuth (login):", redirectUrl);
       window.location.href = redirectUrl;
     } catch (err) {
       console.error("Error starting Google login:", err);
@@ -162,7 +147,7 @@ export default function LoginPage() {
         dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 
         flex items-center justify-center 
         px-4 sm:px-6 
-        pt-16 sm:pt-20          // 🔹 extra top padding so fixed navbar doesn't cover content
+        pt-16 sm:pt-20       /* 🔹 space under fixed navbar on mobile */
         relative overflow-hidden
       "
     >

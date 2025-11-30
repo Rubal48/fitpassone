@@ -27,7 +27,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 separate state for Google
+  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 NEW
 
   // -------------------------------------------------------
   // PASSWORD STRENGTH (simple but useful)
@@ -47,37 +47,22 @@ export default function SignupPage() {
   }, [password]);
 
   // -------------------------------------------------------
-  // GOOGLE SIGNUP (aligned with Login page)
+  // GOOGLE SIGNUP — same base as Axios API
   // -------------------------------------------------------
   const handleGoogleSignup = () => {
     setError("");
     setGoogleLoading(true);
 
     try {
-      // Prefer same base URL as your Axios instance
-      const axiosBase = API?.defaults?.baseURL;
-      const envBase = process.env.REACT_APP_API_BASE_URL;
+      const base =
+        (API && API.defaults && API.defaults.baseURL) ||
+        process.env.REACT_APP_API_BASE_URL ||
+        "/api";
 
-      const apiBase =
-        axiosBase ||
-        envBase ||
-        (window.location.origin.includes("localhost")
-          ? "http://localhost:5000/api"
-          : `${window.location.origin}/api`);
-
-      if (!apiBase) {
-        console.error("No API base URL configured for Google OAuth");
-        setError(
-          "Google sign-in is temporarily unavailable. Please sign up with email."
-        );
-        setGoogleLoading(false);
-        return;
-      }
-
-      const cleanedBase = apiBase.replace(/\/+$/, "");
+      const cleanedBase = base.replace(/\/+$/, "");
       const redirectUrl = `${cleanedBase}/auth/google`;
-      console.log("▶️ Redirecting to Google OAuth (signup):", redirectUrl);
 
+      console.log("▶️ Redirecting to Google OAuth (signup):", redirectUrl);
       window.location.href = redirectUrl;
     } catch (err) {
       console.error("Error starting Google signup:", err);
@@ -123,19 +108,18 @@ export default function SignupPage() {
         password,
       });
 
-      // 🔑 Store auth info — match LoginPage behaviour
+      // 🔑 Store auth info – match LoginPage
       const token = loginRes.data?.token;
       const userPayload = loginRes.data?.user || loginRes.data;
 
       if (token) {
         localStorage.setItem("token", token);
       }
-
       if (userPayload) {
         localStorage.setItem("user", JSON.stringify(userPayload));
       }
 
-      // (Optional cleanup of older key if it ever existed)
+      // clean old key if any
       localStorage.removeItem("userInfo");
 
       // 3️⃣ Go straight to Home
@@ -159,7 +143,7 @@ export default function SignupPage() {
         dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 
         flex items-center justify-center 
         px-4 sm:px-6 
-        pt-16 sm:pt-20          /* 🔹 extra top padding for fixed navbar on mobile */
+        pt-16 sm:pt-20        /* 🔹 same navbar spacing as Login */
         relative overflow-hidden
       "
     >
