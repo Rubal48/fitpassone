@@ -78,6 +78,7 @@ export default function Navbar() {
 
   /* -------------------------------------------
      Scroll effect → stronger shadow after 16px
+     (only really visible when at top)
   ------------------------------------------- */
   useEffect(() => {
     const onScroll = () => {
@@ -126,7 +127,8 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-40">
+    // 🔹 No more `fixed top-0` → navbar scrolls with page
+    <nav className="w-full z-40">
       {/* Main nav bar */}
       <div style={containerStyle}>
         <div className="max-w-7xl mx-auto flex justify-between items-center px-4 sm:px-6 py-3 md:py-3.5">
@@ -299,17 +301,16 @@ export default function Navbar() {
         }}
       />
 
-      {/* MOBILE DROPDOWN — animated sheet, “big company” style */}
+      {/* MOBILE DROPDOWN — now collapses height when closed */}
       <div
-        className="md:hidden"
+        className="md:hidden overflow-hidden transition-all duration-200"
         style={{
-          backgroundColor: palette.bg,
-          borderBottom: `1px solid ${palette.border}`,
-          boxShadow: "0 18px 60px rgba(15,23,42,0.8)",
-          transform: menuOpen ? "translateY(0)" : "translateY(-12px)",
+          maxHeight: menuOpen ? 500 : 0,
           opacity: menuOpen ? 1 : 0,
           pointerEvents: menuOpen ? "auto" : "none",
-          transition: "opacity 180ms ease, transform 180ms ease",
+          backgroundColor: palette.bg,
+          borderBottom: menuOpen ? `1px solid ${palette.border}` : "transparent",
+          boxShadow: menuOpen ? "0 18px 60px rgba(15,23,42,0.8)" : "none",
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4 text-sm">
