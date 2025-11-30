@@ -22,7 +22,6 @@ import API from "../utils/api";
 
 /* =========================================================
    GLOBAL THEME — EXACTLY MATCH NAVBAR PATTERN (PASSIIFY)
-   (shadows slightly reduced for performance)
    ========================================================= */
 
 const THEME = {
@@ -49,17 +48,6 @@ const THEME = {
 
 const buildTheme = (mode) => {
   const base = mode === "light" ? THEME.light : THEME.dark;
-
-  // ⬇️ Softer shadows = cheaper to render on low-end phones
-  const shadowStrongBase =
-    mode === "dark"
-      ? "0 20px 70px rgba(0,0,0,0.85)"
-      : "0 18px 60px rgba(15,23,42,0.16)";
-  const shadowSoftBase =
-    mode === "dark"
-      ? "0 12px 40px rgba(15,23,42,0.8)"
-      : "0 10px 30px rgba(15,23,42,0.12)";
-
   return {
     ...base,
     accentFrom: THEME.accentFrom,
@@ -70,8 +58,14 @@ const buildTheme = (mode) => {
     accentOrange: THEME.accentTo,
     accentMint: "#22C55E",
     borderSoft: base.border,
-    shadowStrong: shadowStrongBase,
-    shadowSoft: shadowSoftBase,
+    shadowStrong:
+      mode === "dark"
+        ? "0 32px 120px rgba(0,0,0,0.95)"
+        : "0 28px 90px rgba(15,23,42,0.18)",
+    shadowSoft:
+      mode === "dark"
+        ? "0 20px 80px rgba(15,23,42,0.85)"
+        : "0 18px 60px rgba(15,23,42,0.12)",
   };
 };
 
@@ -187,7 +181,7 @@ const fallbackGymImage = () =>
   "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1400";
 
 /* =========================================================
-   HERO SECTION — fully Passiify themed, lighter effects
+   HERO SECTION — fully Passiify themed
    ========================================================= */
 
 function Hero({
@@ -233,27 +227,26 @@ function Hero({
 
   return (
     <header className="relative w-full pt-4 sm:pt-6">
-      {/* Ambient blobs tuned to Passiify accents
-          ⬇️ Hidden on mobile for performance */}
+      {/* Ambient blobs tuned to Passiify accents */}
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
-          className="hidden md:block absolute -top-24 -left-16 w-72 h-72 rounded-full blur-3xl"
+          className="absolute -top-24 -left-16 w-72 h-72 rounded-full blur-3xl"
           style={{ backgroundColor: `${theme.accentBlue}4D` }}
         />
         <div
-          className="hidden md:block absolute -bottom-24 -right-10 w-80 h-80 rounded-full blur-3xl"
+          className="absolute -bottom-24 -right-10 w-80 h-80 rounded-full blur-3xl"
           style={{ backgroundColor: `${theme.accentOrange}4D` }}
         />
         <div
-          className="hidden md:block absolute top-1/3 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full blur-3xl"
+          className="absolute top-1/3 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full blur-3xl"
           style={{ backgroundColor: `${theme.accentMid}33` }}
         />
       </div>
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Shell hero card (no backdrop-blur now) */}
+        {/* Shell hero card */}
         <div
-          className="relative w-full rounded-[26px] sm:rounded-[32px] border overflow-hidden transition-all duration-300"
+          className="relative w-full rounded-[26px] sm:rounded-[32px] border overflow-hidden backdrop-blur-md md:backdrop-blur-2xl transition-all duration-300"
           style={{
             borderColor: theme.borderSoft,
             boxShadow: theme.shadowStrong,
@@ -288,7 +281,7 @@ function Hero({
             <div className="space-y-4 sm:space-y-5">
               {/* micro trust strip */}
               <div
-                className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-full border"
+                className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-full border backdrop-blur-xl"
                 style={{
                   borderColor: theme.borderSoft,
                   background: isDark
@@ -338,7 +331,7 @@ function Hero({
                 aria-label="Search fitness experiences"
               >
                 <div
-                  className="flex flex-col xs:flex-row items-stretch rounded-2xl border"
+                  className="flex flex-col xs:flex-row items-stretch rounded-2xl border backdrop-blur-md md:backdrop-blur-xl"
                   style={{
                     borderColor: isDark
                       ? "rgba(51,65,85,0.9)"
@@ -348,8 +341,8 @@ function Hero({
                       : "rgba(255,255,255,0.98)",
                     boxShadow:
                       mode === "dark"
-                        ? "0 16px 45px rgba(15,23,42,0.75)"
-                        : "0 12px 32px rgba(15,23,42,0.14)",
+                        ? "0 16px 45px rgba(15,23,42,0.85)"
+                        : "0 12px 32px rgba(15,23,42,0.16)",
                   }}
                 >
                   {/* type selector */}
@@ -367,7 +360,7 @@ function Hero({
                     <select
                       value={type}
                       onChange={(e) => setType(e.target.value)}
-                      className="bg-transparent text-[11px] sm:text-xs md:text-sm outline-none pr-2 w-full"
+                      className="bg-transparent text-[11px] sm:text-xs md:text-sm outline-none pr-2 w-full cursor-pointer"
                       style={{ color: theme.textMain }}
                     >
                       <option value="all">All</option>
@@ -397,7 +390,7 @@ function Hero({
                     {/* submit (Passiify gradient) */}
                     <button
                       type="submit"
-                      className="px-4 md:px-6 py-2.5 text-[11px] sm:text-sm font-semibold rounded-br-2xl xs:rounded-r-2xl xs:rounded-bl-none flex items-center gap-1.5 shadow-md hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition"
+                      className="px-4 md:px-6 py-2.5 text-[11px] sm:text-sm font-semibold rounded-br-2xl xs:rounded-r-2xl xs:rounded-bl-none flex items-center gap-1.5 shadow-md hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition cursor-pointer"
                       style={{
                         backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                         color: "#020617",
@@ -422,7 +415,7 @@ function Hero({
                         key={chip.label}
                         type="button"
                         onClick={() => quickSearch(chip.label, chip.type)}
-                        className="px-3 py-1.5 rounded-full border transition"
+                        className="px-3 py-1.5 rounded-full border transition cursor-pointer"
                         style={{
                           borderColor: theme.borderSoft,
                           background: isDark
@@ -534,18 +527,18 @@ function Hero({
 
             {/* RIGHT — dual highlight card (event + gym) */}
             <div className="relative w-full">
-              {/* floating halos (hidden on mobile for perf) */}
+              {/* floating halos */}
               <div
-                className="hidden md:block pointer-events-none absolute -top-10 right-4 w-28 h-28 sm:w-32 sm:h-32 rounded-full blur-3xl"
+                className="pointer-events-none absolute -top-10 right-4 w-28 h-28 sm:w-32 sm:h-32 rounded-full blur-3xl"
                 style={{ backgroundColor: `${theme.accentMid}55` }}
               />
               <div
-                className="hidden md:block pointer-events-none absolute -bottom-10 -left-4 w-32 h-32 sm:w-40 sm:h-40 rounded-full blur-3xl"
+                className="pointer-events-none absolute -bottom-10 -left-4 w-32 h-32 sm:w-40 sm:h-40 rounded-full blur-3xl"
                 style={{ backgroundColor: `${theme.accentOrange}55` }}
               />
 
               <div
-                className="relative rounded-3xl border overflow-hidden w-full"
+                className="relative rounded-3xl border backdrop-blur-md md:backdrop-blur-2xl overflow-hidden w-full"
                 style={{
                   borderColor: theme.borderSoft,
                   background: isDark
@@ -585,11 +578,10 @@ function Hero({
 
                   <div className="absolute left-3 right-3 bottom-3 sm:left-4 sm:right-4 sm:bottom-4">
                     <div
-                      className="rounded-2xl border px-3.5 sm:px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3"
+                      className="rounded-2xl border px-3.5 sm:px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 shadow-[0_18px_50px_rgba(15,23,42,0.9)]"
                       style={{
                         borderColor: "rgba(148,163,184,0.7)",
                         background: "rgba(15,23,42,0.96)",
-                        boxShadow: "0 18px 50px rgba(15,23,42,0.9)",
                       }}
                     >
                       <div className="flex-1 min-w-0">
@@ -634,7 +626,7 @@ function Hero({
                             <>
                               <Link
                                 to={`/events/${topEvent._id}`}
-                                className="px-2.5 sm:px-3 py-1 rounded-full border text-[11px] md:text-xs text-slate-100 hover:bg-slate-800/80 transition"
+                                className="px-2.5 sm:px-3 py-1 rounded-full border text-[11px] md:text-xs text-slate-100 hover:bg-slate-800/80 transition cursor-pointer"
                                 style={{
                                   borderColor: "rgba(148,163,184,0.7)",
                                 }}
@@ -643,7 +635,7 @@ function Hero({
                               </Link>
                               <Link
                                 to={`/book-event/${topEvent._id}`}
-                                className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                                className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition cursor-pointer"
                                 style={{
                                   backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                                   color: "#020617",
@@ -655,7 +647,7 @@ function Hero({
                           ) : (
                             <Link
                               to="/events"
-                              className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                              className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] md:text-xs font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition cursor-pointer"
                               style={{
                                 backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                                 color: "#020617",
@@ -774,7 +766,7 @@ function Hero({
                               ? `/booking/${featuredGym._id}`
                               : "/explore"
                           }
-                          className="px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                          className="px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition cursor-pointer"
                           style={{
                             backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                             color: "#020617",
@@ -791,7 +783,7 @@ function Hero({
               {/* tiny bottom tags under card */}
               <div className="hidden sm:flex mt-3 flex-wrap gap-3 text-[11px]">
                 <div
-                  className="px-3 py-1.5 rounded-full border flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-full border backdrop-blur flex items-center gap-1.5"
                   style={{
                     borderColor: theme.borderSoft,
                     background: isDark
@@ -804,7 +796,7 @@ function Hero({
                   <span>Solo, group & community sessions</span>
                 </div>
                 <div
-                  className="px-3 py-1.5 rounded-full border flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-full border backdrop-blur flex items-center gap-1.5"
                   style={{
                     borderColor: theme.borderSoft,
                     background: isDark
@@ -861,7 +853,7 @@ function StatsStrip({
     <section className="w-full">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4 -mt-6 space-y-4">
         <div
-          className="rounded-2xl border px-5 py-4 grid sm:grid-cols-3 gap-4 transition-all duration-300"
+          className="rounded-2xl border px-5 py-4 grid sm:grid-cols-3 gap-4 backdrop-blur-md md:backdrop-blur-xl transition-all duration-300"
           style={{
             borderColor: theme.borderSoft,
             background:
@@ -971,7 +963,7 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
     <section className="w-full">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-6">
         <div
-          className="rounded-2xl border px-4 py-4 md:px-5 md:py-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between transition-all duration-300"
+          className="rounded-2xl border px-4 py-4 md:px-5 md:py-5 backdrop-blur-md md:backdrop-blur-xl flex flex-col gap-3 md:flex-row md:items-center md:justify-between transition-all duration-300"
           style={{
             borderColor: theme.borderSoft,
             background:
@@ -1070,7 +1062,7 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                     {eventObj?._id && (
                       <Link
                         to={`/events/${eventObj._id}`}
-                        className="text-[11px] font-semibold hover:underline"
+                        className="text-[11px] font-semibold hover:underline cursor-pointer"
                         style={{ color: theme.accentBlue }}
                       >
                         View event
@@ -1083,7 +1075,7 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
             <div className="flex justify-end mt-1">
               <Link
                 to="/my-bookings"
-                className="text-[11px] font-semibold hover:underline"
+                className="text-[11px] font-semibold hover:underline cursor-pointer"
                 style={{ color: theme.textMuted }}
               >
                 View all bookings →
@@ -1129,7 +1121,7 @@ function TravelCityStrip({ theme, mode }) {
             <Link
               key={c.name}
               to={`/explore?query=${encodeURIComponent(c.name)}`}
-              className="rounded-2xl border transition-all p-4 flex flex-col justify-between"
+              className="rounded-2xl border transition-all p-4 flex flex-col justify-between backdrop-blur-md md:backdrop-blur-xl cursor-pointer"
               style={{
                 borderColor: theme.borderSoft,
                 background:
@@ -1198,7 +1190,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
           </div>
           <Link
             to="/events"
-            className="text-xs font-semibold hover:underline"
+            className="text-xs font-semibold hover:underline cursor-pointer"
             style={{ color: theme.textMuted }}
           >
             See all events →
@@ -1225,16 +1217,15 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
 
               return (
                 <article key={ev._id} className="relative group">
-                  {/* Ambient halo behind event card
-                      ⬇️ Disabled on mobile for performance */}
+                  {/* Ambient halo behind event card */}
                   <div
-                    className="hidden md:block pointer-events-none absolute -inset-1 rounded-3xl opacity-40 blur-2xl group-hover:opacity-60 transition"
+                    className="pointer-events-none absolute -inset-1 rounded-3xl opacity-40 blur-2xl group-hover:opacity-60 transition"
                     style={{
                       background: `radial-gradient(circle at top, ${theme.accentFrom}33, transparent 55%), radial-gradient(circle at bottom, ${theme.accentTo}26, transparent 60%)`,
                     }}
                   />
                   <div
-                    className="relative rounded-2xl overflow-hidden border transition-all"
+                    className="relative rounded-2xl overflow-hidden border transition-all backdrop-blur-md md:backdrop-blur-xl"
                     style={{
                       borderColor: theme.borderSoft,
                       background:
@@ -1351,7 +1342,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                         <div className="flex gap-2">
                           <Link
                             to={`/events/${ev._id}`}
-                            className="px-3 py-1.5 rounded-full border text-[11px]"
+                            className="px-3 py-1.5 rounded-full border text-[11px] cursor-pointer"
                             style={{
                               borderColor: theme.borderSoft,
                               color: theme.textMain,
@@ -1361,7 +1352,7 @@ function UpcomingEventsSection({ theme, mode, events, loading }) {
                           </Link>
                           <Link
                             to={`/book-event/${ev._id}`}
-                            className="px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                            className="px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition cursor-pointer"
                             style={{
                               backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                               color: "#020617",
@@ -1409,7 +1400,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
           </div>
           <Link
             to="/explore"
-            className="text-xs font-semibold hover:underline"
+            className="text-xs font-semibold hover:underline cursor-pointer"
             style={{ color: theme.textMuted }}
           >
             Browse all gyms →
@@ -1430,15 +1421,15 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
             {/* Featured gym row */}
             {featured && (
               <article className="relative group">
-                {/* Ambient halo behind featured gym card (hidden on mobile) */}
+                {/* Ambient halo behind featured gym card */}
                 <div
-                  className="hidden md:block pointer-events-none absolute -inset-1 rounded-[32px] opacity-40 blur-2xl group-hover:opacity-60 transition"
+                  className="pointer-events-none absolute -inset-1 rounded-[32px] opacity-40 blur-2xl group-hover:opacity-60 transition"
                   style={{
                     background: `radial-gradient(circle at top left, ${theme.accentFrom}33, transparent 55%), radial-gradient(circle at bottom right, ${theme.accentTo}26, transparent 60%)`,
                   }}
                 />
                 <div
-                  className="relative rounded-3xl overflow-hidden border flex flex-col md:flex-row"
+                  className="relative rounded-3xl overflow-hidden border flex flex-col md:flex-row backdrop-blur-md md:backdrop-blur-xl"
                   style={{
                     borderColor: theme.borderSoft,
                     background:
@@ -1558,7 +1549,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                       <div className="flex gap-2">
                         <Link
                           to={`/gyms/${featured._id}`}
-                          className="px-3 py-1.5 rounded-full border text-[11px]"
+                          className="px-3 py-1.5 rounded-full border text-[11px] cursor-pointer"
                           style={{
                             borderColor: theme.borderSoft,
                             color: theme.textMain,
@@ -1568,7 +1559,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                         </Link>
                         <Link
                           to={`/booking/${featured._id}`}
-                          className="px-4 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                          className="px-4 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition cursor-pointer"
                           style={{
                             backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                             color: "#020617",
@@ -1590,15 +1581,15 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                   const price = getGymDayPassPrice(g);
                   return (
                     <article key={g._id} className="relative group">
-                      {/* Ambient halo behind gym card (hidden on mobile) */}
+                      {/* Ambient halo behind gym card */}
                       <div
-                        className="hidden md:block pointer-events-none absolute -inset-1 rounded-3xl opacity-40 blur-2xl group-hover:opacity-60 transition"
+                        className="pointer-events-none absolute -inset-1 rounded-3xl opacity-40 blur-2xl group-hover:opacity-60 transition"
                         style={{
                           background: `radial-gradient(circle at top, ${theme.accentFrom}33, transparent 55%), radial-gradient(circle at bottom, ${theme.accentTo}26, transparent 60%)`,
                         }}
                       />
                       <div
-                        className="relative rounded-2xl overflow-hidden border transition-all"
+                        className="relative rounded-2xl overflow-hidden border transition-all backdrop-blur-md md:backdrop-blur-xl"
                         style={{
                           borderColor: theme.borderSoft,
                           background:
@@ -1701,7 +1692,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                             <div className="flex gap-2">
                               <Link
                                 to={`/gyms/${g._id}`}
-                                className="px-3 py-1.5 rounded-full border text-[11px]"
+                                className="px-3 py-1.5 rounded-full border text-[11px] cursor-pointer"
                                 style={{
                                   borderColor: theme.borderSoft,
                                   color: theme.textMain,
@@ -1711,7 +1702,7 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                               </Link>
                               <Link
                                 to={`/booking/${g._id}`}
-                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition"
+                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition cursor-pointer"
                                 style={{
                                   backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
                                   color: "#020617",
@@ -1761,7 +1752,7 @@ function CategoryStrip({ theme, mode }) {
           </h2>
           <Link
             to="/explore"
-            className="text-xs font-semibold hover:underline"
+            className="text-xs font-semibold hover:underline cursor-pointer"
             style={{ color: theme.textMuted }}
           >
             View all experiences →
@@ -1773,7 +1764,7 @@ function CategoryStrip({ theme, mode }) {
             <Link
               key={c.name}
               to={`/explore?query=${encodeURIComponent(c.name)}`}
-              className="group relative overflow-hidden rounded-2xl border transition-all p-4 flex flex-col items-start"
+              className="group relative overflow-hidden rounded-2xl border transition-all p-4 flex flex-col items-start backdrop-blur-md md:backdrop-blur-xl cursor-pointer"
               style={{
                 borderColor: theme.borderSoft,
                 background:
@@ -1828,7 +1819,7 @@ function WhyPassiifySection({ theme, mode }) {
     <section className="w-full">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div
-          className="rounded-3xl border p-6 md:p-8 transition-all duration-300"
+          className="rounded-3xl border p-6 md:p-8 backdrop-blur-md md:backdrop-blur-xl transition-all duration-300"
           style={{
             borderColor: theme.borderSoft,
             background:
@@ -1913,7 +1904,7 @@ function PartnerStrip({ theme, mode }) {
     <section className="w-full">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div
-          className="rounded-3xl border px-5 py-6 md:px-7 md:py-8 flex flex-col md:flex-row gap-5 md:items-center md:justify-between transition-all duration-300"
+          className="rounded-3xl border px-5 py-6 md:px-7 md:py-8 flex flex-col md:flex-row gap-5 md:items-center md:justify-between backdrop-blur-md md:backdrop-blur-xl transition-all duration-300"
           style={{
             borderColor: theme.borderSoft,
             background:
@@ -1955,7 +1946,7 @@ function PartnerStrip({ theme, mode }) {
             <div className="mt-3 flex gap-3 flex-wrap">
               <Link
                 to="/partner"
-                className="px-4 py-2 rounded-xl text-xs font-semibold"
+                className="px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
                 style={{
                   backgroundImage: `linear-gradient(120deg, ${theme.accentBlue}, ${theme.accentOrange})`,
                   color: "#020617",
@@ -1965,7 +1956,7 @@ function PartnerStrip({ theme, mode }) {
               </Link>
               <Link
                 to="/partner?tab=events"
-                className="px-4 py-2 rounded-xl text-xs font-semibold border"
+                className="px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer"
                 style={{
                   borderColor: theme.borderSoft,
                   color: theme.textMain,
@@ -2022,7 +2013,7 @@ function HowItWorksSection({ theme, mode }) {
           {steps.map((step) => (
             <div
               key={step.title}
-              className="rounded-2xl border p-4 flex flex-col transition-all duration-300"
+              className="rounded-2xl border p-4 flex flex-col backdrop-blur-md md:backdrop-blur-xl transition-all duration-300"
               style={{
                 borderColor: theme.borderSoft,
                 background:
@@ -2071,7 +2062,7 @@ function LocalDiscoveryInline({ theme, mode }) {
     <section className="w-full">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div
-          className="rounded-2xl border px-5 py-6 transition-all duration-300"
+          className="rounded-2xl border px-5 py-6 backdrop-blur-md md:backdrop-blur-xl transition-all duration-300"
           style={{
             borderColor: theme.borderSoft,
             background:
@@ -2098,7 +2089,7 @@ function LocalDiscoveryInline({ theme, mode }) {
               <button
                 key={c}
                 onClick={() => handleClick(c)}
-                className="px-3 py-1.5 rounded-full border text-xs transition"
+                className="px-3 py-1.5 rounded-full border text-xs transition cursor-pointer"
                 style={{
                   borderColor: theme.borderSoft,
                   background:
@@ -2142,14 +2133,14 @@ function CTASection({ theme }) {
       <div className="flex flex-wrap gap-3 justify-center">
         <Link
           to="/events"
-          className="inline-flex items-center gap-2 bg-white text-blue-700 px-6 py-2.5 rounded-full font-semibold text-sm shadow-md hover:shadow-lg transition"
+          className="inline-flex items-center gap-2 bg-white text-blue-700 px-6 py-2.5 rounded-full font-semibold text-sm shadow-md hover:shadow-lg transition cursor-pointer"
         >
           Explore events
           <ArrowRight size={16} />
         </Link>
         <Link
           to="/explore"
-          className="inline-flex items-center gap-2 bg-slate-950/20 border border-white/60 text-white px-6 py-2.5 rounded-full font-semibold text-sm hover:bg-slate-950/30 transition"
+          className="inline-flex items-center gap-2 bg-slate-950/20 border border-white/60 text-white px-6 py-2.5 rounded-full font-semibold text-sm hover:bg-slate-950/30 transition cursor-pointer"
         >
           Find gyms & studios
         </Link>
@@ -2528,14 +2519,15 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen w-full overflow-x-hidden pb-16 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
+      className="min-h-screen w-full overflow-x-hidden pb-16 pt-16 md:pt-20 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
       style={{
         color: theme.textMain,
+        touchAction: "manipulation", // ensure taps/scrolls work nicely on mobile
       }}
     >
-      {/* TOP TRUST STRIP */}
+      {/* TOP TRUST STRIP (sits below fixed navbar thanks to pt-16 above) */}
       <div
-        className="w-full border-b transition-all duration-300"
+        className="w-full border-b backdrop-blur-xl transition-all duration-300"
         style={{
           borderColor: theme.borderSoft,
           background:

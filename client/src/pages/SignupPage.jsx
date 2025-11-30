@@ -27,6 +27,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 separate state for Google
 
   // -------------------------------------------------------
   // PASSWORD STRENGTH (simple but useful)
@@ -46,31 +47,45 @@ export default function SignupPage() {
   }, [password]);
 
   // -------------------------------------------------------
-  // GOOGLE SIGNUP (CRA-friendly)
+  // GOOGLE SIGNUP (aligned with Login page)
   // -------------------------------------------------------
   const handleGoogleSignup = () => {
     setError("");
+    setGoogleLoading(true);
 
-    // CRA env: REACT_APP_API_BASE_URL
-    const envBase = process.env.REACT_APP_API_BASE_URL;
+    try {
+      // Prefer same base URL as your Axios instance
+      const axiosBase = API?.defaults?.baseURL;
+      const envBase = process.env.REACT_APP_API_BASE_URL;
 
-    // Fallback: common local dev
-    const apiBase =
-      envBase ||
-      (window.location.origin.includes("localhost")
-        ? "http://localhost:5000/api"
-        : `${window.location.origin}/api`);
+      const apiBase =
+        axiosBase ||
+        envBase ||
+        (window.location.origin.includes("localhost")
+          ? "http://localhost:5000/api"
+          : `${window.location.origin}/api`);
 
-    if (!apiBase) {
-      console.error("No API base URL configured for Google OAuth");
+      if (!apiBase) {
+        console.error("No API base URL configured for Google OAuth");
+        setError(
+          "Google sign-in is temporarily unavailable. Please sign up with email."
+        );
+        setGoogleLoading(false);
+        return;
+      }
+
+      const cleanedBase = apiBase.replace(/\/+$/, "");
+      const redirectUrl = `${cleanedBase}/auth/google`;
+      console.log("▶️ Redirecting to Google OAuth (signup):", redirectUrl);
+
+      window.location.href = redirectUrl;
+    } catch (err) {
+      console.error("Error starting Google signup:", err);
+      setGoogleLoading(false);
       setError(
-        "Google sign-in is temporarily unavailable. Please sign up with email."
+        "Could not start Google sign-in. Please try again or use email signup."
       );
-      return;
     }
-
-    const cleanedBase = apiBase.replace(/\/+$/, "");
-    window.location.href = `${cleanedBase}/auth/google`;
   };
 
   // -------------------------------------------------------
@@ -108,9 +123,20 @@ export default function SignupPage() {
         password,
       });
 
-      // 🔑 Store auth info – match this with your Login page
-      // If your Login page uses a different key, change "userInfo" to that.
-      localStorage.setItem("userInfo", JSON.stringify(loginRes.data));
+      // 🔑 Store auth info — match LoginPage behaviour
+      const token = loginRes.data?.token;
+      const userPayload = loginRes.data?.user || loginRes.data;
+
+      if (token) {
+        localStorage.setItem("token", token);
+      }
+
+      if (userPayload) {
+        localStorage.setItem("user", JSON.stringify(userPayload));
+      }
+
+      // (Optional cleanup of older key if it ever existed)
+      localStorage.removeItem("userInfo");
 
       // 3️⃣ Go straight to Home
       navigate("/");
@@ -126,7 +152,17 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center px-4 sm:px-6 relative overflow-hidden">
+    <div
+      className="
+        min-h-screen 
+        bg-gradient-to-b from-sky-50 via-white to-slate-50 
+        dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 
+        flex items-center justify-center 
+        px-4 sm:px-6 
+        pt-16 sm:pt-20          /* 🔹 extra top padding for fixed navbar on mobile */
+        relative overflow-hidden
+      "
+    >
       {/* Ambient glows */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 -left-40 w-[360px] h-[360px] bg-sky-500/20 dark:bg-sky-500/30 rounded-full blur-3xl" />
@@ -186,15 +222,15 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={handleGoogleSignup}
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3"
+                disabled={loading || googleLoading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <img
                   src="https://www.google.com/favicon.ico"
                   alt=""
                   className="w-4 h-4"
                 />
-                Continue with Google
+                {googleLoading ? "Opening Google…" : "Continue with Google"}
               </button>
 
               <div className="flex items-center gap-3 my-4">
@@ -346,7 +382,7 @@ export default function SignupPage() {
                 {/* Submit */}
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                   className="w-full mt-1 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-slate-950 py-2.5 shadow-[0_16px_60px_rgba(15,23,42,0.9)] disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 hover:brightness-105 transition-transform hover:scale-[1.01] active:scale-[0.99]"
                 >
                   {loading ? (

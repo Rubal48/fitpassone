@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false); // 🔹 new: separate loading for Google
 
   // Prefill remembered email if available
   useEffect(() => {
@@ -69,27 +70,41 @@ export default function LoginPage() {
   // -------------------------------------------------------
   const handleGoogleLogin = () => {
     setError("");
+    setGoogleLoading(true);
 
-    // CRA-style env var
-    const envBase = process.env.REACT_APP_API_BASE_URL;
+    try {
+      // Prefer same base URL as your Axios instance
+      const axiosBase = API?.defaults?.baseURL;
+      const envBase = process.env.REACT_APP_API_BASE_URL;
 
-    // Fallbacks
-    const apiBase =
-      envBase ||
-      (window.location.origin.includes("localhost")
-        ? "http://localhost:5000/api"
-        : `${window.location.origin}/api`);
+      let apiBase =
+        axiosBase ||
+        envBase ||
+        (window.location.origin.includes("localhost")
+          ? "http://localhost:5000/api"
+          : `${window.location.origin}/api`);
 
-    if (!apiBase) {
-      console.error("No API base URL configured for Google OAuth");
+      if (!apiBase) {
+        console.error("No API base URL configured for Google OAuth");
+        setError(
+          "Google login is temporarily unavailable. Please log in with email."
+        );
+        setGoogleLoading(false);
+        return;
+      }
+
+      const cleanedBase = apiBase.replace(/\/+$/, "");
+      const redirectUrl = `${cleanedBase}/auth/google`;
+      console.log("▶️ Redirecting to Google OAuth:", redirectUrl);
+
+      window.location.href = redirectUrl;
+    } catch (err) {
+      console.error("Error starting Google login:", err);
+      setGoogleLoading(false);
       setError(
-        "Google login is temporarily unavailable. Please log in with email."
+        "Could not start Google sign-in. Please try again or use email login."
       );
-      return;
     }
-
-    const cleanedBase = apiBase.replace(/\/+$/, "");
-    window.location.href = `${cleanedBase}/auth/google`;
   };
 
   // -------------------------------------------------------
@@ -140,7 +155,17 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center px-4 sm:px-6 relative overflow-hidden">
+    <div
+      className="
+        min-h-screen 
+        bg-gradient-to-b from-sky-50 via-white to-slate-50 
+        dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 
+        flex items-center justify-center 
+        px-4 sm:px-6 
+        pt-16 sm:pt-20          // 🔹 extra top padding so fixed navbar doesn't cover content
+        relative overflow-hidden
+      "
+    >
       {/* Ambient glows */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 -left-40 w-[360px] h-[360px] bg-sky-500/20 dark:bg-sky-500/30 rounded-full blur-3xl" />
@@ -201,15 +226,15 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3"
+                disabled={loading || googleLoading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm hover:border-sky-400/70 dark:hover:border-sky-400/70 transition mb-3 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <img
                   src="https://www.google.com/favicon.ico"
                   alt=""
                   className="w-4 h-4"
                 />
-                Continue with Google
+                {googleLoading ? "Opening Google…" : "Continue with Google"}
               </button>
 
               <div className="flex items-center gap-3 my-4">
@@ -300,7 +325,7 @@ export default function LoginPage() {
                 {/* Submit */}
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                   className="w-full mt-1 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-slate-950 py-2.5 shadow-[0_16px_60px_rgba(15,23,42,0.9)] disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-blue-600 via-sky-500 to-orange-500 hover:brightness-105 transition-transform hover:scale-[1.01] active:scale-[0.99]"
                 >
                   {loading ? (
@@ -395,7 +420,7 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-                  
+
         {/* Tiny footer line */}
         <p className="mt-3 text-[10px] text-center text-slate-500 dark:text-slate-500 max-w-xl mx-auto">
           Secure by design. Your login details are encrypted and never shared
