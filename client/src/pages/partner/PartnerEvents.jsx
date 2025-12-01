@@ -42,14 +42,25 @@ const PartnerEvents = () => {
     setLoading(true);
     setError("");
     try {
+      const config = {};
+
+      // ✅ If this account is an event host, only show THEIR events
+      //    based on the organizer name from the linked gym profile.
+      if (isEventHost && gym?.name) {
+        config.params = {
+          organizer: gym.name, // must match Event.organizer in DB
+        };
+      }
+
       // Backend: GET /events  → { success, events }
-      const res = await API.get("/events");
+      const res = await API.get("/events", config);
       const data = res.data?.events || res.data || [];
       setEvents(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error loading events:", err);
       const msg =
-        err?.response?.data?.message || "Unable to load events. Please try again.";
+        err?.response?.data?.message ||
+        "Unable to load events. Please try again.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -58,6 +69,7 @@ const PartnerEvents = () => {
 
   useEffect(() => {
     fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ===========================
@@ -220,13 +232,14 @@ const PartnerEvents = () => {
           </h1>
           <p className="mt-1 max-w-xl text-xs text-gray-400">
             {isEventHost
-              ? "See all events on Passiify with their capacity, ticket sales and status. Later, this view will filter to only your hosted events."
+              ? "See all events you host on Passiify with their capacity, ticket sales and status. This view is filtered to only your hosted events."
               : "Use this view to understand which special classes and events are driving the most bookings and revenue."}
           </p>
           <p className="mt-2 flex items-center gap-1 text-[11px] text-gray-500">
             <AlertCircle className="h-3 w-3" />
-            Connected to your <code>/events</code> backend. Host-specific
-            filtering can be added later.
+            Connected to your <code>/events</code> backend. For event hosts,
+            this view filters by{" "}
+            <code>organizer = {gym?.name || "your brand"}</code>.
           </p>
         </div>
         <div className="flex gap-2">
@@ -599,10 +612,12 @@ const PartnerEvents = () => {
       {/* Backend note */}
       <p className="text-[11px] text-gray-500">
         This view reads from your <code>Event</code> model via{" "}
-        <code>GET /events</code>. Later, you can add host-specific routes
-        (e.g. <code>GET /events/host/me</code> or query by <code>host</code>) and
-        event analytics from <code>/event-bookings/event/:eventId/analytics</code>{" "}
-        without changing this UI.
+        <code>GET /events</code>. For event hosts, it uses{" "}
+        <code>?organizer=&lt;your brand name&gt;</code> so only your hosted
+        events appear here. Later, you can also add host-based routes (e.g.{" "}
+        <code>GET /events/host/me</code>) and analytics from{" "}
+        <code>/event-bookings/event/:eventId/analytics</code> without changing
+        this UI.
       </p>
     </div>
   );

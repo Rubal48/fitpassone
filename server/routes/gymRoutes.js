@@ -28,7 +28,9 @@ const mapPassesForDashboard = (gym) => {
       typeof p.discountPercent === "number" ? p.discountPercent : 0;
 
     if (basePrice && salePrice && salePrice < basePrice && !discountPercent) {
-      discountPercent = Math.round(((basePrice - salePrice) / basePrice) * 100);
+      discountPercent = Math.round(
+        ((basePrice - salePrice) / basePrice) * 100
+      );
     } else if (!basePrice || salePrice >= basePrice) {
       discountPercent = 0;
     }
@@ -190,12 +192,14 @@ router.post(
 
     const duration = Number(durationDays) || 1;
 
-    let base = basePrice !== undefined && basePrice !== null
-      ? Number(basePrice)
-      : undefined;
-    let sale = salePrice !== undefined && salePrice !== null
-      ? Number(salePrice)
-      : undefined;
+    let base =
+      basePrice !== undefined && basePrice !== null
+        ? Number(basePrice)
+        : undefined;
+    let sale =
+      salePrice !== undefined && salePrice !== null
+        ? Number(salePrice)
+        : undefined;
     const flatPrice =
       price !== undefined && price !== null ? Number(price) : undefined;
 
@@ -299,18 +303,40 @@ router.get(
   })
 );
 
+// ✅ SAFE /me/stats – works even if user has no gym (event-only host)
 router.get(
   "/me/stats",
   verifyToken,
   asyncHandler(async (req, res) => {
-    const gym = await Gym.findOne({ owner: req.user._._id });
+    const user = req.user;
 
+    if (!user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
+
+    const gym = await Gym.findOne({ owner: user._id });
+
+    // If no gym (e.g. pure event host), return safe zeros so UI doesn't error
     if (!gym) {
-      return res.status(404).json({ message: "Gym not found for this owner." });
+      return res.json({
+        success: true,
+        bookingsToday: 0,
+        activePasses: 0,
+        revenueThisMonth: 0,
+        growthRate: 0,
+        rating: 4.8, // nice default rating for now
+        upcomingEvents: 0,
+      });
     }
 
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const bookingsToday = await Booking.countDocuments({
@@ -338,10 +364,11 @@ router.get(
 
     const revenueThisMonth = revenueAgg[0]?.total || 0;
 
-    const growthRate = 0;
-    const upcomingEvents = 0;
+    const growthRate = 0; // placeholder for later comparison logic
+    const upcomingEvents = 0; // events will come from EventBooking later
 
     res.json({
+      success: true,
       bookingsToday,
       activePasses,
       revenueThisMonth,

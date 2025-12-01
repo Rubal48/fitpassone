@@ -2,6 +2,8 @@
 import EventBooking from "../models/EventBooking.js";
 import Event from "../models/Event.js";
 import User from "../models/User.js";
+import Gym from "../models/Gym.js"; // 👈 added
+
 // import { sendEventBookingEmail } from "../utils/sendEmail.js"; // (optional for later)
 
 /**
@@ -488,6 +490,278 @@ export const getEventAnalytics = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch analytics",
+    });
+  }
+};
+
+/**
+ * 📊 Host / event organiser overview stats
+ * GET /api/event-bookings/host/overview
+ *
+ * Used in PartnerOverview when businessType === "event"
+ */
+export const getEventHostOverview = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
+
+    // Find linked gym/event brand for this user
+    const gym = await Gym.findOne({ owner: userId }).lean();
+
+    // Build event query: prefer matching by organizer name (brand),
+    // otherwise fallback to host user id.
+    const eventQuery = {};
+    if (gym?.name) {
+      eventQuery.organizer = gym.name;
+    } else {
+      eventQuery.host = userId;
+    }
+
+    const events = await Event.find(eventQuery).lean();
+
+    if (!events.length) {
+      return res.json({
+        success: true,
+        bookingsToday: 0,
+        activePasses: 0, // here: active events
+        revenueThisMonth: 0,
+        growthRate: 0,
+        rating: 0,
+        upcomingEvents: 0,
+      });
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // For growth: compare last 7 days vs previous 7 days
+    const startCurrent7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const startPrev7 = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    const eventIds = events.map((e) => e._id);
+
+    const bookings = await EventBooking.find({
+      event: { $in: eventIds },
+      createdAt: { $gte: startPrev7 },
+    }).lean();
+
+    let bookingsToday = 0;
+    let revenueThisMonth = 0;
+    let current7 = 0;
+    let prev7 = 0;
+
+    bookings.forEach((b) => {
+      const created = new Date(b.createdAt);
+      const tickets = b.tickets || 0;
+      const payout = b.hostPayout ?? b.totalPrice ?? 0;
+
+      if (created >= startOfToday) {
+        bookingsToday += tickets;
+      }
+      if (created >= startOfMonth) {
+        revenueThisMonth += payout;
+      }
+      if (created >= startCurrent7) {
+        current7 += 1;
+      } else if (created >= startPrev7) {
+        prev7 += 1;
+      }
+    });
+
+    let growthRate = 0;
+    if (prev7 > 0) {
+      growthRate = Math.round(((current7 - prev7) / prev7) * 100);
+    } else if (current7 > 0) {
+      growthRate = 100;
+    }
+
+    const nowTime = now.getTime();
+    const upcomingEvents = events.filter(
+      (e) => e.date && new Date(e.date).getTime() >= nowTime
+    ).length;
+
+    const activeEvents = events.filter((e) => {
+      const isApproved = !e.status || e.status === "approved";
+      const isFuture = e.date
+        ? new Date(e.date).getTime() >= nowTime
+        : false;
+      return isApproved && isFuture;
+    }).length;
+
+    let ratingSum = 0;
+    let ratingCount = 0;
+    events.forEach((e) => {
+      if (typeof e.rating === "number" && e.ratingCount > 0) {
+        ratingSum += e.rating;
+        ratingCount += 1;
+      }
+    });
+    const avgRating = ratingCount ? ratingSum / ratingCount : 0;
+
+    return res.json({
+      success: true,
+      bookingsToday,
+      activePasses: activeEvents, // reused key for PartnerOverview
+      revenueThisMonth,
+      growthRate,
+      rating: avgRating,
+      upcomingEvents,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching host overview:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch host overview",
+    });
+  }
+};
+
+/**
+ * 🥇 Top events for a host / partner
+ * GET /api/event-bookings/host/top-events
+ *
+ * Used in PartnerOverview "Top events" box
+ */
+export const getEventHostTopEvents = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
+
+    const gym = await Gym.findOne({ owner: userId }).lean();
+
+    const eventQuery = {};
+    if (gym?.name) {
+      eventQuery.organizer = gym.name;
+    } else {
+      eventQuery.host = userId;
+    }
+
+    const events = await Event.find(eventQuery).lean();
+
+    if (!events.length) {
+      return res.json({ success: true, items: [] });
+    }
+
+    const eventIds = events.map((e) => e._id);
+
+    const bookings = await EventBooking.find({
+      event: { $in: eventIds },
+    })
+      .lean()
+      .exec();
+
+    const byEvent = {};
+    bookings.forEach((b) => {
+      const key = b.event.toString();
+      if (!byEvent[key]) {
+        byEvent[key] = { totalTickets: 0, totalRevenue: 0 };
+      }
+      byEvent[key].totalTickets += b.tickets || 0;
+      byEvent[key].totalRevenue += b.totalPrice || 0;
+    });
+
+    const eventMap = new Map(events.map((e) => [e._id.toString(), e]));
+
+    const items = Object.entries(byEvent).map(([eventId, agg]) => {
+      const ev = eventMap.get(eventId);
+      const totalTickets = agg.totalTickets;
+      const totalRevenue = agg.totalRevenue;
+      const averagePrice =
+        totalTickets > 0
+          ? Math.round(totalRevenue / totalTickets)
+          : ev?.price || 0;
+
+      return {
+        eventId,
+        name: ev?.name || "Event",
+        totalTickets,
+        totalRevenue,
+        averagePrice,
+        date: ev?.date,
+      };
+    });
+
+    items.sort((a, b) => {
+      if (b.totalTickets !== a.totalTickets) {
+        return b.totalTickets - a.totalTickets;
+      }
+      return b.totalRevenue - a.totalRevenue;
+    });
+
+    const top3 = items.slice(0, 3);
+
+    return res.json({ success: true, items: top3 });
+  } catch (error) {
+    console.error("❌ Error fetching host top events:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch top events",
+    });
+  }
+};
+
+/**
+ * 👤 Host-level event bookings (for PartnerBookings)
+ * GET /api/event-bookings/host/me
+ *
+ * Used in PartnerBookings when isEventHost === true
+ */
+export const getHostEventBookings = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
+
+    // Try to match events by brand name first (organizer),
+    // otherwise fallback to host user id
+    const gym = await Gym.findOne({ owner: userId }).lean();
+
+    const eventQuery = {};
+    if (gym?.name) {
+      eventQuery.organizer = gym.name;
+    } else {
+      eventQuery.host = userId;
+    }
+
+    const events = await Event.find(eventQuery)
+      .select("_id name date location")
+      .lean();
+
+    if (!events.length) {
+      return res.json({ success: true, bookings: [] });
+    }
+
+    const eventIds = events.map((e) => e._id);
+
+    const bookings = await EventBooking.find({
+      event: { $in: eventIds },
+    })
+      .populate("user", "name email")
+      .populate("event", "name date location")
+      .sort({ createdAt: -1 });
+
+    return res.json({ success: true, bookings });
+  } catch (error) {
+    console.error("❌ Error fetching host bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch host bookings",
     });
   }
 };

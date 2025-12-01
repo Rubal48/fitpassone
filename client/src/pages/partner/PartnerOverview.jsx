@@ -21,6 +21,7 @@ const THEME = {
 
 const PartnerOverview = () => {
   const { gym, isGym, isEventHost } = useOutletContext();
+
   const [stats, setStats] = useState({
     bookingsToday: 0,
     activePasses: 0, // for gyms: active passes; for events: active events
@@ -31,23 +32,58 @@ const PartnerOverview = () => {
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // 🔥 new: top events for event hosts
+  const [topEvents, setTopEvents] = useState([]);
+
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchStatsAndTop = async () => {
       setLoadingStats(true);
       try {
-        // 🔢 Analytics endpoint for this partner
-        const res = await API.get("/gyms/me/stats").catch(() => null);
-        const data = res?.data || {};
+        if (isEventHost) {
+          // ⭐ EVENT ORGANISER MODE → use event bookings + top events
+          const [overviewRes, topRes] = await Promise.all([
+            API.get("/event-bookings/host/overview"),
+            API.get("/event-bookings/host/top-events").catch(() => null),
+          ]);
 
-        setStats((prev) => ({
-          ...prev,
-          bookingsToday: data.bookingsToday ?? prev.bookingsToday,
-          activePasses: data.activePasses ?? prev.activePasses,
-          revenueThisMonth: data.revenueThisMonth ?? prev.revenueThisMonth,
-          growthRate: data.growthRate ?? prev.growthRate,
-          rating: data.rating ?? prev.rating,
-          upcomingEvents: data.upcomingEvents ?? prev.upcomingEvents,
-        }));
+          const data = overviewRes?.data || {};
+
+          setStats((prev) => ({
+            ...prev,
+            bookingsToday: data.bookingsToday ?? prev.bookingsToday,
+            activePasses: data.activePasses ?? prev.activePasses, // here: active events
+            revenueThisMonth:
+              data.revenueThisMonth ?? prev.revenueThisMonth,
+            growthRate: data.growthRate ?? prev.growthRate,
+            rating: data.rating ?? prev.rating,
+            upcomingEvents: data.upcomingEvents ?? prev.upcomingEvents,
+          }));
+
+          const items = topRes?.data?.items;
+          if (Array.isArray(items)) {
+            setTopEvents(items);
+          } else {
+            setTopEvents([]);
+          }
+        } else {
+          // 🧱 GYM PARTNER MODE → existing gym stats endpoint
+          const res = await API.get("/gyms/me/stats").catch(() => null);
+          const data = res?.data || {};
+
+          setStats((prev) => ({
+            ...prev,
+            bookingsToday: data.bookingsToday ?? prev.bookingsToday,
+            activePasses: data.activePasses ?? prev.activePasses,
+            revenueThisMonth:
+              data.revenueThisMonth ?? prev.revenueThisMonth,
+            growthRate: data.growthRate ?? prev.growthRate,
+            rating: data.rating ?? prev.rating,
+            upcomingEvents: data.upcomingEvents ?? prev.upcomingEvents,
+          }));
+
+          // topEvents only used for event hosts
+          setTopEvents([]);
+        }
       } catch (err) {
         console.error("Error loading stats:", err);
       } finally {
@@ -55,8 +91,8 @@ const PartnerOverview = () => {
       }
     };
 
-    fetchStats();
-  }, []);
+    fetchStatsAndTop();
+  }, [isEventHost]);
 
   const isVerified = gym?.status === "approved" || gym?.verified;
 
@@ -242,7 +278,9 @@ const PartnerOverview = () => {
               <div className="flex items-baseline gap-1">
                 <span className="text-xl font-semibold">{card.value}</span>
               </div>
-              <div className={`mt-1 flex items-center gap-1 text-[11px] ${card.helperColor}`}>
+              <div
+                className={`mt-1 flex items-center gap-1 text-[11px] ${card.helperColor}`}
+              >
                 {HelperIcon && <HelperIcon className="h-3 w-3" />}
                 <span>{card.helper}</span>
               </div>
@@ -274,47 +312,42 @@ const PartnerOverview = () => {
           </div>
 
           <div className="space-y-3 text-xs">
-            {/* Placeholder UI – swap with real data later */}
+            {/* 🔥 Event organiser: real top events from backend */}
             {isEventHost ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Sunset Yoga Festival</p>
-                    <p className="text-[11px] text-gray-400">
-                      210 tickets · ₹499 avg
-                    </p>
+              topEvents.length > 0 ? (
+                topEvents.map((item) => (
+                  <div
+                    key={item.eventId}
+                    className="flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-medium">{item.name}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {item.totalTickets} tickets · ₹
+                        {Math.round(item.averagePrice || 0)} avg
+                      </p>
+                    </div>
+                    <span className="flex items-center gap-1 text-[11px] text-emerald-300">
+                      <ArrowUpRight className="h-3 w-3" />
+                      Top performer
+                    </span>
                   </div>
-                  <span className="flex items-center gap-1 text-[11px] text-emerald-300">
-                    <ArrowUpRight className="h-3 w-3" />
-                    +24%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Weekend Strength Camp</p>
-                    <p className="text-[11px] text-gray-400">
-                      132 tickets · ₹799 avg
-                    </p>
+                ))
+              ) : (
+                // fallback when no data yet
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">No event data yet</p>
+                      <p className="text-[11px] text-gray-400">
+                        Create your first event to see performance here.
+                      </p>
+                    </div>
                   </div>
-                  <span className="flex items-center gap-1 text-[11px] text-emerald-300">
-                    <ArrowUpRight className="h-3 w-3" />
-                    +11%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">MetCon Showdown</p>
-                    <p className="text-[11px] text-gray-400">
-                      84 tickets · ₹999 avg
-                    </p>
-                  </div>
-                  <span className="flex items-center gap-1 text-[11px] text-red-300">
-                    <ArrowDownRight className="h-3 w-3" />
-                    -3%
-                  </span>
-                </div>
-              </>
+                </>
+              )
             ) : (
+              // Gym partners: keep your current placeholder top passes for now
               <>
                 <div className="flex items-center justify-between">
                   <div>
@@ -357,7 +390,7 @@ const PartnerOverview = () => {
           </div>
         </div>
 
-        {/* Upcoming events */}
+        {/* Upcoming events (still placeholder for now) */}
         <div
           className="rounded-2xl border p-4"
           style={{
@@ -372,7 +405,7 @@ const PartnerOverview = () => {
               </p>
               <h3 className="text-sm font-semibold">Upcoming events</h3>
             </div>
-            <button className="text-[11px] text-gray-400 hover:text-gray-200">
+          <button className="text-[11px] text-gray-400 hover:text-gray-200">
               Manage
             </button>
           </div>

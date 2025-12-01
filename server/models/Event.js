@@ -1,7 +1,7 @@
-// models/Event.js
+// server/models/Event.js
 import mongoose from "mongoose";
 
-const { Schema } = mongoose;
+const { Schema, model } = mongoose;
 
 // ✅ Optional: cancellation policy per event
 const cancellationPolicySchema = new Schema(
@@ -143,7 +143,7 @@ eventSchema.pre("save", function (next) {
   next();
 });
 
-// Optional: small helper method if you want to adjust capacity safely later
+// Optional: small helper methods
 eventSchema.methods.decrementSeats = function (tickets = 1) {
   if (this.remainingSeats == null) this.remainingSeats = this.capacity;
   this.remainingSeats = Math.max(0, this.remainingSeats - tickets);
@@ -159,4 +159,7 @@ eventSchema.methods.incrementSeats = function (tickets = 1) {
   this.ticketsSold = Math.max(0, this.ticketsSold - tickets);
 };
 
-export default mongoose.model("Event", eventSchema);
+// 🔥 VERY IMPORTANT: default export must be the model function
+const Event = model("Event", eventSchema);
+
+export default Event;

@@ -1,3 +1,4 @@
+// server/routes/eventRoutes.js
 import express from "express";
 import Event from "../models/Event.js";
 
@@ -5,15 +6,40 @@ const router = express.Router();
 
 /**
  * @route   GET /api/events
- * @desc    Get all events
+ * @desc    Get events (optionally filtered)
+ * Query params supported:
+ *   - organizer: string (exact match, usually your gym/brand name)
+ *   - hostId: string (Mongo ObjectId of the host user)
+ *   - status: "approved" | "pending" | "rejected" (optional)
  */
 router.get("/", async (req, res) => {
   try {
-    const events = await Event.find().sort({ date: 1 });
+    const { organizer, hostId, status } = req.query;
+
+    const query = {};
+
+    // Filter by organizer name (for event host dashboard)
+    if (organizer) {
+      query.organizer = organizer;
+    }
+
+    // Filter by host user id (for future use if needed)
+    if (hostId) {
+      query.host = hostId;
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    const events = await Event.find(query).sort({ date: 1 });
+
     res.status(200).json({ success: true, events });
   } catch (error) {
     console.error("❌ Error fetching events:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch events" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch events" });
   }
 });
 
@@ -129,7 +155,9 @@ router.post("/", async (req, res) => {
     res.status(201).json({ success: true, event: newEvent });
   } catch (error) {
     console.error("❌ Error creating event:", error);
-    res.status(500).json({ success: false, message: "Failed to create event" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to create event" });
   }
 });
 

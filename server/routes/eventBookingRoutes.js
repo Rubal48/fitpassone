@@ -10,6 +10,9 @@ import {
   cancelEventBooking,
   getEventAttendanceList,
   getEventAnalytics,
+  getEventHostOverview,   // host overview stats
+  getEventHostTopEvents,  // host top-events
+  getHostEventBookings,   // 👈 NEW: host /me bookings
 } from "../controllers/eventBookingController.js";
 
 const router = express.Router();
@@ -25,6 +28,24 @@ router.post("/", verifyToken, createEventBooking);
  * GET /api/event-bookings/me
  */
 router.get("/me", verifyToken, getMyEventBookings);
+
+/**
+ * 👤 Host-level event bookings (for PartnerBookings)
+ * GET /api/event-bookings/host/me
+ */
+router.get("/host/me", verifyToken, getHostEventBookings);
+
+/**
+ * 📊 Host / event organiser overview stats
+ * GET /api/event-bookings/host/overview
+ */
+router.get("/host/overview", verifyToken, getEventHostOverview);
+
+/**
+ * 🥇 Top events for this host
+ * GET /api/event-bookings/host/top-events
+ */
+router.get("/host/top-events", verifyToken, getEventHostTopEvents);
 
 /**
  * 📜 Get bookings by user ID (admin usage)

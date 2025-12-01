@@ -1,7 +1,13 @@
 // src/pages/partner/PartnerRevenue.jsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Wallet, ArrowUpRight, CalendarDays } from "lucide-react";
+import {
+  Wallet,
+  ArrowUpRight,
+  CalendarDays,
+  AlertCircle,
+} from "lucide-react";
+import API from "../../utils/api";
 
 const THEME = {
   card: "rgba(15, 10, 24, 0.96)",
@@ -11,32 +17,127 @@ const THEME = {
 const PartnerRevenue = () => {
   const { gym, isGym, isEventHost } = useOutletContext();
 
-  const brandName =
-    gym?.name || (isEventHost ? "your brand" : "your gym");
+  const [stats, setStats] = useState({
+    lifetimeRevenue: 0,
+    revenueThisMonth: 0,
+    pendingPayout: 0,
+    lastPayoutAmount: 0,
+    lastPayoutDate: null,
+    growthRate: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const brandName = gym?.name || (isEventHost ? "your brand" : "your gym");
+
+  /* ============================
+     FETCH REVENUE STATS
+  ============================= */
+  useEffect(() => {
+    const fetchRevenue = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        if (isEventHost && !isGym) {
+          // 🎟 Event organiser – use event bookings overview
+          const res = await API.get("/event-bookings/host/overview");
+          const data = res.data || {};
+
+          setStats((prev) => ({
+            ...prev,
+            lifetimeRevenue: data.lifetimeRevenue ?? prev.lifetimeRevenue ?? 0,
+            revenueThisMonth: data.revenueThisMonth ?? 0,
+            pendingPayout: data.pendingPayout ?? prev.pendingPayout ?? 0,
+            lastPayoutAmount:
+              data.lastPayoutAmount ?? prev.lastPayoutAmount ?? 0,
+            lastPayoutDate: data.lastPayoutDate ?? prev.lastPayoutDate ?? null,
+            growthRate: data.growthRate ?? 0,
+          }));
+        } else {
+          // 🏋️ Gym partner (or mixed) – use gym stats
+          const res = await API.get("/gyms/me/stats");
+          const data = res.data || {};
+
+          setStats((prev) => ({
+            ...prev,
+            lifetimeRevenue: data.lifetimeRevenue ?? prev.lifetimeRevenue ?? 0,
+            revenueThisMonth: data.revenueThisMonth ?? 0,
+            pendingPayout: data.pendingPayout ?? prev.pendingPayout ?? 0,
+            lastPayoutAmount:
+              data.lastPayoutAmount ?? prev.lastPayoutAmount ?? 0,
+            lastPayoutDate: data.lastPayoutDate ?? prev.lastPayoutDate ?? null,
+            growthRate: data.growthRate ?? 0,
+          }));
+        }
+      } catch (err) {
+        console.error("Error loading revenue stats:", err);
+        const msg =
+          err?.response?.data?.message ||
+          "Unable to load revenue stats right now.";
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRevenue();
+  }, [isEventHost, isGym]);
+
+  /* ============================
+     DERIVED LABELS
+  ============================= */
+  const lifetimeLabelValue = `₹${Number(
+    stats.lifetimeRevenue || 0
+  ).toLocaleString()}`;
+
+  const monthLabelValue = `₹${Number(
+    stats.revenueThisMonth || 0
+  ).toLocaleString()}`;
+
+  const pendingLabelValue = `₹${Number(
+    stats.pendingPayout || 0
+  ).toLocaleString()}`;
+
+  const lastPayoutLabelValue =
+    stats.lastPayoutAmount && stats.lastPayoutAmount > 0
+      ? `₹${Number(stats.lastPayoutAmount).toLocaleString()}${
+          stats.lastPayoutDate
+            ? ` · ${new Date(stats.lastPayoutDate).toLocaleDateString()}`
+            : ""
+        }`
+      : "—";
+
+  const growthHelper =
+    stats.growthRate === 0
+      ? "+0% vs last month"
+      : `${stats.growthRate > 0 ? "+" : ""}${stats.growthRate}% vs last month`;
 
   const revenueCards = [
     {
       label: "Lifetime revenue",
-      value: "₹0",
-      helper: "Will auto-fill once payouts are connected",
+      value: lifetimeLabelValue,
+      helper: "Approx total before fees",
       icon: Wallet,
     },
     {
       label: "This month (gross)",
-      value: "₹0",
-      helper: "+0% vs last month (sample)",
+      value: monthLabelValue,
+      helper: growthHelper,
       icon: ArrowUpRight,
     },
     {
       label: "Pending payout",
-      value: "₹0",
-      helper: "Next settlement cycle",
+      value: pendingLabelValue,
+      helper: "Estimated next settlement",
       icon: Wallet,
     },
     {
       label: "Last payout",
-      value: "—",
-      helper: "No payouts processed yet",
+      value: lastPayoutLabelValue,
+      helper: stats.lastPayoutAmount
+        ? "Most recent completed payout"
+        : "No payouts processed yet",
       icon: CalendarDays,
     },
   ];
@@ -53,14 +154,23 @@ const PartnerRevenue = () => {
         </h1>
         <p className="mt-1 max-w-xl text-xs text-gray-400">
           {isEventHost
-            ? `Track ticket revenue from your events, settlement timelines and downloadable statements for ${brandName}. Once connected to your revenue endpoints, this will stay in sync with real-time ticket sales.`
-            : `Track earnings from passes, bookings and add-ons for ${brandName}. Once connected to your revenue endpoints, this will show monthly earnings, payout timelines and downloadable financial reports.`}
+            ? `Track ticket revenue from your events, settlement timelines and downloadable statements for ${brandName}. Connected to your event bookings so it can reflect real sales once your billing APIs are wired.`
+            : `Track earnings from passes, bookings and add-ons for ${brandName}. Connected to your gym stats so it can reflect live monthly earnings once your payouts are plugged in.`}
         </p>
         <p className="mt-2 text-[11px] text-orange-300/80">
-          Right now these are placeholder numbers — perfect UI ready for when
-          you plug in billing & payouts APIs.
+          {loading
+            ? "Syncing latest revenue numbers…"
+            : "Some values may still be placeholders until full billing & payout APIs are connected."}
         </p>
       </div>
+
+      {/* Error banner (if any) */}
+      {error && (
+        <div className="flex items-center gap-2 rounded-2xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+          <AlertCircle className="h-4 w-4" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
