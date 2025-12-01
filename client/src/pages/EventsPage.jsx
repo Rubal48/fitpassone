@@ -12,10 +12,10 @@ import {
   Users,
   Clock3,
   Sparkles,
+  Globe2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import API, { getAssetUrl } from "../utils/api";
-
+import API from "../utils/api";
 
 /* =========================================================
    THEME TOKENS — Passiify global (same for all pages)
@@ -47,6 +47,12 @@ const getSystemMode = () => {
 const fallbackEventImage =
   "https://images.pexels.com/photos/1552103/pexels-photo-1552103.jpeg?auto=compress&cs=tinysrgb&w=1200";
 
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
 const buildMediaUrl = (raw) => {
   if (!raw) return null;
 
@@ -54,10 +60,10 @@ const buildMediaUrl = (raw) => {
   if (typeof raw === "string" && raw.startsWith("http")) return raw;
 
   try {
-    const base = (API?.defaults?.baseURL || "").replace(/\/$/, "");
-    const cleanPath = String(raw).replace(/^\//, "");
-    if (!base) return `/${cleanPath}`;
-    return `${base}/${cleanPath}`;
+    const origin = getBackendOrigin();
+    const cleanPath = String(raw).replace(/^\/+/, "");
+    if (!origin) return `/${cleanPath}`;
+    return `${origin}/${cleanPath}`;
   } catch {
     return null;
   }
@@ -200,6 +206,25 @@ const getStatsSnapshot = (event) => {
   );
   return { totalBookings, totalAttendees };
 };
+
+/* =========================================================
+   HostEvent extras → visualized here
+   ========================================================= */
+
+const parseCommaOrArray = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return String(value)
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+};
+
+const getLanguages = (event) =>
+  parseCommaOrArray(event?.languages ?? event?.languagesInput);
+
+const getTags = (event) =>
+  parseCommaOrArray(event?.tags ?? event?.tagsInput);
 
 /* =========================================================
    HERO SCORING — pick "event of the week"
@@ -411,6 +436,8 @@ const EventsPage = () => {
   const heroDifficulty = heroEvent
     ? difficultyLabel(heroEvent) || "Beginner-friendly"
     : "Beginner-friendly";
+  const heroIsOnline =
+    typeof heroEvent?.isOnline === "boolean" ? heroEvent.isOnline : null;
 
   /* Loading skeleton */
   const SkeletonCard = () => (
@@ -583,6 +610,10 @@ const EventsPage = () => {
                       src={heroImage}
                       alt={heroTitle}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = fallbackEventImage;
+                      }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/80 to-transparent" />
                     <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-transparent to-slate-900/70" />
@@ -608,6 +639,10 @@ const EventsPage = () => {
                             {heroTimeLabel ? ` · ${heroTimeLabel}` : ""}
                             {" · "}
                             {heroDifficulty}
+                            {heroIsOnline !== null &&
+                              ` · ${
+                                heroIsOnline ? "Online session" : "In-person"
+                              }`}
                           </span>
                         </p>
                       </div>
@@ -771,9 +806,12 @@ const EventsPage = () => {
           id="events-grid"
           className="max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-10"
         >
-          <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-50 mb-2">
-            Featured this week
-          </h2>
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-4 h-4 text-orange-400" />
+            <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-50">
+              Featured this week
+            </h2>
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-xl">
             Hosts running sessions travellers keep coming back for. Spots are
             limited — especially for fight camps and sunrise classes.
@@ -856,8 +894,15 @@ const EventsPage = () => {
                   event.type ||
                   (Array.isArray(event.tags) && event.tags[0]);
                 const { totalAttendees } = getStatsSnapshot(event);
-
+                const languages = getLanguages(event);
+                const tags = getTags(event);
                 const image = getEventImage(event);
+
+                const personalNotePreview = event.personalNote
+                  ? event.personalNote.length > 120
+                    ? `${event.personalNote.slice(0, 117)}...`
+                    : event.personalNote
+                  : null;
 
                 const isBookDisabled = isSoldOut || isPast || !id;
 
@@ -873,6 +918,11 @@ const EventsPage = () => {
                         alt={event.name}
                         className="h-full w-full object-cover group-hover:scale-[1.05] transition-transform duration-700"
                         loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = fallbackEventImage;
+                        }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent" />
 
@@ -969,6 +1019,16 @@ const EventsPage = () => {
 
                       {/* meta pills */}
                       <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-slate-600 dark:text-slate-300">
+                        {typeof event.isOnline === "boolean" && (
+                          <span className="px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                            {event.isOnline ? (
+                              <Globe2 className="w-3 h-3" />
+                            ) : (
+                              <MapPin className="w-3 h-3" />
+                            )}
+                            {event.isOnline ? "Online session" : "In-person"}
+                          </span>
+                        )}
                         {diffLabel && (
                           <span className="px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                             {diffLabel}
@@ -986,6 +1046,12 @@ const EventsPage = () => {
                             Up to {event.capacity || event.totalSlots} guests
                           </span>
                         )}
+                        {event.checkInRequired && (
+                          <span className="px-2.5 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-100 flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                            QR check-in
+                          </span>
+                        )}
                         {cancelLabel && (
                           <span className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-200">
                             {cancelLabel}
@@ -997,6 +1063,49 @@ const EventsPage = () => {
                           </span>
                         )}
                       </div>
+
+                      {/* languages + tags + personal note */}
+                      {languages.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1 text-[10px] text-slate-600 dark:text-slate-300">
+                          {languages.slice(0, 3).map((lang) => (
+                            <span
+                              key={lang}
+                              className="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+                            >
+                              {lang}
+                            </span>
+                          ))}
+                          {languages.length > 3 && (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                              +{languages.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1 text-[10px] text-slate-600 dark:text-slate-300">
+                          {tags.slice(0, 4).map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                          {tags.length > 4 && (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                              +{tags.length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {personalNotePreview && (
+                        <p className="mt-1 text-[10px] italic text-slate-500 dark:text-slate-400 line-clamp-2">
+                          “{personalNotePreview}”
+                        </p>
+                      )}
 
                       {/* rating + actions */}
                       <div className="flex items-center justify-between mt-3 gap-3">

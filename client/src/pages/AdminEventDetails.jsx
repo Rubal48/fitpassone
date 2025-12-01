@@ -21,6 +21,9 @@ import {
   Clock,
   Trash2,
   Globe,
+  Languages,
+  Tag,
+  CheckCircle2,
 } from "lucide-react";
 
 /* =========================
@@ -63,6 +66,17 @@ const statusChipClass = (status) => {
 const prettyStatus = (status) =>
   (status || "pending").charAt(0).toUpperCase() +
   (status || "pending").slice(1);
+
+// Map policy type to friendly label
+const policyLabel = (type) => {
+  if (!type) return "Flexible";
+  const t = String(type).toLowerCase();
+  if (t === "flexible") return "Flexible";
+  if (t === "moderate") return "Moderate";
+  if (t === "strict") return "Strict";
+  if (t === "none") return "No refunds";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 const AdminEventDetails = () => {
   const { id } = useParams();
@@ -171,8 +185,19 @@ const AdminEventDetails = () => {
     }
   };
 
+  // ====== DERIVED FIELDS (match HostEvent schema) ======
   const ticketsSold = eventData?.ticketsSold || 0;
-  const remainingSeats = eventData?.remainingSeats ?? eventData?.totalSeats ?? 0;
+
+  const capacity =
+    eventData?.capacity ??
+    eventData?.totalSeats ??
+    eventData?.maxCapacity ??
+    0;
+
+  const remainingSeats =
+    eventData?.remainingSeats ??
+    (capacity ? Math.max(capacity - ticketsSold, 0) : 0);
+
   const totalRevenue = Number(eventData?.totalRevenue || 0);
 
   const dateLabel = useMemo(() => {
@@ -189,6 +214,38 @@ const AdminEventDetails = () => {
       return eventData.date;
     }
   }, [eventData?.date]);
+
+  const languagesList = useMemo(() => {
+    if (!eventData?.languages && !eventData?.languagesInput) return [];
+    const raw =
+      eventData.languages ||
+      eventData.languagesInput ||
+      [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    return String(raw)
+      .split(",")
+      .map((l) => l.trim())
+      .filter(Boolean);
+  }, [eventData?.languages, eventData?.languagesInput]);
+
+  const tagsList = useMemo(() => {
+    if (!eventData?.tags && !eventData?.tagsInput) return [];
+    const raw = eventData.tags || eventData.tagsInput || [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    return String(raw)
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }, [eventData?.tags, eventData?.tagsInput]);
+
+  const cancellation = eventData?.cancellationPolicy || {};
+  const policyType = cancellation.type || eventData?.cancellationType;
+  const policyFreeHours =
+    cancellation.freeCancellationHours ?? eventData?.freeCancellationHours;
+  const policyBefore =
+    cancellation.refundPercentBefore ?? eventData?.refundPercentBefore;
+  const policyAfter =
+    cancellation.refundPercentAfter ?? eventData?.refundPercentAfter;
 
   if (loading) {
     return (
@@ -348,23 +405,176 @@ const AdminEventDetails = () => {
               </div>
             </div>
 
-            {/* Description */}
-            <div className="mt-5">
-              <h3 className="text-sm font-semibold text-slate-200 mb-2">
-                About Event
-              </h3>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                {eventData.description || "No description provided."}
-              </p>
-            </div>
-
-            {/* Timing block (if you store explicit time fields later) */}
-            {eventData.duration && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-slate-300">
-                <Clock size={16} className="text-sky-400" />
-                <span>Duration: {eventData.duration}</span>
+            {/* About Event */}
+            <div className="mt-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200 mb-2">
+                  About Event
+                </h3>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  {eventData.description || "No description provided."}
+                </p>
               </div>
-            )}
+
+              {/* Personal note from host */}
+              {eventData.personalNote && (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-sm text-slate-200 italic">
+                  “{eventData.personalNote}”
+                  {eventData.organizer && (
+                    <div className="mt-2 text-xs text-slate-400 not-italic">
+                      — {eventData.organizer}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Format & logistics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl bg-black/30 border border-white/10 p-3 text-sm">
+                  <h4 className="text-xs font-semibold text-slate-300 mb-2">
+                    Format & Check-in
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-slate-300">
+                      <Globe size={14} className="text-sky-400" />
+                      <span>
+                        {eventData.isOnline
+                          ? "Online session"
+                          : "In-person meetup"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-300">
+                      <CheckCircle2
+                        size={14}
+                        className={
+                          eventData.checkInRequired
+                            ? "text-emerald-400"
+                            : "text-slate-500"
+                        }
+                      />
+                      <span>
+                        Check-in required:{" "}
+                        <span className="font-semibold">
+                          {eventData.checkInRequired ? "Yes" : "No"}
+                        </span>
+                      </span>
+                    </div>
+                    {eventData.duration && (
+                      <div className="flex items-center gap-2 text-xs text-slate-300">
+                        <Clock size={14} className="text-sky-400" />
+                        <span>Duration: {eventData.duration}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-black/30 border border-white/10 p-3 text-sm">
+                  <h4 className="text-xs font-semibold text-slate-300 mb-2">
+                    Meeting details
+                  </h4>
+                  <div className="space-y-1 text-xs text-slate-300">
+                    <p>
+                      <span className="font-semibold">Meeting point: </span>
+                      {eventData.meetingPoint || "Not provided"}
+                    </p>
+                    <p className="mt-1">
+                      <span className="font-semibold">
+                        Meeting instructions:{" "}
+                      </span>
+                      {eventData.meetingInstructions || "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Guest-facing details: languages + tags */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl bg-black/30 border border-white/10 p-3 text-sm">
+                  <h4 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1">
+                    <Languages size={14} className="text-sky-300" />
+                    Languages
+                  </h4>
+                  {languagesList.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {languagesList.map((lang) => (
+                        <span
+                          key={lang}
+                          className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-slate-100"
+                        >
+                          {lang}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">
+                      No languages specified.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-black/30 border border-white/10 p-3 text-sm">
+                  <h4 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1">
+                    <Tag size={14} className="text-amber-300" />
+                    Tags
+                  </h4>
+                  {tagsList.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tagsList.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-slate-100"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">
+                      No tags added by host.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Cancellation policy */}
+              <div className="rounded-xl bg-black/30 border border-white/10 p-3 text-sm">
+                <h4 className="text-xs font-semibold text-slate-300 mb-2">
+                  Cancellation policy
+                </h4>
+                {policyType ? (
+                  <div className="space-y-1 text-xs text-slate-300">
+                    <p>
+                      <span className="font-semibold">
+                        {policyLabel(policyType)}
+                      </span>
+                      {typeof policyFreeHours !== "undefined" && (
+                        <> · Free cancel {policyFreeHours}h before</>
+                      )}
+                    </p>
+                    <p>
+                      Refund before event:{" "}
+                      <span className="font-semibold">
+                        {typeof policyBefore !== "undefined"
+                          ? `${policyBefore}%`
+                          : "Not set"}
+                      </span>
+                    </p>
+                    <p>
+                      Refund after cutoff:{" "}
+                      <span className="font-semibold">
+                        {typeof policyAfter !== "undefined"
+                          ? `${policyAfter}%`
+                          : "Not set"}
+                      </span>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    No cancellation policy set. (Host used old flow.)
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Right: main image */}

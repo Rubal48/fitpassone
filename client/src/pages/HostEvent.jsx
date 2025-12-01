@@ -18,6 +18,7 @@ import {
   Clock3,
   Info,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import API from "../utils/api";
 
@@ -75,6 +76,29 @@ const cancellationOptions = [
   },
 ];
 
+const fallbackEventImage =
+  "https://images.unsplash.com/photo-1543353071-873f17a7a088?w=1200&auto=format&fit=crop&q=80";
+
+/* =========================================================
+   Media helpers — reuse-able for relative paths
+========================================================= */
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+
+  const origin = getBackendOrigin();
+  const cleanPath = String(raw).replace(/^\/+/, "");
+
+  if (!origin) return `/${cleanPath}`;
+  return `${origin}/${cleanPath}`;
+};
+
 const StepIcon = ({ active, done, Icon, label }) => (
   <div className="flex flex-col items-center">
     <div
@@ -130,6 +154,12 @@ const HostEvent = () => {
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  // ✅ NEW: submission state (for admin review flow)
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submittedEventId, setSubmittedEventId] = useState(null);
 
   const user = useMemo(() => {
     try {
@@ -218,15 +248,10 @@ const HostEvent = () => {
     [form.tagsInput]
   );
 
-  const imagePreview = useMemo(() => {
-    if (!form.image) return null;
-    try {
-      new URL(form.image);
-      return form.image;
-    } catch {
-      return null;
-    }
-  }, [form.image]);
+  const imagePreview = useMemo(
+    () => buildMediaUrl(form.image),
+    [form.image]
+  );
 
   const selectedCategoryLabel =
     categories.find((c) => c.value === form.category)?.label || "Adventure";
@@ -234,6 +259,59 @@ const HostEvent = () => {
   const selectedPolicy = cancellationOptions.find(
     (c) => c.value === form.cancellationType
   );
+
+  const handleImageFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError("");
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please upload a valid image file (JPG, PNG, etc.).");
+      return;
+    }
+
+    const maxSizeMB = 5;
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setUploadError(`Image too large. Please keep it under ${maxSizeMB} MB.`);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      setUploadingImage(true);
+      // Adjust this endpoint if your backend uses a different path
+      const res = await API.post("/uploads/events", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const data = res?.data || {};
+      const uploadedUrl =
+        data.url ||
+        data.secure_url ||
+        data.imageUrl ||
+        data.image ||
+        data.path;
+
+      if (!uploadedUrl) {
+        throw new Error("No image URL returned from server.");
+      }
+
+      update("image", uploadedUrl);
+    } catch (err) {
+      console.error("Event image upload failed:", err);
+      setUploadError(
+        err?.response?.data?.message ||
+          "Failed to upload image. Please try again or use a direct URL."
+      );
+    } finally {
+      setUploadingImage(false);
+      // reset file input so the same file can be selected again if needed
+      if (e.target) e.target.value = "";
+    }
+  };
 
   const handlePublish = async () => {
     // final validation
@@ -289,10 +367,19 @@ const HostEvent = () => {
 
     try {
       setSubmitting(true);
+      setSubmitSuccess(false);
+      setSubmittedEventId(null);
+
       const res = await API.post("/events", payload);
+
       if (res?.data?.success && res.data.event?._id) {
         const newEventId = res.data.event._id;
-        navigate(`/events/${newEventId}`);
+
+        // ✅ Do NOT navigate to /events/:id
+        // Keep it for admin review first
+        setSubmittedEventId(newEventId);
+        setSubmitSuccess(true);
+        setStep(3); // make sure we are on review step
       } else {
         alert(res?.data?.message || "Failed to create event. Try again.");
       }
@@ -645,23 +732,110 @@ const HostEvent = () => {
                   </h2>
                   <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                     Make it easy for guests to understand the mood, format and
-                    logistics.
+                    logistics. A strong cover image sells the vibe.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Image section: URL + Upload + mini preview */}
                   <div className="md:col-span-2">
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                      Event image URL
+                      Cover image / poster
                     </label>
-                    <div className="mt-2 relative">
-                      <ImageIcon className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                      <input
-                        value={form.image}
-                        onChange={(e) => update("image", e.target.value)}
-                        placeholder="Paste an image URL (ideally 1200x700, bright and clear)"
-                        className="pl-9 w-full px-4 py-3 rounded-2xl text-sm border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-950/90 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-500/40"
-                      />
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      Upload a wide banner (ideally 1200×700) showing the
+                      setup, crowd or vibe. This becomes the hero image on your
+                      event page.
+                    </p>
+
+                    <div className="mt-3 grid sm:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)] gap-4 items-stretch">
+                      <div className="space-y-3">
+                        {/* URL input */}
+                        <div className="relative">
+                          <ImageIcon className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                          <input
+                            value={form.image}
+                            onChange={(e) => update("image", e.target.value)}
+                            placeholder="Paste an image URL or upload from your device"
+                            className="pl-9 w-full px-4 py-3 rounded-2xl text-sm border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-950/90 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-500/40"
+                          />
+                        </div>
+
+                        {/* File upload card */}
+                        <div className="relative rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/70 px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 via-sky-500 to-orange-500 flex items-center justify-center text-slate-950 shadow-sm">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                            <div className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-300">
+                              <p className="font-semibold">
+                                Upload from your device
+                              </p>
+                              <p className="opacity-80">
+                                JPG / PNG, up to 5 MB. We’ll store it and use
+                                the URL for this event.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              className="px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold bg-slate-900 text-slate-50 dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                            >
+                              Choose file
+                            </button>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageFileChange}
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {uploadingImage && (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Uploading image…</span>
+                          </div>
+                        )}
+
+                        {uploadError && (
+                          <p className="text-[11px] text-rose-500 mt-1">
+                            {uploadError}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Mini preview */}
+                      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden bg-slate-900/95 text-slate-50 shadow-[0_14px_50px_rgba(15,23,42,0.6)]">
+                        <div className="relative h-28 sm:h-32 overflow-hidden">
+                          <img
+                            src={imagePreview || fallbackEventImage}
+                            alt="Event preview"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent" />
+                          <div className="absolute bottom-2 left-2 right-2">
+                            <p className="text-xs font-semibold text-white line-clamp-1">
+                              {form.name || "Your event title"}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-slate-200 flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {form.location || "Add location"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-3 py-2 text-[10px] flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-slate-300">
+                            <Globe2 className="w-3 h-3" />
+                            {form.isOnline ? "Online session" : "In-person"}
+                          </span>
+                          <span className="font-semibold">
+                            ₹{form.price || "—"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -788,6 +962,28 @@ const HostEvent = () => {
                     your event.
                   </p>
                 </div>
+
+                {/* ✅ submission success banner */}
+                {submitSuccess && (
+                  <div className="mb-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-700/80 bg-emerald-50/80 dark:bg-emerald-950/40 px-4 py-3 text-xs sm:text-sm text-emerald-800 dark:text-emerald-200 flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="font-semibold">
+                        Your experience has been submitted for review.
+                      </span>
+                    </div>
+                    <p>
+                      It will appear on the public Passiify events page once it
+                      is approved in your admin dashboard.
+                    </p>
+                    {submittedEventId && (
+                      <p className="text-[11px] opacity-80">
+                        Internal event ID:{" "}
+                        <span className="font-mono">{submittedEventId}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)] gap-5">
                   <div className="space-y-4">
@@ -930,10 +1126,7 @@ const HostEvent = () => {
                   <div className="bg-gradient-to-b from-white/95 via-sky-50/70 to-slate-50/80 dark:from-slate-950/95 dark:via-slate-950/90 dark:to-slate-950/95 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl shadow-[0_16px_60px_rgba(15,23,42,0.4)] overflow-hidden">
                     <div className="relative h-40 sm:h-48 overflow-hidden">
                       <img
-                        src={
-                          imagePreview ||
-                          "https://images.unsplash.com/photo-1543353071-873f17a7a088?w=1200&auto=format&fit=crop&q=80"
-                        }
+                        src={imagePreview || fallbackEventImage}
                         alt="Preview"
                         className="w-full h-full object-cover"
                       />
@@ -1038,12 +1231,18 @@ const HostEvent = () => {
                 ) : (
                   <button
                     type="button"
-                    onClick={handlePublish}
-                    disabled={submitting}
+                    onClick={submitSuccess ? undefined : handlePublish}
+                    disabled={submitting || submitSuccess}
                     className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 via-sky-500 to-orange-500 text-slate-950 px-6 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-[0_20px_70px_rgba(15,23,42,0.9)] hover:scale-[1.03] hover:shadow-[0_24px_90px_rgba(15,23,42,1)] transition-transform disabled:opacity-60 disabled:hover:scale-100"
                   >
-                    {submitting ? "Publishing…" : "Publish experience"}
-                    {!submitting && <Sparkles className="w-4 h-4" />}
+                    {submitting
+                      ? "Publishing…"
+                      : submitSuccess
+                      ? "Submitted for review"
+                      : "Publish experience"}
+                    {!submitting && !submitSuccess && (
+                      <Sparkles className="w-4 h-4" />
+                    )}
                   </button>
                 )}
               </div>

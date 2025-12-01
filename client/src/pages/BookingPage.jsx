@@ -33,10 +33,55 @@ const loadRazorpayScript = () => {
     script.async = true;
     script.onload = () => resolve(true);
     script.onerror = () =>
-      reject(new Error("Razorpay SDK failed to load. Please check your network."));
+      reject(
+        new Error("Razorpay SDK failed to load. Please check your network.")
+      );
 
     document.body.appendChild(script);
   });
+};
+
+/* =========================================================
+   Media helpers — match GymDetails / Explore behaviour
+========================================================= */
+
+const fallbackHeroImage =
+  "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1200";
+
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+
+  try {
+    const origin = getBackendOrigin();
+    const cleanPath = String(raw).replace(/^\/+/, "");
+    if (!origin) return `/${cleanPath}`;
+    return `${origin}/${cleanPath}`;
+  } catch {
+    return null;
+  }
+};
+
+const getHeroImageForGym = (gym) => {
+  if (!gym) return null;
+
+  if (Array.isArray(gym.images) && gym.images.length) {
+    const url = buildMediaUrl(gym.images[0]);
+    if (url) return url;
+  }
+
+  if (gym.image) {
+    const url = buildMediaUrl(gym.image);
+    if (url) return url;
+  }
+
+  return null;
 };
 
 export default function BookingPage() {
@@ -344,7 +389,10 @@ export default function BookingPage() {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      console.error("❌ Booking / payment init failed:", err?.response?.data || err);
+      console.error(
+        "❌ Booking / payment init failed:",
+        err?.response?.data || err
+      );
       setErrorMessage(
         err?.response?.data?.message ||
           "Failed to start payment. Please try again or contact support."
@@ -364,6 +412,8 @@ export default function BookingPage() {
         year: "numeric",
       })
     : "Select a date";
+
+  const heroImage = getHeroImageForGym(gym) || fallbackHeroImage;
 
   /* =========================================================
      Loading / not-found states
@@ -431,11 +481,7 @@ export default function BookingPage() {
           {/* Hero image */}
           <div className="relative h-56 sm:h-64 md:h-64 overflow-hidden">
             <img
-              src={
-                gym.images?.[0] ||
-                gym.image ||
-                "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1200"
-              }
+              src={heroImage}
               alt={gym.name}
               className="w-full h-full object-cover"
             />

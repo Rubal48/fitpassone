@@ -32,13 +32,19 @@ app.use(express.json());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use("/uploads", express.static(path.join(__dirname, "/uploads")));
+// Serve uploaded files (gyms / events) from /uploads
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ---------- API Routes ----------
 app.use("/api/auth", authRoutes);
 app.use("/api/gyms", gymRoutes);
 app.use("/api/bookings", bookingRoutes);
-app.use("/api/upload", uploadRoutes);
+
+// ✅ Uploads router mounted on BOTH singular & plural paths
+// so frontend can use /upload or /uploads safely
+app.use("/api/upload", uploadRoutes);   // legacy (e.g. gym image uploads)
+app.use("/api/uploads", uploadRoutes);  // new (e.g. /uploads/events)
+
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/test", testEmailRoute);
