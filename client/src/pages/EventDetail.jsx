@@ -156,6 +156,41 @@ const parseCommaOrArray = (value) => {
     .filter(Boolean);
 };
 
+// Generic bullet-text parser for multi-line / bullet fields
+const parseBulletText = (value, fallback = []) => {
+  if (!value) return fallback;
+  if (Array.isArray(value)) {
+    const cleaned = value.map((v) => String(v).trim()).filter(Boolean);
+    return cleaned.length ? cleaned : fallback;
+  }
+
+  const parts = String(value)
+    .split(/\n|•|-\s/gi)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return parts.length ? parts : fallback;
+};
+
+// Defaults if host did not customize
+const DEFAULT_WHO_IS_FOR = [
+  "Travellers who want to meet people through movement.",
+  "Locals exploring new fitness communities in their city.",
+  "Beginners & intermediates — all levels welcome.",
+];
+
+const DEFAULT_WHAT_YOULL_EXPERIENCE = [
+  "A structured session led by a passionate host/trainer.",
+  "Warm-up, main workout/activity & cool-down.",
+  "Time to talk, share stories and connect afterwards.",
+];
+
+const DEFAULT_GOOD_TO_KNOW = [
+  "Arrive 10–15 minutes before start time.",
+  "Bring water, comfortable clothes and valid ID.",
+  "Exact meeting point is shared in your booking confirmation.",
+];
+
 // Tiny mini icon for analytics section
 const BarMiniIcon = () => (
   <span className="inline-flex items-end gap-0.5">
@@ -284,6 +319,18 @@ const EventDetail = () => {
     return parsed.length ? parsed : ["English", "Hindi"];
   }, [event]);
 
+  // Customizable languages & vibe text (host can override)
+  const languagesVibeText = useMemo(() => {
+    if (event?.languagesVibe && event.languagesVibe.trim() !== "") {
+      return event.languagesVibe;
+    }
+    if (event?.languagesVibeText && event.languagesVibeText.trim() !== "") {
+      return event.languagesVibeText;
+    }
+    const languageList = languages.join(", ");
+    return `This experience usually runs in ${languageList}. Travellers are always welcome, and the host keeps things beginner-friendly.`;
+  }, [event, languages]);
+
   const tags = useMemo(() => {
     if (!event) {
       return ["Outdoor", "Community", "Fitness", "Travel Friendly"];
@@ -293,6 +340,42 @@ const EventDetail = () => {
       ? parsed
       : ["Outdoor", "Community", "Fitness", "Travel Friendly"];
   }, [event]);
+
+  // Customizable bullet sections (host can override)
+  const whoIsForItems = useMemo(
+    () =>
+      parseBulletText(
+        event?.whoIsFor ||
+          event?.whoIsForText ||
+          event?.whoIsThisFor ||
+          event?.whoIsThisForText,
+        DEFAULT_WHO_IS_FOR
+      ),
+    [event]
+  );
+
+  const whatYoullExperienceItems = useMemo(
+    () =>
+      parseBulletText(
+        event?.whatYoullExperience ||
+          event?.whatYoullExperienceText ||
+          event?.whatYouWillExperience ||
+          event?.experienceHighlights,
+        DEFAULT_WHAT_YOULL_EXPERIENCE
+      ),
+    [event]
+  );
+
+  const goodToKnowItems = useMemo(
+    () =>
+      parseBulletText(
+        event?.goodToKnow ||
+          event?.goodToKnowText ||
+          event?.goodToKnowNotes,
+        DEFAULT_GOOD_TO_KNOW
+      ),
+    [event]
+  );
 
   const stats = event?.stats || {};
   const cancellationPolicy = event?.cancellationPolicy || {};
@@ -324,13 +407,10 @@ const EventDetail = () => {
   }, [cancellationPolicy]);
 
   // 📝 Host special notes from meetingInstructions (split into bullets)
-  const hostNotes = useMemo(() => {
-    if (!event?.meetingInstructions) return [];
-    return event.meetingInstructions
-      .split(/\n|•|-\s/gi)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }, [event]);
+  const hostNotes = useMemo(
+    () => parseBulletText(event?.meetingInstructions || "", []),
+    [event]
+  );
 
   const bookingDisabled =
     isPast ||
@@ -716,23 +796,21 @@ const EventDetail = () => {
                   Who is this for?
                 </h3>
                 <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 list-disc pl-5">
-                  <li>Travellers who want to meet people through movement.</li>
-                  <li>Locals exploring new fitness communities in their city.</li>
-                  <li>Beginners & intermediates — all levels welcome.</li>
+                  {whoIsForItems.map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
                 </ul>
               </div>
 
               <div className="bg-white/90 dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-3 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-blue-500 dark:text-sky-400" />
-               
-
                   What you’ll experience
                 </h3>
                 <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 list-disc pl-5">
-                  <li>A structured session led by a passionate host/trainer.</li>
-                  <li>Warm-up, main workout/activity & cool-down.</li>
-                  <li>Time to talk, share stories and connect afterwards.</li>
+                  {whatYoullExperienceItems.map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -746,12 +824,7 @@ const EventDetail = () => {
                     Languages & vibe
                   </h3>
                   <p className="text-slate-700 dark:text-slate-300 mb-2">
-                    This experience usually runs in{" "}
-                    <span className="font-semibold">
-                      {languages.join(", ")}
-                    </span>
-                    . Travellers are always welcome, and the host keeps things
-                    beginner-friendly.
+                    {languagesVibeText}
                   </p>
                   <p className="text-slate-500 dark:text-slate-400 text-xs">
                     Exact contact and meeting details are shared on your
@@ -764,12 +837,9 @@ const EventDetail = () => {
                     Good to know
                   </h3>
                   <ul className="text-slate-700 dark:text-slate-300 space-y-1.5 list-disc pl-5">
-                    <li>Arrive 10–15 minutes before start time.</li>
-                    <li>Bring water, comfortable clothes and valid ID.</li>
-                    <li>
-                      Exact meeting point is shared in your booking
-                      confirmation.
-                    </li>
+                    {goodToKnowItems.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
                   </ul>
                 </div>
               </div>

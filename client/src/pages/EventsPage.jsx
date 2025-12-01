@@ -375,6 +375,7 @@ const EventsPage = () => {
 
   const totalCount = events.length;
   const visibleCount = filteredEvents.length;
+  const hasAnyEvents = totalCount > 0;
 
   /* Pick hero event of the week */
   const heroEvent = useMemo(() => {
@@ -438,6 +439,16 @@ const EventsPage = () => {
     : "Beginner-friendly";
   const heroIsOnline =
     typeof heroEvent?.isOnline === "boolean" ? heroEvent.isOnline : null;
+  const heroId = heroEvent?._id || heroEvent?.id || null;
+  const heroSpotsLeft = heroEvent ? getSpotsLeft(heroEvent) : null;
+  const heroIsPast =
+    heroStartDate && heroStartDate < new Date();
+  const heroIsSoldOut =
+    (heroEvent &&
+      !heroIsPast &&
+      (heroEvent.isSoldOut || heroSpotsLeft === 0)) ||
+    false;
+  const heroCancelLabel = heroEvent ? getCancellationLabel(heroEvent) : null;
 
   /* Loading skeleton */
   const SkeletonCard = () => (
@@ -619,11 +630,23 @@ const EventsPage = () => {
                     <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-transparent to-slate-900/70" />
 
                     {/* top pill */}
-                    <div className="absolute top-3 left-3 flex gap-2">
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-2">
                       <span className="px-3 py-1 rounded-full text-[10px] font-semibold bg-slate-950/80 border border-slate-700 text-slate-100 flex items-center gap-1.5">
                         <MapPin className="w-3 h-3 text-orange-300" />
                         {heroLocation}
                       </span>
+                      {heroSpotsLeft !== null && !heroIsSoldOut && !heroIsPast && (
+                        <span className="px-3 py-1 rounded-full bg-slate-950/80 border border-slate-700 text-[10px] text-amber-200 font-medium">
+                          {heroSpotsLeft <= 5
+                            ? `Last ${heroSpotsLeft} spots`
+                            : `${heroSpotsLeft} spots left`}
+                        </span>
+                      )}
+                      {heroIsSoldOut && (
+                        <span className="px-3 py-1 rounded-full bg-rose-500 text-[10px] font-semibold text-white uppercase tracking-[0.18em]">
+                          Sold out
+                        </span>
+                      )}
                     </div>
 
                     {/* bottom meta */}
@@ -646,13 +669,24 @@ const EventsPage = () => {
                           </span>
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-slate-300 mb-0.5">
-                          From
-                        </p>
-                        <p className="text-sm font-bold text-orange-300">
-                          ₹{heroPrice}
-                        </p>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="text-right">
+                          <p className="text-[10px] text-slate-300 mb-0.5">
+                            From
+                          </p>
+                          <p className="text-sm font-bold text-orange-300">
+                            ₹{heroPrice}
+                          </p>
+                        </div>
+                        {heroId && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/events/${heroId}`)}
+                            className="px-3 py-1 rounded-full text-[10px] font-semibold bg-white/90 text-slate-900 shadow-md hover:bg-slate-100 transition"
+                          >
+                            View details
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -668,6 +702,7 @@ const EventsPage = () => {
                           : heroRatingCount
                           ? ` · ${heroRatingCount}+ ratings`
                           : ""}
+                        {heroCancelLabel ? ` · ${heroCancelLabel}` : ""}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-emerald-300">
@@ -832,26 +867,39 @@ const EventsPage = () => {
           ) : filteredEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <p className="text-sm text-slate-900 dark:text-slate-50">
-                No events match your filters yet.
+                {hasAnyEvents
+                  ? "No events match your filters yet."
+                  : "No live events are listed yet."}
               </p>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-                Try resetting filters or searching something broader like “run”,
-                “yoga”, “MMA” or just a city name. New experiences are added
-                frequently as hosts go live.
+                {hasAnyEvents
+                  ? 'Try resetting filters or searching something broader like “run”, “yoga”, “MMA” or just a city name. New experiences are added frequently as hosts go live.'
+                  : "We’re onboarding hosts in your cities right now. Check back soon or be the first to host a Passiify experience."}
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory("all");
-                  setSearchQuery("");
-                  setSortBy("recommended");
-                  setUpcomingOnly(true);
-                }}
-                className="mt-2 px-4 py-2 rounded-full text-xs font-semibold text-white shadow-md hover:shadow-lg hover:scale-[1.03] transition"
-                style={{ backgroundImage: primaryGradient }}
-              >
-                Clear filters & show all events
-              </button>
+              {hasAnyEvents ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory("all");
+                    setSearchQuery("");
+                    setSortBy("recommended");
+                    setUpcomingOnly(true);
+                  }}
+                  className="mt-2 px-4 py-2 rounded-full text-xs font-semibold text-white shadow-md hover:shadow-lg hover:scale-[1.03] transition"
+                  style={{ backgroundImage: primaryGradient }}
+                >
+                  Clear filters & show all events
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => navigate("/create-event")}
+                  className="mt-2 px-4 py-2 rounded-full text-xs font-semibold text-white shadow-md hover:shadow-lg hover:scale-[1.03] transition"
+                  style={{ backgroundImage: primaryGradient }}
+                >
+                  Host an experience
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
