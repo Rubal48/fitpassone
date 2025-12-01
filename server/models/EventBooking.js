@@ -65,10 +65,29 @@ const eventBookingSchema = new Schema(
       type: Number,
       default: 0,
     },
+
+    // 👉 Razorpay charges (snapshot)
+    razorpayFee: {
+      type: Number,
+      default: 0,
+    }, // NEW
+
+    // 👉 What organiser should receive (snapshot)
     hostPayout: {
       type: Number,
       default: 0,
     },
+
+    // 👉 payout status for this booking
+    payoutStatus: {
+      type: String,
+      enum: ["pending", "processing", "paid", "failed"],
+      default: "pending",
+    }, // NEW
+    payoutAt: Date,
+    payoutBatchId: String,
+    payoutNote: String,
+
     couponCode: {
       type: String,
     },
@@ -128,19 +147,22 @@ const eventBookingSchema = new Schema(
   { timestamps: true }
 );
 
-// ✅ Auto-generate unique booking code & copy eventDate
+// ✅ Auto-generate unique booking code & ensure hostPayout snapshot
 eventBookingSchema.pre("save", function (next) {
   if (!this.bookingCode) {
     const random = Math.random().toString(36).substring(2, 7).toUpperCase();
     this.bookingCode = `PASSIIFY-EVT-${random}`;
   }
 
-  // ensure eventDate set if not
-  if (!this.eventDate && this.populated("event") == null) {
-    // we will normally set eventDate in controller,
-    // but leaving here as a fallback
-    // (no-op here, controller will handle)
+  // Ensure hostPayout is consistent if not set:
+  // hostPayout = totalPrice - platformFee - razorpayFee
+  if (!this.hostPayout && this.totalPrice) {
+    const pf = this.platformFee || 0;
+    const rf = this.razorpayFee || 0;
+    this.hostPayout = Math.max(0, this.totalPrice - pf - rf);
   }
+
+  // eventDate is already set in controller as snapshot (fallback here is no-op)
 
   next();
 });

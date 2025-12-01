@@ -1,3 +1,4 @@
+// routes/adminRoutes.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -5,6 +6,8 @@ import bcrypt from "bcryptjs";
 import Admin from "../models/Admin.js";
 import Gym from "../models/Gym.js";
 import Event from "../models/Event.js";
+import Booking from "../models/Booking.js";
+import EventBooking from "../models/EventBooking.js";
 import adminAuth from "../middleware/adminAuth.js";
 
 const router = express.Router();
@@ -15,9 +18,7 @@ const router = express.Router();
 
 // ✅ Always sign admin tokens with ONE consistent secret
 const ADMIN_SIGN_SECRET =
-  process.env.JWT_SECRET ||
-  process.env.ADMIN_SECRET ||
-  "dev_admin_secret";
+  process.env.JWT_SECRET || process.env.ADMIN_SECRET || "dev_admin_secret";
 
 const generateAdminToken = (id, expiresIn = "7d") =>
   jwt.sign({ id }, ADMIN_SIGN_SECRET, { expiresIn });
@@ -33,22 +34,14 @@ router.post("/login", async (req, res) => {
     const emailLower = (email || "").trim().toLowerCase();
 
     console.log("🔑 [ADMIN LOGIN] attempt:", emailLower);
-    console.log(
-      "🔑 [ADMIN LOGIN] secret configured?",
-      !!ADMIN_SIGN_SECRET
-    );
+    console.log("🔑 [ADMIN LOGIN] secret configured?", !!ADMIN_SIGN_SECRET);
 
-    const admin = await Admin.findOne({ email: emailLower }).select(
-      "+password"
-    );
+    const admin = await Admin.findOne({ email: emailLower }).select("+password");
     if (!admin) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const isMatch = await bcrypt.compare(
-      (password || "").trim(),
-      admin.password
-    );
+    const isMatch = await bcrypt.compare((password || "").trim(), admin.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
@@ -269,6 +262,278 @@ router.delete("/events/:id", async (req, res) => {
   } catch (err) {
     console.error("Error deleting event:", err);
     res.status(500).json({ message: "Failed to delete event" });
+  }
+});
+
+/* ==========================
+   💸 SETTLEMENTS & PAYOUTS
+========================== */
+
+/**
+ * GET /api/admin/settlements/overview
+ *
+ * For each gym and each event it calculates:
+ * - grossAmount  (what users paid)
+ * - platformFee  (your commission)
+ * - razorpayFee  (gateway cost snapshot)
+ * - netPayable   (what you owe them)
+ *
+ * Response:
+ * {
+ *   summary: { totalGross, totalPlatformFee, totalRazorpayFee, totalNetPayable },
+ *   gyms: [...],
+ *   events: [...]
+ * }
+ */
+router.get("/settlements/overview", async (_req, res) => {
+  try {
+    /* ---------- 1) GYM SETTLEMENTS (passes/bookings) ---------- */
+
+    const gymAgg = await Booking.aggregate([
+      {
+        $match: {
+          paymentStatus: "paid",
+          // include docs with payoutStatus = "pending" OR older docs where payoutStatus doesn't exist yet
+          $or: [
+            { payoutStatus: "pending" },
+            { payoutStatus: { $exists: false } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: "$gym",
+          totalBookings: { $sum: 1 },
+          grossAmount: { $sum: "$price" },
+          platformFee: { $sum: "$platformFee" },
+          razorpayFee: { $sum: "$razorpayFee" },
+          gymPayout: { $sum: "$gymPayout" },
+        },
+      },
+    ]);
+
+    const gymIds = gymAgg.map((g) => g._id);
+    const gyms = await Gym.find({ _id: { $in: gymIds } }).select(
+      "name city owner"
+    );
+    const gymMap = new Map(gyms.map((g) => [g._id.toString(), g]));
+
+    const gymSettlements = gymAgg.map((row) => {
+      const gymDoc = gymMap.get(row._id.toString());
+      const gross = row.grossAmount || 0;
+      const platformFee = row.platformFee || 0;
+      const razorpayFee = row.razorpayFee || 0;
+      const snapshotPayout = row.gymPayout || 0;
+
+      // Prefer stored snapshot if present, else compute
+      const netPayable =
+        snapshotPayout || Math.max(0, gross - platformFee - razorpayFee);
+
+      return {
+        gymId: row._id,
+        gymName: gymDoc?.name || "Gym",
+        city: gymDoc?.city || "",
+        ownerId: gymDoc?.owner || null,
+        totalBookings: row.totalBookings || 0,
+        grossAmount: gross,
+        platformFee,
+        razorpayFee,
+        netPayable,
+        currency: "INR",
+      };
+    });
+
+    /* ---------- 2) EVENT SETTLEMENTS (tickets) ---------- */
+
+    const eventAgg = await EventBooking.aggregate([
+      {
+        $match: {
+          paymentStatus: "paid",
+          $or: [
+            { payoutStatus: "pending" },
+            { payoutStatus: { $exists: false } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: "$event",
+          totalBookings: { $sum: 1 },
+          ticketsSold: { $sum: "$tickets" },
+          grossAmount: { $sum: "$totalPrice" },
+          platformFee: { $sum: "$platformFee" },
+          razorpayFee: { $sum: "$razorpayFee" },
+          hostPayout: { $sum: "$hostPayout" },
+        },
+      },
+    ]);
+
+    const eventIds = eventAgg.map((e) => e._id);
+    const events = await Event.find({ _id: { $in: eventIds } }).select(
+      "name organizer host date location city"
+    );
+    const eventMap = new Map(events.map((e) => [e._id.toString(), e]));
+
+    const eventSettlements = eventAgg.map((row) => {
+      const ev = eventMap.get(row._id.toString());
+      const gross = row.grossAmount || 0;
+      const platformFee = row.platformFee || 0;
+      const razorpayFee = row.razorpayFee || 0;
+      const snapshotPayout = row.hostPayout || 0;
+
+      const netPayable =
+        snapshotPayout || Math.max(0, gross - platformFee - razorpayFee);
+
+      return {
+        eventId: row._id,
+        eventName: ev?.name || "Event",
+        organizer: ev?.organizer || "",
+        hostId: ev?.host || null,
+        location: ev?.location || ev?.city || "",
+        eventDate: ev?.date || null,
+        totalBookings: row.totalBookings || 0,
+        ticketsSold: row.ticketsSold || 0,
+        grossAmount: gross,
+        platformFee,
+        razorpayFee,
+        netPayable,
+        currency: "INR",
+      };
+    });
+
+    /* ---------- 3) SUMMARY TOTALS ---------- */
+
+    const totalGrossGyms = gymSettlements.reduce(
+      (sum, g) => sum + (g.grossAmount || 0),
+      0
+    );
+    const totalGrossEvents = eventSettlements.reduce(
+      (sum, e) => sum + (e.grossAmount || 0),
+      0
+    );
+
+    const totalPlatformGyms = gymSettlements.reduce(
+      (sum, g) => sum + (g.platformFee || 0),
+      0
+    );
+    const totalPlatformEvents = eventSettlements.reduce(
+      (sum, e) => sum + (e.platformFee || 0),
+      0
+    );
+
+    const totalRazorpayGyms = gymSettlements.reduce(
+      (sum, g) => sum + (g.razorpayFee || 0),
+      0
+    );
+    const totalRazorpayEvents = eventSettlements.reduce(
+      (sum, e) => sum + (e.razorpayFee || 0),
+      0
+    );
+
+    const totalNetGyms = gymSettlements.reduce(
+      (sum, g) => sum + (g.netPayable || 0),
+      0
+    );
+    const totalNetEvents = eventSettlements.reduce(
+      (sum, e) => sum + (e.netPayable || 0),
+      0
+    );
+
+    const summary = {
+      totalGross: totalGrossGyms + totalGrossEvents,
+      totalPlatformFee: totalPlatformGyms + totalPlatformEvents,
+      totalRazorpayFee: totalRazorpayGyms + totalRazorpayEvents,
+      totalNetPayable: totalNetGyms + totalNetEvents,
+    };
+
+    res.json({
+      summary,
+      gyms: gymSettlements,
+      events: eventSettlements,
+    });
+  } catch (err) {
+    console.error("Error building settlements overview:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to load settlements overview" });
+  }
+});
+
+/**
+ * POST /api/admin/settlements/mark-paid/gym/:gymId
+ * Marks all pending payouts for a gym as PAID (one-click bulk).
+ */
+router.post("/settlements/mark-paid/gym/:gymId", async (req, res) => {
+  try {
+    const { gymId } = req.params;
+    const { note, batchId } = req.body || {};
+    const now = new Date();
+
+    const result = await Booking.updateMany(
+      {
+        gym: gymId,
+        paymentStatus: "paid",
+        $or: [
+          { payoutStatus: "pending" },
+          { payoutStatus: { $exists: false } },
+        ],
+      },
+      {
+        $set: {
+          payoutStatus: "paid",
+          payoutAt: now,
+          ...(note ? { payoutNote: note } : {}),
+          ...(batchId ? { payoutBatchId: batchId } : {}),
+        },
+      }
+    );
+
+    res.json({
+      message: "Gym payout(s) marked as paid",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error("Error marking gym payouts as paid:", err);
+    res.status(500).json({ message: "Failed to mark gym payouts as paid" });
+  }
+});
+
+/**
+ * POST /api/admin/settlements/mark-paid/event/:eventId
+ * Marks all pending payouts for an event host as PAID.
+ */
+router.post("/settlements/mark-paid/event/:eventId", async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { note, batchId } = req.body || {};
+    const now = new Date();
+
+    const result = await EventBooking.updateMany(
+      {
+        event: eventId,
+        paymentStatus: "paid",
+        $or: [
+          { payoutStatus: "pending" },
+          { payoutStatus: { $exists: false } },
+        ],
+      },
+      {
+        $set: {
+          payoutStatus: "paid",
+          payoutAt: now,
+          ...(note ? { payoutNote: note } : {}),
+          ...(batchId ? { payoutBatchId: batchId } : {}),
+        },
+      }
+    );
+
+    res.json({
+      message: "Event payout(s) marked as paid",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error("Error marking event payouts as paid:", err);
+    res.status(500).json({ message: "Failed to mark event payouts as paid" });
   }
 });
 

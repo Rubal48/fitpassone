@@ -114,8 +114,25 @@ const bookingSchema = new mongoose.Schema(
     paymentProvider: String,
     paymentRef: String,
     currency: { type: String, default: "INR" },
+
+    // 👉 your commission per booking (snapshot)
     platformFee: { type: Number, default: 0 },
-    gymPayout: Number,
+
+    // 👉 Razorpay charges you paid for this booking (snapshot)
+    razorpayFee: { type: Number, default: 0 }, // NEW
+
+    // 👉 what should ultimately go to the gym for this booking
+    gymPayout: { type: Number, default: 0 },
+
+    // 👉 status of payout to partner (for settlements)
+    payoutStatus: {
+      type: String,
+      enum: ["pending", "processing", "paid", "failed"],
+      default: "pending",
+    }, // NEW
+    payoutAt: Date, // when you mark it as paid in admin
+    payoutBatchId: String, // optional (for grouping payouts)
+    payoutNote: String, // e.g. "Paid via NEFT TXN123"
 
     /**
      * couponCode       -> any code applied (e.g. PASS10)
@@ -193,6 +210,13 @@ bookingSchema.pre("save", function (next) {
     this.discountPercent = Math.round((diff / this.basePrice) * 100);
   } else {
     this.discountPercent = 0;
+  }
+
+  // 🧮 Safety: if gymPayout is not set, default to "user paid - fees"
+  if (!this.gymPayout && this.price) {
+    const pf = this.platformFee || 0;
+    const rf = this.razorpayFee || 0;
+    this.gymPayout = Math.max(0, this.price - pf - rf);
   }
 
   next();
