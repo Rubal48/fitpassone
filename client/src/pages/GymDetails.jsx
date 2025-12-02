@@ -174,9 +174,7 @@ const getGalleryImages = (gym) => {
     candidates.push(gym.image);
   }
 
-  const mapped = candidates
-    .map((item) => buildMediaUrl(item))
-    .filter(Boolean);
+  const mapped = candidates.map((item) => buildMediaUrl(item)).filter(Boolean);
 
   if (mapped.length) return mapped;
 
@@ -1003,7 +1001,10 @@ export default function GymDetails() {
         <meta property="og:description" content={seoDescription} />
         {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
         {galleryImages[0] && (
-          <meta property="og:image" content={galleryImages[0]} />
+          <meta
+            property="og:image"
+            content={buildMediaUrl(galleryImages[0])}
+          />
         )}
         <meta property="og:type" content="website" />
         <script type="application/ld+json">{jsonLd}</script>
@@ -1021,7 +1022,7 @@ export default function GymDetails() {
            =================================================== */}
         <section className="relative w-full h-[54vh] md:h-[60vh] overflow-hidden rounded-b-[32px] md:rounded-b-[40px] shadow-2xl">
           <img
-            src={galleryImages[0]}
+            src={buildMediaUrl(galleryImages[0])}
             alt={gym.name}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -1377,7 +1378,7 @@ export default function GymDetails() {
                     }}
                   >
                     <img
-                      src={img}
+                      src={buildMediaUrl(img)}
                       alt={`${gym.name}-${i}`}
                       className="w-full h-32 sm:h-40 object-cover group-hover:scale-[1.05] transition-transform duration-500"
                       onError={(e) => {
@@ -1845,7 +1846,7 @@ export default function GymDetails() {
                     className="w-4 h-4"
                     style={{ color: theme.accentTo }}
                   />
-                  Choose when you want to train
+                Choose when you want to train
                 </label>
 
                 <div className="grid grid-cols-3 gap-2 mb-3">
@@ -2075,7 +2076,7 @@ export default function GymDetails() {
               ✕
             </button>
             <img
-              src={galleryImages[activeImage]}
+              src={buildMediaUrl(galleryImages[activeImage])}
               alt="active"
               className="max-w-4xl w-full max-h-[80vh] object-contain rounded-2xl border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,1)]"
               onError={(e) => {

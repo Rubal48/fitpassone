@@ -31,10 +31,41 @@ const RAW_BASE =
   (API.defaults && API.defaults.baseURL) || "http://localhost:5000/api";
 const MEDIA_BASE = RAW_BASE.replace(/\/api\/?$/, "");
 
-const toMediaUrl = (path) => {
+// Convert any backend media value (string | object) into a usable URL
+const toMediaUrl = (input) => {
+  if (!input) return "";
+
+  let path = input;
+
+  // If it's an object (Cloudinary / multer / S3), try common keys
+  if (typeof input === "object") {
+    path =
+      input.url ||
+      input.secure_url ||
+      input.path ||
+      input.location ||
+      input.key ||
+      input.filename ||
+      "";
+  }
+
   if (!path) return "";
-  if (path.startsWith("http")) return path;
-  return `${MEDIA_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  if (typeof path !== "string") {
+    path = String(path);
+  }
+
+  // Already an absolute URL
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+
+  // Normalise relative path
+  let clean = path.trim().replace(/\\/g, "/");
+  clean = clean.replace(/^public\//, "");
+  clean = clean.replace(/^\/+/, "");
+
+  const base = MEDIA_BASE.replace(/\/$/, "");
+  return `${base}/${clean}`;
 };
 
 // Get axios config with admin token (for all protected admin routes)
@@ -65,6 +96,21 @@ const prettyStatus = (status) =>
   (status || "pending").slice(1);
 
 /* =========================
+   NUMBER HELPER
+========================= */
+
+const pickNumber = (...values) => {
+  for (let i = 0; i < values.length; i += 1) {
+    const raw = values[i];
+    if (raw !== undefined && raw !== null && raw !== "") {
+      const num = Number(raw);
+      if (!Number.isNaN(num)) return num;
+    }
+  }
+  return 0;
+};
+
+/* =========================
    DAY CONFIG for opening hours
 ========================= */
 
@@ -77,6 +123,108 @@ const DAY_CONFIG = [
   { key: "saturday", label: "Saturday", short: "Sat", jsDay: 6 },
   { key: "sunday", label: "Sunday", short: "Sun", jsDay: 0 },
 ];
+
+/* =========================
+   OPENING HOURS NORMALIZER
+   (supports string + structured object)
+========================= */
+
+const normalizeOpeningHours = (openingHoursInput) => {
+  if (!openingHoursInput) return null;
+
+  // Unwrap potential nested containers
+  let openingHours = openingHoursInput;
+  if (
+    typeof openingHours === "object" &&
+    openingHours !== null &&
+    !Array.isArray(openingHours)
+  ) {
+    if (openingHours.days) openingHours = openingHours.days;
+    else if (openingHours.week) openingHours = openingHours.week;
+    else if (openingHours.schedule) openingHours = openingHours.schedule;
+    else if (openingHours.slots) openingHours = openingHours.slots;
+  }
+
+  // Old data: simple string
+  if (typeof openingHours === "string") {
+    return {
+      isStructured: false,
+      label: openingHours,
+    };
+  }
+
+  // Structured Mon–Sun object
+  if (
+    typeof openingHours === "object" &&
+    openingHours !== null &&
+    !Array.isArray(openingHours)
+  ) {
+    let hasAnyOpen = false;
+
+    const list = DAY_CONFIG.map((day) => {
+      const raw =
+        openingHours[day.key] ||
+        openingHours[day.key.toUpperCase()] ||
+        openingHours[day.key[0].toUpperCase() + day.key.slice(1)] ||
+        null;
+
+      let data = raw;
+      let closed = false;
+      let open = "";
+      let close = "";
+
+      if (typeof data === "string") {
+        // e.g. "6:00 AM – 10:00 PM"
+        open = data;
+        close = "";
+      } else if (typeof data === "object" && data !== null) {
+        open = data.open || data.openTime || data.from || "";
+        close = data.close || data.closeTime || data.to || "";
+        closed = !!data.closed;
+      }
+
+      const hasTimes = open && close;
+      const isClosed = closed || !hasTimes;
+
+      if (!isClosed) hasAnyOpen = true;
+
+      return {
+        ...day,
+        closed: isClosed,
+        open,
+        close,
+        raw,
+      };
+    });
+
+    const hasAnyDayConfigured =
+      Object.keys(openingHours).length > 0 || hasAnyOpen;
+
+    return {
+      isStructured: true,
+      list,
+      hasAnyOpen: hasAnyOpen || hasAnyDayConfigured,
+    };
+  }
+
+  // Fallback
+  return {
+    isStructured: false,
+    label: String(openingHoursInput),
+  };
+};
+
+const extractOpeningHoursSource = (gym) => {
+  if (!gym) return null;
+  return (
+    gym.openingHours ||
+    gym.operatingHours ||
+    gym.operating_hours ||
+    gym.hours ||
+    gym.timings ||
+    null
+  );
+};
 
 const AdminGymDetails = () => {
   const { id } = useParams();
@@ -188,7 +336,16 @@ const AdminGymDetails = () => {
   const passes = gym?.passes || [];
   const facilities = gym?.facilities || [];
   const tags = gym?.tags || [];
-  const images = gym?.images || [];
+  const images = [
+    ...(gym?.heroImage ? [gym.heroImage] : []),
+    ...(gym?.coverImage ? [gym.coverImage] : []),
+    ...(gym?.bannerImage ? [gym.bannerImage] : []),
+    ...(gym?.mainImage ? [gym.mainImage] : []),
+    ...(Array.isArray(gym?.images) ? gym.images : []),
+    ...(Array.isArray(gym?.media) ? gym.media : []),
+    ...(Array.isArray(gym?.gallery) ? gym.gallery : []),
+    ...(gym?.image ? [gym.image] : []),
+  ];
   const reviews = gym?.reviews || [];
 
   const avgRating = gym?.rating ?? 0;
@@ -204,6 +361,14 @@ const AdminGymDetails = () => {
     [reviews]
   );
 
+  const openingHoursSource = extractOpeningHoursSource(gym);
+  const normalizedHours = useMemo(
+    () => normalizeOpeningHours(openingHoursSource),
+    [openingHoursSource]
+  );
+  const hasStructuredOpeningHours =
+    !!normalizedHours?.isStructured && !!normalizedHours?.hasAnyOpen;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#050308] text-white flex items-center justify-center">
@@ -213,10 +378,6 @@ const AdminGymDetails = () => {
   }
 
   if (!gym) return null;
-
-  // Helper: opening hours are structured object?
-  const hasStructuredOpeningHours =
-    gym.openingHours && typeof gym.openingHours === "object";
 
   return (
     <div className="min-h-screen bg-[#050308] text-white px-4 py-6">
@@ -371,7 +532,7 @@ const AdminGymDetails = () => {
             </div>
 
             {/* Opening hours */}
-            {gym.openingHours && (
+            {openingHoursSource && normalizedHours && (
               <div className="mt-5">
                 <div className="flex items-center gap-2 text-sm text-slate-300 mb-2">
                   <Clock size={16} className="text-sky-400" />
@@ -379,54 +540,66 @@ const AdminGymDetails = () => {
                 </div>
 
                 {/* Old string form */}
-                {typeof gym.openingHours === "string" && (
+                {!normalizedHours.isStructured && normalizedHours.label && (
                   <p className="text-sm text-slate-300 ml-6">
-                    {gym.openingHours}
+                    {normalizedHours.label}
                   </p>
                 )}
 
-                {/* New structured object: monday–sunday */}
-                {hasStructuredOpeningHours && (
-                  <div className="ml-6 space-y-1 text-xs text-slate-300">
-                    {DAY_CONFIG.map((day) => {
-                      const info = gym.openingHours[day.key] || {};
-                      const hasTimes = info.open && info.close;
-                      const closed = info.closed || !hasTimes;
-                      const label = closed
-                        ? "Closed"
-                        : `${info.open} – ${info.close}`;
-                      const isToday =
-                        typeof day.jsDay === "number" &&
-                        day.jsDay === new Date().getDay();
+                {/* Structured weekly schedule */}
+                {hasStructuredOpeningHours &&
+                  normalizedHours.list &&
+                  normalizedHours.list.length > 0 && (
+                    <div className="ml-6 space-y-1 text-xs text-slate-300">
+                      {normalizedHours.list.map((day) => {
+                        const isToday =
+                          typeof day.jsDay === "number" &&
+                          day.jsDay === new Date().getDay();
 
-                      return (
-                        <div
-                          key={day.key}
-                          className="flex items-center justify-between"
-                        >
-                          <span
-                            className={`w-16 ${
-                              isToday ? "font-semibold text-white" : ""
-                            }`}
+                        let label;
+                        if (day.closed) {
+                          label = "Closed";
+                        } else if (day.open && day.close) {
+                          label = `${day.open} – ${day.close}`;
+                        } else if (
+                          typeof day.raw === "string" &&
+                          day.raw.trim()
+                        ) {
+                          label = day.raw;
+                        } else if (day.open) {
+                          label = day.open;
+                        } else {
+                          label = "Closed";
+                        }
+
+                        return (
+                          <div
+                            key={day.key}
+                            className="flex items-center justify-between"
                           >
-                            {day.short}
-                          </span>
-                          <span
-                            className={
-                              closed
-                                ? "text-slate-500"
-                                : isToday
-                                ? "text-emerald-300"
-                                : "text-slate-300"
-                            }
-                          >
-                            {label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                            <span
+                              className={`w-16 ${
+                                isToday ? "font-semibold text-white" : ""
+                              }`}
+                            >
+                              {day.short}
+                            </span>
+                            <span
+                              className={
+                                day.closed
+                                  ? "text-slate-500"
+                                  : isToday
+                                  ? "text-emerald-300"
+                                  : "text-slate-300"
+                              }
+                            >
+                              {label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
               </div>
             )}
           </div>
@@ -515,21 +688,25 @@ const AdminGymDetails = () => {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {images.map((img, i) => (
-                <a
-                  key={i}
-                  href={toMediaUrl(img)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group relative rounded-xl overflow-hidden border border-white/10 bg-black/30"
-                >
-                  <img
-                    src={toMediaUrl(img)}
-                    alt={`gym-${i}`}
-                    className="w-full h-36 object-cover group-hover:scale-105 transition"
-                  />
-                </a>
-              ))}
+              {images.map((img, i) => {
+                const finalUrl = toMediaUrl(img);
+                if (!finalUrl) return null;
+                return (
+                  <a
+                    key={i}
+                    href={finalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group relative rounded-xl overflow-hidden border border-white/10 bg-black/30"
+                  >
+                    <img
+                      src={finalUrl}
+                      alt={`gym-${i}`}
+                      className="w-full h-36 object-cover group-hover:scale-105 transition"
+                    />
+                  </a>
+                );
+              })}
             </div>
           )}
         </section>
@@ -553,14 +730,31 @@ const AdminGymDetails = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {passes.map((p, i) => (
-                    <tr key={i} className="border-b border-white/5">
-                      <td className="py-2 text-slate-100">{p.duration}</td>
-                      <td className="py-2 text-slate-100 font-semibold">
-                        ₹{Number(p.price).toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                  ))}
+                  {passes.map((p, i) => {
+                    const duration =
+                      p.duration ||
+                      p.durationDays ||
+                      (typeof p.label === "string" ? p.label : "-");
+                    const price = pickNumber(
+                      p.salePrice,
+                      p.price,
+                      p.basePrice
+                    );
+                    return (
+                      <tr key={i} className="border-b border-white/5">
+                        <td className="py-2 text-slate-100">
+                          {typeof duration === "number"
+                            ? duration
+                            : duration || "-"}
+                        </td>
+                        <td className="py-2 text-slate-100 font-semibold">
+                          {price
+                            ? `₹${Number(price).toLocaleString("en-IN")}`
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -649,7 +843,7 @@ const DocRow = ({ label, icon: Icon, url }) => {
         <Icon size={14} className="text-slate-400" />
         {label}
       </div>
-      {url ? (
+      {url && finalUrl ? (
         <a
           href={finalUrl}
           target="_blank"
