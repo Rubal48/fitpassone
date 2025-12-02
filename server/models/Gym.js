@@ -54,6 +54,33 @@ const passSchema = new mongoose.Schema(
 passSchema.pre("save", function (next) {
   const pass = this;
 
+  // Normalise discountPercent to a number if present
+  let inputDiscount = null;
+  if (pass.discountPercent !== undefined && pass.discountPercent !== null) {
+    const maybe = Number(pass.discountPercent);
+    inputDiscount = Number.isFinite(maybe) ? maybe : null;
+  }
+
+  // If we have legacy price + discount% but no base/sale, infer basePrice
+  // Example: price = 400, discountPercent = 20  → basePrice ≈ 500, salePrice = 400
+  if (
+    !pass.basePrice &&
+    !pass.salePrice &&
+    typeof pass.price === "number" &&
+    inputDiscount !== null &&
+    inputDiscount > 0 &&
+    inputDiscount < 90
+  ) {
+    pass.salePrice = pass.price;
+    const multiplier = 1 - inputDiscount / 100;
+    if (multiplier > 0) {
+      pass.basePrice = Math.round(pass.price / multiplier);
+    } else {
+      pass.basePrice = pass.price;
+      inputDiscount = 0;
+    }
+  }
+
   // If only legacy price is set, treat it as both base & sale (no discount)
   if (!pass.basePrice && !pass.salePrice && typeof pass.price === "number") {
     pass.basePrice = pass.price;
@@ -116,7 +143,11 @@ const gymSchema = new mongoose.Schema(
 
     // ✅ Rating & reviews
     rating: { type: Number, default: 0 },
+
+    // Hero + gallery
+    coverImage: { type: String }, // main banner used in cards/detail
     images: { type: [String], default: [] },
+
     description: { type: String },
     tags: { type: [String], default: [] },
 
@@ -127,8 +158,20 @@ const gymSchema = new mongoose.Schema(
       type: [String],
       default: [], // e.g. ["WiFi", "Parking", "Showers"]
     },
+
+    /**
+     * Opening hours:
+     * - OLD data: simple string like "6:00 AM – 10:00 PM"
+     * - NEW data: Mon–Sun object from Partner flow:
+     *   {
+     *     monday:   { open: "06:00", close: "22:00", closed: false },
+     *     tuesday:  { ... },
+     *     ...
+     *   }
+     */
     openingHours: {
-      type: String, // "6:00 AM – 10:00 PM"
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
 
     // ✅ Contact & links (matching Partner form)

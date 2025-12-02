@@ -18,6 +18,7 @@ import {
   Ticket,
   CheckCircle2,
 } from "lucide-react";
+import { Helmet } from "react-helmet"; // ✅ SEO: Helmet for <head> tags
 import API from "../utils/api";
 
 /* =========================================================
@@ -234,6 +235,42 @@ const getEventHeroImage = (event) => {
 };
 
 /* =========================================================
+   OPENING HOURS LABEL — avoid rendering raw object
+   ========================================================= */
+
+const getGymOpeningLabel = (gym) => {
+  if (!gym) return null;
+  const raw =
+    gym.openingHours || gym.openinghours || gym.hours || gym.timing || gym.schedule;
+
+  if (!raw) return null;
+
+  // Already a simple string from older models
+  if (typeof raw === "string") return raw;
+
+  // Some models store summary/general fields
+  if (typeof raw === "object") {
+    if (typeof raw.summary === "string") return raw.summary;
+    if (typeof raw.general === "string") return raw.general;
+
+    // Try monday as sample: { open, close }
+    const monday = raw.monday || raw.Monday || raw.mon;
+    if (monday && typeof monday === "object") {
+      const open =
+        monday.open || monday.from || monday.start || monday.opensAt;
+      const close =
+        monday.close || monday.to || monday.end || monday.closesAt;
+      if (open && close) return `Weekdays · ${open} – ${close}`;
+    }
+
+    // Fallback safe label
+    return "See full timings inside";
+  }
+
+  return null;
+};
+
+/* =========================================================
    HERO SECTION — fully Passiify themed
    ========================================================= */
 
@@ -380,8 +417,8 @@ function Hero({
                 style={{ color: theme.textMuted }}
               >
                 Tap into MMA gyms, rooftop yoga, dance studios or strength clubs
-                in each city as we roll out. Book clear, honest 1-day passes —
-                no sales tours, no lock-ins.
+                in each city as we roll out. Book clear, honest 1-day passes — no
+                sales tours, no lock-ins.
               </p>
 
               {/* Search bar */}
@@ -619,7 +656,7 @@ function Hero({
                 <div className="relative h-52 sm:h-60 md:h-64">
                   <img
                     src={heroEventImageSrc}
-                    alt={topEvent?.name || "Passiify event"}
+                    alt={topEvent?.name || "Featured fitness event on Passiify"}
                     className="w-full h-full object-cover"
                     loading="lazy"
                     onError={(e) => {
@@ -746,7 +783,7 @@ function Hero({
                   >
                     <img
                       src={heroGymImageSrc}
-                      alt={featuredGym?.name || "Featured gym"}
+                      alt={featuredGym?.name || "Featured day-pass gym on Passiify"}
                       className="w-full h-full object-cover"
                       loading="lazy"
                       onError={(e) => {
@@ -1611,6 +1648,8 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
   const featured = visible[0];
   const rest = visible.slice(1);
 
+  const featuredOpeningLabel = featured ? getGymOpeningLabel(featured) : null;
+
   return (
     <section className="w-full py-10">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1743,13 +1782,13 @@ function DayPassGymsSection({ theme, mode, gyms, loading }) {
                             ? `${featured.rating.toFixed(1)} rating`
                             : "New on Passiify"}
                         </span>
-                        {featured.openingHours && (
+                        {featuredOpeningLabel && (
                           <span
                             className="inline-flex items-center gap-1"
                             style={{ color: theme.textMuted }}
                           >
                             <Clock size={13} />
-                            {featured.openingHours}
+                            {featuredOpeningLabel}
                           </span>
                         )}
                       </div>
@@ -2029,7 +2068,7 @@ function CategoryStrip({ theme, mode }) {
 }
 
 /* =========================================================
-   WHY PASSIIFY & GEN-Z ANGLE (copy updated to be broader)
+   WHY PASSIIFY
    ========================================================= */
 
 function WhyPassiifySection({ theme, mode }) {
@@ -2085,9 +2124,9 @@ function WhyPassiifySection({ theme, mode }) {
                 style={{ color: theme.textMuted }}
               >
                 Passiify lets you experiment with Muay Thai, rooftop yoga, dance
-                cardio or strength clubs — with honest pricing and instant
-                booking. No awkward sales desk chats. No guilt when you travel or
-                change cities.
+                cardio or strength clubs — with honest pricing and instant booking.
+                No awkward sales desk chats. No guilt when you travel or change
+                cities.
               </p>
             </div>
 
@@ -2595,7 +2634,7 @@ function Footer({ theme, mode }) {
 }
 
 /* =========================================================
-   PAGE ASSEMBLY (DEFAULT EXPORT)
+   PAGE ASSEMBLY (DEFAULT EXPORT) — now with Helmet SEO
    ========================================================= */
 
 export default function Home() {
@@ -2762,107 +2801,163 @@ export default function Home() {
   });
   const cityCount = citySet.size;
 
+  // ✅ SEO constants
+  const canonicalUrl = "https://www.passiify.com/";
+  const pageTitle =
+    "Passiify | Day-Pass Gyms & Fitness Events for Travellers & Locals";
+  const pageDescription =
+    "Book verified day-pass gyms, MMA & yoga studios, and curated fitness events as you travel or move cities. No contracts, no hidden fees — just clear 1-day passes via Passiify.";
+
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Passiify",
+    url: "https://www.passiify.com",
+    description: pageDescription,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: "https://www.passiify.com/explore?query={search_term_string}",
+      "query-input": "required name=search_term_string",
+    },
+  };
+
   return (
-    <div
-      className="min-h-screen w-full overflow-x-hidden pb-16 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
-      style={{
-        color: theme.textMain,
-        touchAction: "manipulation", // ensure taps/scrolls work nicely on mobile
-      }}
-    >
-      {/* TOP TRUST STRIP under navbar */}
+    <>
+      {/* ✅ Helmet SEO for home page */}
+      <Helmet htmlAttributes={{ lang: "en" }}>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <meta
+          name="keywords"
+          content="Passiify, gym day pass, fitness events, MMA gyms, yoga studios, dance classes, drop-in gym, one-day gym pass, travel fitness, Goa gym pass, Delhi gym pass"
+        />
+        <meta name="author" content="Passiify" />
+        <meta name="robots" content="index,follow" />
+        <link rel="canonical" href={canonicalUrl} />
+
+        {/* Open Graph / social preview */}
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
+        <meta property="og:url" content={canonicalUrl} />
+        {/* Update this when you have a real OG image in your assets */}
+        <meta
+          property="og:image"
+          content="https://www.passiify.com/og-image.jpg"
+        />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={pageDescription} />
+
+        {/* JSON-LD structured data */}
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData)}
+        </script>
+      </Helmet>
+
       <div
-        className="w-full border-b backdrop-blur-xl transition-all duration-300"
+        className="min-h-screen w-full overflow-x-hidden pb-16 transition-colors duration-300 bg-gradient-to-b from-sky-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
         style={{
-          borderColor: theme.borderSoft,
-          background:
-            mode === "dark"
-              ? "rgba(2,6,23,0.9)"
-              : "rgba(255,255,255,0.85)",
+          color: theme.textMain,
+          touchAction: "manipulation", // ensure taps/scrolls work nicely on mobile
         }}
       >
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3 text-[11px] md:text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span style={{ color: theme.textMuted }}>
-              Curated day-pass gyms & fitness experiences, rolling out city by
-              city.
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck
-                className="w-4 h-4"
-                style={{ color: theme.accentFrom }}
-              />
-              <span style={{ color: theme.textMuted }}>Verified hosts only</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2
-                className="w-4 h-4"
-                style={{ color: theme.accentTo }}
-              />
+        {/* TOP TRUST STRIP under navbar */}
+        <div
+          className="w-full border-b backdrop-blur-xl transition-all duration-300"
+          style={{
+            borderColor: theme.borderSoft,
+            background:
+              mode === "dark"
+                ? "rgba(2,6,23,0.9)"
+                : "rgba(255,255,255,0.85)",
+          }}
+        >
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3 text-[11px] md:text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span style={{ color: theme.textMuted }}>
-                Transparent pricing · No lock-ins
+                Curated day-pass gyms & fitness experiences, rolling out city by
+                city.
               </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck
+                  className="w-4 h-4"
+                  style={{ color: theme.accentFrom }}
+                />
+                <span style={{ color: theme.textMuted }}>Verified hosts only</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2
+                  className="w-4 h-4"
+                  style={{ color: theme.accentTo }}
+                />
+                <span style={{ color: theme.textMuted }}>
+                  Transparent pricing · No lock-ins
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* HERO */}
-      <Hero
-        theme={theme}
-        mode={mode}
-        topEvent={topEvent}
-        featuredGym={featuredGym}
-        onSearch={handleSearch}
-        startingDayPrice={startingDayPrice}
-        eventsCount={events.length}
-        gymsCount={gyms.length}
-      />
-
-      {/* MAIN CONTENT */}
-      <main className="w-full space-y-4">
-        <StatsStrip
+        {/* HERO */}
+        <Hero
           theme={theme}
           mode={mode}
-          gymsCount={gyms.length}
+          topEvent={topEvent}
+          featuredGym={featuredGym}
+          onSearch={handleSearch}
+          startingDayPrice={startingDayPrice}
           eventsCount={events.length}
-          globalRating={globalAvgRating}
-          globalRatingCount={globalRatingCount}
-          cityCount={cityCount}
+          gymsCount={gyms.length}
         />
-        <ForYouStrip
-          theme={theme}
-          mode={mode}
-          bookings={eventBookings}
-          loading={loadingBookings}
-          events={events}
-        />
-        <TravelCityStrip theme={theme} mode={mode} gyms={gyms} events={events} />
-        <UpcomingEventsSection
-          theme={theme}
-          mode={mode}
-          events={events}
-          loading={loadingEvents}
-        />
-        <DayPassGymsSection
-          theme={theme}
-          mode={mode}
-          gyms={gyms}
-          loading={loadingGyms}
-        />
-        <CategoryStrip theme={theme} mode={mode} />
-        <WhyPassiifySection theme={theme} mode={mode} />
-        <PartnerStrip theme={theme} mode={mode} />
-        <HowItWorksSection theme={theme} mode={mode} />
-        <LocalDiscoveryInline theme={theme} mode={mode} />
-        <CTASection theme={theme} />
-      </main>
 
-      {/* FOOTER */}
-      <Footer theme={theme} mode={mode} />
-    </div>
+        {/* MAIN CONTENT */}
+        <main className="w-full space-y-4">
+          <StatsStrip
+            theme={theme}
+            mode={mode}
+            gymsCount={gyms.length}
+            eventsCount={events.length}
+            globalRating={globalAvgRating}
+            globalRatingCount={globalRatingCount}
+            cityCount={cityCount}
+          />
+          <ForYouStrip
+            theme={theme}
+            mode={mode}
+            bookings={eventBookings}
+            loading={loadingBookings}
+            events={events}
+          />
+          <TravelCityStrip theme={theme} mode={mode} gyms={gyms} events={events} />
+          <UpcomingEventsSection
+            theme={theme}
+            mode={mode}
+            events={events}
+            loading={loadingEvents}
+          />
+          <DayPassGymsSection
+            theme={theme}
+            mode={mode}
+            gyms={gyms}
+            loading={loadingGyms}
+          />
+          <CategoryStrip theme={theme} mode={mode} />
+          <WhyPassiifySection theme={theme} mode={mode} />
+          <PartnerStrip theme={theme} mode={mode} />
+          <HowItWorksSection theme={theme} mode={mode} />
+          <LocalDiscoveryInline theme={theme} mode={mode} />
+          <CTASection theme={theme} />
+        </main>
+
+        {/* FOOTER */}
+        <Footer theme={theme} mode={mode} />
+      </div>
+    </>
   );
 }

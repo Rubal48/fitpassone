@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   Globe2,
+  Sun,
 } from "lucide-react";
 import API from "../utils/api";
 
@@ -88,23 +89,67 @@ const getBackendOrigin = () => {
   return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
 };
 
-const buildMediaUrl = (raw) => {
-  if (!raw) return null;
+// Try to read an image string out of all shapes (string | obj | array)
+const extractImageValue = (value) => {
+  if (!value) return null;
 
-  // Already a full URL
-  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+  // direct string
+  if (typeof value === "string") return value;
 
-  try {
-    const origin = getBackendOrigin();
-    const cleanPath = String(raw).replace(/^\/+/, ""); // remove starting "/"
-
-    // If for some reason we don't know backend origin, fall back to same-origin
-    if (!origin) return `/${cleanPath}`;
-
-    return `${origin}/${cleanPath}`;
-  } catch {
+  // array: pick first usable
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const fromItem = extractImageValue(item);
+      if (fromItem) return fromItem;
+    }
     return null;
   }
+
+  // object from partner/Cloudinary/multer, etc.
+  if (typeof value === "object") {
+    return (
+      value.url || // { url: "/uploads/gyms/..." } or Cloudinary
+      value.secure_url ||
+      value.path || // multer: { path: "uploads/gyms/..." }
+      value.location ||
+      value.key ||
+      value.filename ||
+      null
+    );
+  }
+
+  return null;
+};
+
+const normalizeRelativePath = (rawPath) => {
+  if (!rawPath) return null;
+  let p = String(rawPath).trim();
+
+  // already absolute URL
+  if (p.startsWith("http://") || p.startsWith("https://")) return p;
+
+  // fix Windows slashes and strip "public/"
+  p = p.replace(/\\/g, "/");
+  p = p.replace(/^public\//, "");
+  p = p.replace(/^\/+/, ""); // remove starting "/"
+  return p || null;
+};
+
+const buildMediaUrl = (raw) => {
+  const extracted = extractImageValue(raw);
+  if (!extracted) return null;
+
+  // full URL (Cloudinary, S3, etc.)
+  if (typeof extracted === "string" && extracted.startsWith("http")) {
+    return extracted;
+  }
+
+  const origin = getBackendOrigin();
+  const clean = normalizeRelativePath(extracted);
+  if (!clean) return null;
+
+  // If backend origin unknown, fall back to same origin
+  return origin ? `${origin}/${clean}` : `/${clean}`;
 };
 
 const fallbackImages = [
@@ -115,15 +160,28 @@ const fallbackImages = [
 ];
 
 const getGymImage = (gym) => {
-  const raw =
-    gym.coverImage ||
-    gym.image ||
-    (Array.isArray(gym.images) && gym.images[0]) ||
-    (Array.isArray(gym.media) && gym.media[0]) ||
-    gym.thumbnail;
+  // Prefer partner “hero” / card image first
+  const candidates = [
+    gym.heroImage,
+    gym.hero,
+    gym.coverImage,
+    gym.bannerImage,
+    gym.mainImage,
+    gym.cardImage,
+    gym.image,
+    Array.isArray(gym.images) && gym.images[0],
+    Array.isArray(gym.media) && gym.media[0],
+    Array.isArray(gym.gallery) && gym.gallery[0],
+    Array.isArray(gym.photos) && gym.photos[0],
+    gym.thumbnail,
+    gym.host &&
+      (gym.host.heroImage || gym.host.bannerImage || gym.host.image),
+  ];
 
-  const url = buildMediaUrl(raw);
-  if (url) return url;
+  for (const c of candidates) {
+    const url = buildMediaUrl(c);
+    if (url) return url;
+  }
 
   // fallback (deterministic by id to avoid flicker)
   const key = gym._id || gym.id || Math.random();
@@ -136,101 +194,151 @@ const getGymImage = (gym) => {
   return fallbackImages[index];
 };
 
-/* ---------- 🧮 Helper for safe numbers ---------- */
+/* ---------- 🧮 Pricing helpers (sync with GymDetails) ---------- */
 
-const pickNumber = (...values) => {
-  for (let i = 0; i < values.length; i += 1) {
-    const raw = values[i];
-    if (raw !== undefined && raw !== null && raw !== "") {
-      const num = Number(raw);
-      if (!Number.isNaN(num)) return num;
-    }
-  }
-  return 0;
+const toNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
 };
 
-/* ---------- 🧮 Pricing meta from passes (discount-aware) ---------- */
+const getPassPricing = (pass = {}, gym = {}) => {
+  // try pass basePrice / price, then gym fallback
+  const baseCandidates = [
+    pass.basePrice,
+    pass.price,
+    gym.basePrice,
+    gym.price,
+  ];
 
-const getGymPricingMeta = (gym) => {
-  const passes = Array.isArray(gym.passes) ? gym.passes : [];
-
-  // pick the cheapest pass by salePrice (or price/basePrice as fallback)
-  let primaryPass = null;
-  if (passes.length > 0) {
-    primaryPass = passes.reduce((best, current) => {
-      const currentSale = pickNumber(
-        current.salePrice,
-        current.price,
-        current.basePrice
-      );
-
-      if (!best) return current;
-
-      const bestSale = pickNumber(
-        best.salePrice,
-        best.price,
-        best.basePrice
-      );
-
-      if (!bestSale && currentSale) return current;
-      return currentSale && currentSale < bestSale ? current : best;
-    }, null);
-  }
-
-  const baseFromPass = primaryPass
-    ? pickNumber(
-        primaryPass.basePrice,
-        primaryPass.price,
-        gym.basePrice,
-        gym.price
-      )
-    : 0;
-
-  const basePrice =
-    baseFromPass || pickNumber(gym.basePrice, gym.price) || 0;
-
-  let salePrice;
-  if (primaryPass) {
-    salePrice = pickNumber(
-      primaryPass.salePrice,
-      primaryPass.price,
-      basePrice
-    );
-  } else {
-    salePrice = pickNumber(gym.salePrice, gym.price, basePrice);
-  }
-
-  if (!salePrice && basePrice) salePrice = basePrice;
-
-  let discountPercent =
-    primaryPass && typeof primaryPass.discountPercent === "number"
-      ? primaryPass.discountPercent
-      : 0;
-
-  let hasDiscount = false;
-  let savings = 0;
-
-  if (basePrice && salePrice && salePrice < basePrice) {
-    hasDiscount = true;
-    savings = basePrice - salePrice;
-    if (!discountPercent) {
-      discountPercent = Math.round((savings / basePrice) * 100);
+  let basePrice = 0;
+  for (const c of baseCandidates) {
+    const n = toNumber(c);
+    if (n !== null) {
+      basePrice = n;
+      break;
     }
-  } else {
-    discountPercent = 0;
   }
+
+  let discountPercent = toNumber(pass.discountPercent) || 0;
+  let salePrice = toNumber(pass.salePrice);
+
+  // compute sale if not explicitly stored
+  if (!salePrice && basePrice) {
+    if (discountPercent > 0) {
+      salePrice = Math.round(basePrice * (1 - discountPercent / 100));
+    } else {
+      salePrice = basePrice;
+    }
+  }
+
+  if (!salePrice) salePrice = basePrice;
+
+  const hasDiscount = basePrice && salePrice && salePrice < basePrice;
+  const savings = hasDiscount ? basePrice - salePrice : 0;
+  if (!hasDiscount) discountPercent = 0;
 
   return {
     basePrice: basePrice || 0,
     salePrice: salePrice || 0,
-    hasDiscount,
     discountPercent,
     savings,
-    durationDays:
-      primaryPass && primaryPass.duration ? primaryPass.duration : 1,
-    offerLabel:
-      (primaryPass && primaryPass.offerLabel) || gym.offerLabel || "",
+    hasDiscount,
   };
+};
+
+/**
+ * Return a single pricing object for the gym:
+ * - picks the cheapest active pass (new model)
+ * - supports old model (price/duration) as fallback
+ */
+const getGymPricingMeta = (gym) => {
+  const passesRaw = Array.isArray(gym.passes) ? gym.passes : [];
+  const passes = passesRaw.filter(
+    (p) => p && (p.isActive === undefined || p.isActive === true)
+  );
+
+  let primaryPass = null;
+  let primaryPricing = null;
+
+  if (passes.length > 0) {
+    passes.forEach((pass) => {
+      const pricing = getPassPricing(pass, gym);
+      const currentSale =
+        pricing.salePrice || pricing.basePrice || Number(pass.price) || 0;
+
+      if (!primaryPass) {
+        primaryPass = pass;
+        primaryPricing = pricing;
+        return;
+      }
+
+      const bestSale =
+        primaryPricing.salePrice ||
+        primaryPricing.basePrice ||
+        Number(primaryPass.price) ||
+        0;
+
+      if (currentSale && (!bestSale || currentSale < bestSale)) {
+        primaryPass = pass;
+        primaryPricing = pricing;
+      }
+    });
+  }
+
+  if (!primaryPricing) {
+    // fallback if no passes: use gym-level fields
+    primaryPricing = getPassPricing({}, gym);
+  }
+
+  const durationDays =
+    (primaryPass &&
+      (primaryPass.durationDays || primaryPass.duration)) ||
+    1;
+
+  const offerLabel =
+    (primaryPass && primaryPass.offerLabel) || gym.offerLabel || "";
+
+  return {
+    ...primaryPricing,
+    durationDays,
+    offerLabel,
+  };
+};
+
+/* ---------- 🕒 Sunday open detection (supports old + new models) ---------- */
+
+const isSundayOpen = (gym) => {
+  const src =
+    gym?.openingHours || gym?.openinghours || gym?.hours || {};
+
+  // direct boolean field
+  if (typeof gym?.sundayOpen === "boolean") return gym.sundayOpen;
+  if (!src || typeof src !== "object") return false;
+
+  const directSunday = src.sunday || src.Sunday || src.sun;
+
+  if (directSunday) {
+    if (typeof directSunday === "object") {
+      if (directSunday.closed === true) return false;
+      if (directSunday.open || directSunday.close) return true;
+    }
+    if (typeof directSunday === "string") {
+      const lower = directSunday.toLowerCase();
+      if (lower.includes("closed")) return false;
+      if (lower.trim().length > 0) return true;
+    }
+    if (typeof directSunday === "boolean") return directSunday;
+  }
+
+  // fallback: weekend bucket
+  if (src.weekend && typeof src.weekend === "object") {
+    if (src.weekend.closed === true) return false;
+    if (src.weekend.open || src.weekend.close) return true;
+  }
+
+  if (typeof src.sundayOpen === "boolean") return src.sundayOpen;
+  return false;
 };
 
 /* =========================================================
@@ -562,10 +670,10 @@ function ExploreControls({
             {query
               ? `Filtered by “${query}”${
                   cityFilter !== "Anywhere" ? ` in ${cityFilter}` : ""
-                }. Tune vibe, price or rating for your perfect match.`
+                }. Tune vibe, price, Sunday hours or rating for your perfect match.`
               : cityFilter !== "Anywhere"
-              ? `Showing gyms & studios in ${cityFilter}. We’re adding more spaces city by city — adjust filters for budget, rating and vibe.`
-              : "Showing recommended gyms & studios in cities where Passiify is live. Use filters to tune by budget, rating and training style."}
+              ? `Showing gyms & studios in ${cityFilter}. Adjust filters for budget, rating, and Sunday open timings.`
+              : "Showing recommended gyms & studios in cities where Passiify is live. Use filters to tune by budget, rating, Sunday open and training style."}
           </div>
         </div>
 
@@ -574,9 +682,10 @@ function ExploreControls({
           <div className="flex flex-wrap gap-2 text-[11px] md:text-xs">
             {[
               { key: "all", label: "All" },
+              { key: "sunday", label: "Open Sunday" },
               { key: "budget", label: "Budget friendly" },
               { key: "premium", label: "Premium clubs" },
-              { key: "highRating", label: "Top rated" },
+              { key: "highRating", label: "Top rated (4.6+)" },
             ].map((f) => (
               <button
                 key={f.key}
@@ -696,7 +805,10 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
             Number(gym.price) ||
             499;
 
-          const rating = Number(gym.rating) || 4.7;
+          const rawRating = Number(gym.rating);
+          const hasRating = !Number.isNaN(rawRating) && rawRating > 0;
+          const sundayOpen = isSundayOpen(gym);
+
           const isTrending = index < 3;
           const isBudget = effectivePrice <= 500;
           const isPremium = effectivePrice >= 900;
@@ -718,8 +830,13 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
               <div className="relative h-44">
                 <img
                   src={getGymImage(gym)}
-                  alt={gym.name}
+                  alt={
+                    gym.name && gym.city
+                      ? `${gym.name} gym in ${gym.city} – day pass on Passiify`
+                      : gym.name || "Passiify gym day pass"
+                  }
                   loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transform group-hover:scale-[1.04] transition-transform duration-700"
                   onError={(e) => {
                     e.currentTarget.src =
@@ -845,6 +962,29 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
                   >
                     {pricing.durationDays || 1}-day access
                   </span>
+                  {sundayOpen && (
+                    <span
+                      className="px-2 py-0.5 rounded-full border inline-flex items-center gap-1"
+                      style={{
+                        borderColor: theme.borderSoft,
+                        color: theme.textMuted,
+                      }}
+                    >
+                      <Sun className="w-3 h-3" />
+                      Open Sunday
+                    </span>
+                  )}
+                  {pricing.offerLabel && (
+                    <span
+                      className="px-2 py-0.5 rounded-full border"
+                      style={{
+                        borderColor: theme.borderSoft,
+                        color: theme.textMuted,
+                      }}
+                    >
+                      {pricing.offerLabel}
+                    </span>
+                  )}
                 </div>
 
                 <p
@@ -857,21 +997,43 @@ function GymsGrid({ theme, mode, gyms, loading, error }) {
 
                 <div className="flex items-center justify-between mt-1">
                   <div className="flex flex-col">
-                    <div className="flex items-center gap-1 text-xs">
-                      <Star
-                        size={14}
-                        className="fill-yellow-300 text-yellow-300"
-                      />
-                      <span style={{ color: theme.textMain }}>
-                        {rating.toFixed(1)}
-                      </span>
-                    </div>
-                    <span
-                      className="text-[10px]"
-                      style={{ color: theme.textMuted }}
-                    >
-                      Traveller-rated
-                    </span>
+                    {hasRating ? (
+                      <>
+                        <div className="flex items-center gap-1 text-xs">
+                          <Star
+                            size={14}
+                            className="fill-yellow-300 text-yellow-300"
+                          />
+                          <span style={{ color: theme.textMain }}>
+                            {rawRating.toFixed(1)}
+                          </span>
+                        </div>
+                        <span
+                          className="text-[10px]"
+                          style={{ color: theme.textMuted }}
+                        >
+                          Traveller-rated
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-1 text-xs">
+                          <Star
+                            size={14}
+                            className="fill-yellow-300 text-yellow-300"
+                          />
+                          <span style={{ color: theme.textMain }}>
+                            New on Passiify
+                          </span>
+                        </div>
+                        <span
+                          className="text-[10px]"
+                          style={{ color: theme.textMuted }}
+                        >
+                          Rating coming soon
+                        </span>
+                      </>
+                    )}
                     {pricing.hasDiscount && pricing.savings > 0 && (
                       <span
                         className="text-[10px] mt-0.5"
@@ -1015,6 +1177,82 @@ function WhyPassiifyBand({ theme, mode }) {
 }
 
 /* =========================================================
+   HOST CTA — invite gyms to interact with you
+   ========================================================= */
+
+function HostCTA({ theme, mode }) {
+  const primaryGradient = `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`;
+
+  return (
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-20">
+      <div
+        className="rounded-3xl border px-5 py-5 md:px-8 md:py-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4 backdrop-blur-xl"
+        style={{
+          borderColor: theme.borderSoft,
+          background:
+            mode === "dark"
+              ? "rgba(15,23,42,0.96)"
+              : "rgba(255,255,255,0.98)",
+          boxShadow: theme.shadowSoft,
+        }}
+      >
+        <div className="space-y-1">
+          <p
+            className="text-[11px] uppercase tracking-[0.18em]"
+            style={{ color: theme.textMuted }}
+          >
+            Run a gym, studio or fight club?
+          </p>
+          <h2
+            className="text-sm md:text-base font-semibold"
+            style={{ color: theme.textMain }}
+          >
+            List your space on{" "}
+            <span
+              style={{
+                backgroundImage: primaryGradient,
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              Passiify
+            </span>{" "}
+            and start getting day-pass visitors.
+          </h2>
+          <p
+            className="text-[11px] md:text-xs max-w-md"
+            style={{ color: theme.textMuted }}
+          >
+            No setup fee. Share your best photos, set your own prices and we
+            handle secure QR passes and discovery.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-start md:items-end gap-2">
+          <Link
+            to="/partner"
+            className="text-[11px] md:text-xs font-semibold px-4 py-2.5 rounded-full shadow-[0_18px_60px_rgba(15,23,42,0.9)] hover:scale-[1.03] active:scale-[0.99] transition-transform"
+            style={{
+              backgroundImage: primaryGradient,
+              color: "#020617",
+            }}
+          >
+            Become a Passiify host
+          </Link>
+          <span
+            className="text-[10px]"
+            style={{ color: theme.textMuted }}
+          >
+            Takes ~3–5 minutes · Verification for quality & safety
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
    MAIN PAGE
    ========================================================= */
 
@@ -1040,6 +1278,20 @@ export default function Explore() {
   const [cityFilter, setCityFilter] = useState("Anywhere");
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recommended");
+
+  /* SEO: title + meta description */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.title =
+      "Explore day-pass gyms, studios & fight clubs | Passiify";
+    const meta = document.querySelector('meta[name="description"]');
+    if (meta) {
+      meta.setAttribute(
+        "content",
+        "Explore curated day-pass gyms, yoga studios, CrossFit boxes and MMA academies across cities. No contracts, instant QR access with Passiify."
+      );
+    }
+  }, []);
 
   /* Theme: react to system changes */
   useEffect(() => {
@@ -1099,7 +1351,7 @@ export default function Explore() {
     return Array.from(set);
   }, [gyms]);
 
-  /* Filtering + sorting (discount-aware) */
+  /* Filtering + sorting (discount-aware + Sunday + backend rating only) */
   const filteredGyms = useMemo(() => {
     let list = Array.isArray(gyms) ? [...gyms] : [];
 
@@ -1120,20 +1372,26 @@ export default function Explore() {
       );
     }
 
-    // filter by price/rating using discounted price
+    // filter by price/rating/Sunday using discounted price + real rating
     list = list.filter((gym) => {
       const meta = getGymPricingMeta(gym);
       const price =
         meta.salePrice || meta.basePrice || Number(gym.price) || 0;
-      const rating = Number(gym.rating) || 4.5;
+
+      const ratingRaw = Number(gym.rating);
+      const hasRating = !Number.isNaN(ratingRaw) && ratingRaw > 0;
+      const ratingVal = hasRating ? ratingRaw : 0;
+
+      const sundayOpen = isSundayOpen(gym);
 
       if (activeFilter === "budget") return price && price <= 500;
       if (activeFilter === "premium") return price && price >= 900;
-      if (activeFilter === "highRating") return rating >= 4.6;
+      if (activeFilter === "highRating") return hasRating && ratingVal >= 4.6;
+      if (activeFilter === "sunday") return sundayOpen;
       return true;
     });
 
-    // sort using discounted price
+    // sort using discounted price + real rating only
     list.sort((a, b) => {
       const metaA = getGymPricingMeta(a);
       const metaB = getGymPricingMeta(b);
@@ -1143,13 +1401,19 @@ export default function Explore() {
       const priceB =
         metaB.salePrice || metaB.basePrice || Number(b.price) || 0;
 
-      const ratingA = Number(a.rating) || 4.5;
-      const ratingB = Number(b.rating) || 4.5;
+      const ratingRawA = Number(a.rating);
+      const ratingRawB = Number(b.rating);
+
+      const ratingA =
+        !Number.isNaN(ratingRawA) && ratingRawA > 0 ? ratingRawA : 0;
+      const ratingB =
+        !Number.isNaN(ratingRawB) && ratingRawB > 0 ? ratingRawB : 0;
 
       if (sortBy === "priceLow") return priceA - priceB;
       if (sortBy === "priceHigh") return priceB - priceA;
       if (sortBy === "rating") return ratingB - ratingA;
 
+      // recommended: simple score combining rating + price
       const scoreA = ratingA * 2 - priceA / 500;
       const scoreB = ratingB * 2 - priceB / 500;
       return scoreB - scoreA;
@@ -1185,80 +1449,85 @@ export default function Explore() {
       {/* Unified trust strip */}
       <TopTrustStrip theme={theme} mode={mode} />
 
-      {/* HERO */}
-      <ExploreHero
-        theme={theme}
-        mode={mode}
-        query={query}
-        setQuery={setQuery}
-        cityFilter={cityFilter}
-        setCityFilter={setCityFilter}
-        uniqueCities={uniqueCities}
-      />
+      <main>
+        {/* HERO */}
+        <ExploreHero
+          theme={theme}
+          mode={mode}
+          query={query}
+          setQuery={setQuery}
+          cityFilter={cityFilter}
+          setCityFilter={setCityFilter}
+          uniqueCities={uniqueCities}
+        />
 
-      {/* CONTROLS */}
-      <ExploreControls
-        theme={theme}
-        mode={mode}
-        query={query}
-        activeFilter={activeFilter}
-        setActiveFilter={setActiveFilter}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        total={filteredGyms.length}
-        loading={loading}
-        cityFilter={cityFilter}
-      />
+        {/* CONTROLS */}
+        <ExploreControls
+          theme={theme}
+          mode={mode}
+          query={query}
+          activeFilter={activeFilter}
+          setActiveFilter={setActiveFilter}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          total={filteredGyms.length}
+          loading={loading}
+          cityFilter={cityFilter}
+        />
 
-      {/* Nothing found state */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-4">
-        {nothingFound && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <p
-              className="text-sm text-center"
-              style={{ color: theme.textMuted }}
-            >
-              We&apos;re still onboarding spaces for this search.
-            </p>
-            <p
-              className="text-xs max-w-sm text-center"
-              style={{ color: theme.textMuted }}
-            >
-              Try a broader term like “gym”, “yoga”, “MMA” or just a city name —
-              or reset filters to see every city where Passiify is currently
-              live.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("");
-                setCityFilter("Anywhere");
-                setActiveFilter("all");
-                setSortBy("recommended");
-              }}
-              className="px-4 py-2 rounded-full text-xs font-semibold shadow-[0_18px_60px_rgba(15,23,42,0.8)] hover:scale-[1.02] active:scale-[0.99] transition-transform"
-              style={{
-                backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
-                color: "#020617",
-              }}
-            >
-              Clear filters & show all live cities
-            </button>
-          </div>
-        )}
-      </section>
+        {/* Nothing found state */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-4">
+          {nothingFound && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <p
+                className="text-sm text-center"
+                style={{ color: theme.textMuted }}
+              >
+                We&apos;re still onboarding spaces for this search.
+              </p>
+              <p
+                className="text-xs max-w-sm text-center"
+                style={{ color: theme.textMuted }}
+              >
+                Try a broader term like “gym”, “yoga”, “MMA” or just a city
+                name — or reset filters to see every city where Passiify is
+                currently live.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setCityFilter("Anywhere");
+                  setActiveFilter("all");
+                  setSortBy("recommended");
+                }}
+                className="px-4 py-2 rounded-full text-xs font-semibold shadow-[0_18px_60px_rgba(15,23,42,0.8)] hover:scale-[1.02] active:scale-[0.99] transition-transform"
+                style={{
+                  backgroundImage: `linear-gradient(120deg, ${theme.accentFrom}, ${theme.accentMid}, ${theme.accentTo})`,
+                  color: "#020617",
+                }}
+              >
+                Clear filters & show all live cities
+              </button>
+            </div>
+          )}
+        </section>
 
-      {/* GYMS GRID */}
-      <GymsGrid
-        theme={theme}
-        mode={mode}
-        gyms={filteredGyms}
-        loading={loading}
-        error={errorGyms}
-      />
+        {/* GYMS GRID */}
+        <GymsGrid
+          theme={theme}
+          mode={mode}
+          gyms={filteredGyms}
+          loading={loading}
+          error={errorGyms}
+        />
 
-      {/* CONVERSION BAND */}
-      <WhyPassiifyBand theme={theme} mode={mode} />
+        {/* CONVERSION BAND */}
+        <WhyPassiifyBand theme={theme} mode={mode} />
+
+        {/* HOST CTA */}
+        <HostCTA theme={theme} mode={mode} />
+      </main>
     </div>
   );
 }

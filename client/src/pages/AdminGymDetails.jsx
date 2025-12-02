@@ -64,6 +64,20 @@ const prettyStatus = (status) =>
   (status || "pending").charAt(0).toUpperCase() +
   (status || "pending").slice(1);
 
+/* =========================
+   DAY CONFIG for opening hours
+========================= */
+
+const DAY_CONFIG = [
+  { key: "monday", label: "Monday", short: "Mon", jsDay: 1 },
+  { key: "tuesday", label: "Tuesday", short: "Tue", jsDay: 2 },
+  { key: "wednesday", label: "Wednesday", short: "Wed", jsDay: 3 },
+  { key: "thursday", label: "Thursday", short: "Thu", jsDay: 4 },
+  { key: "friday", label: "Friday", short: "Fri", jsDay: 5 },
+  { key: "saturday", label: "Saturday", short: "Sat", jsDay: 6 },
+  { key: "sunday", label: "Sunday", short: "Sun", jsDay: 0 },
+];
+
 const AdminGymDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -199,6 +213,10 @@ const AdminGymDetails = () => {
   }
 
   if (!gym) return null;
+
+  // Helper: opening hours are structured object?
+  const hasStructuredOpeningHours =
+    gym.openingHours && typeof gym.openingHours === "object";
 
   return (
     <div className="min-h-screen bg-[#050308] text-white px-4 py-6">
@@ -354,9 +372,61 @@ const AdminGymDetails = () => {
 
             {/* Opening hours */}
             {gym.openingHours && (
-              <div className="mt-5 flex items-center gap-2 text-sm text-slate-300">
-                <Clock size={16} className="text-sky-400" />
-                <span>{gym.openingHours}</span>
+              <div className="mt-5">
+                <div className="flex items-center gap-2 text-sm text-slate-300 mb-2">
+                  <Clock size={16} className="text-sky-400" />
+                  <span className="font-semibold">Opening hours</span>
+                </div>
+
+                {/* Old string form */}
+                {typeof gym.openingHours === "string" && (
+                  <p className="text-sm text-slate-300 ml-6">
+                    {gym.openingHours}
+                  </p>
+                )}
+
+                {/* New structured object: monday–sunday */}
+                {hasStructuredOpeningHours && (
+                  <div className="ml-6 space-y-1 text-xs text-slate-300">
+                    {DAY_CONFIG.map((day) => {
+                      const info = gym.openingHours[day.key] || {};
+                      const hasTimes = info.open && info.close;
+                      const closed = info.closed || !hasTimes;
+                      const label = closed
+                        ? "Closed"
+                        : `${info.open} – ${info.close}`;
+                      const isToday =
+                        typeof day.jsDay === "number" &&
+                        day.jsDay === new Date().getDay();
+
+                      return (
+                        <div
+                          key={day.key}
+                          className="flex items-center justify-between"
+                        >
+                          <span
+                            className={`w-16 ${
+                              isToday ? "font-semibold text-white" : ""
+                            }`}
+                          >
+                            {day.short}
+                          </span>
+                          <span
+                            className={
+                              closed
+                                ? "text-slate-500"
+                                : isToday
+                                ? "text-emerald-300"
+                                : "text-slate-300"
+                            }
+                          >
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

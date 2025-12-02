@@ -87,6 +87,7 @@ router.put(
 
     const allowedFields = [
       "name",
+      "businessType",
       "city",
       "address",
       "description",
@@ -97,6 +98,7 @@ router.put(
       "openingHours",
       "facilities",
       "images",
+      "coverImage",
     ];
 
     allowedFields.forEach((field) => {
@@ -423,14 +425,23 @@ router.post(
   asyncHandler(async (req, res) => {
     let {
       name,
+      businessType,
       city,
       address,
-      price,
       description,
       images = [],
       tags = [],
       passes = [],
-      customPrice = {},
+      phone,
+      website,
+      instagram,
+      googleMapLink,
+      facilities = [],
+      openingHours,
+      coverImage,
+      businessProof,
+      ownerIdProof,
+      video,
     } = req.body;
 
     if (!name || !city) {
@@ -438,32 +449,135 @@ router.post(
       throw new Error("Name and city are required");
     }
 
-    if (!price) {
-      if (Array.isArray(passes) && passes.length > 0 && passes[0].price) {
-        price = passes[0].price;
-      } else if (customPrice && Object.values(customPrice).length > 0) {
-        price = Object.values(customPrice)[0];
+    // Normalise arrays
+    if (!Array.isArray(tags)) {
+      if (typeof tags === "string") {
+        tags = tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
       } else {
-        res.status(400);
-        throw new Error(
-          "Price information missing (no price/passes/customPrice found)"
-        );
+        tags = [];
       }
     }
 
-    const gym = await Gym.create({
+    if (!Array.isArray(facilities)) {
+      facilities = [];
+    }
+
+    if (!Array.isArray(images)) {
+      images = images ? [images] : [];
+    }
+
+    // Normalise passes — convert simple { duration, price, discountPercent }
+    // into the richer { basePrice, salePrice, discountPercent, price } structure.
+    const normalisePass = (raw) => {
+      if (!raw) return null;
+
+      const duration =
+        typeof raw.duration === "number"
+          ? raw.duration
+          : Number(raw.duration) || 1;
+
+      const toNum = (val) => {
+        if (val === undefined || val === null || val === "") return undefined;
+        const n = Number(val);
+        return Number.isFinite(n) && n > 0 ? n : undefined;
+      };
+
+      let basePrice = toNum(raw.basePrice);
+      let salePrice = toNum(raw.salePrice);
+      let legacyPrice = toNum(raw.price);
+      let inputDiscount = toNum(raw.discountPercent);
+
+      // If no explicit base/sale, infer from legacy price + discount%
+      if (basePrice == null && salePrice == null) {
+        if (legacyPrice != null && inputDiscount != null && inputDiscount > 0) {
+          salePrice = legacyPrice;
+          const multiplier = 1 - inputDiscount / 100;
+          basePrice =
+            multiplier > 0 ? Math.round(legacyPrice / multiplier) : legacyPrice;
+        } else if (legacyPrice != null) {
+          basePrice = legacyPrice;
+          salePrice = legacyPrice;
+        }
+      }
+
+      if (basePrice != null && salePrice == null) salePrice = basePrice;
+      if (salePrice != null && basePrice == null) basePrice = salePrice;
+
+      let discountPercent = 0;
+      if (
+        basePrice != null &&
+        salePrice != null &&
+        salePrice < basePrice
+      ) {
+        discountPercent = Math.round(
+          ((basePrice - salePrice) / basePrice) * 100
+        );
+      }
+
+      const finalPrice = salePrice ?? basePrice ?? legacyPrice ?? 0;
+
+      return {
+        name: raw.name || `${duration}-Day Pass`,
+        description: raw.description || "",
+        duration,
+        basePrice,
+        salePrice,
+        discountPercent,
+        offerLabel: raw.offerLabel || "",
+        maxCheckIns:
+          raw.maxCheckIns !== undefined && raw.maxCheckIns !== null
+            ? Number(raw.maxCheckIns) || 0
+            : 0,
+        isActive:
+          typeof raw.isActive === "boolean" ? raw.isActive : true,
+        price: finalPrice,
+      };
+    };
+
+    const normalisedPasses = Array.isArray(passes)
+      ? passes.map(normalisePass).filter(Boolean)
+      : [];
+
+    if (!normalisedPasses.length) {
+      return res
+        .status(400)
+        .json({ message: "Add at least one pass with a valid price." });
+    }
+
+    // Hero + gallery images: keep a separate coverImage and also
+    // ensure the first element of images[] is that hero for Explore / cards.
+    const hero = coverImage || images[0] || null;
+    const gallery = images || [];
+    const finalImages = hero
+      ? [hero, ...gallery.filter((img) => img !== hero)]
+      : gallery;
+
+    const gym = new Gym({
       name,
+      businessType: businessType || "gym",
       city,
       address,
-      price,
       description,
-      images,
-      tags,
-      passes,
-      customPrice,
+      phone,
+      website,
+      instagram,
+      googleMapLink,
+      facilities,
+      openingHours: openingHours || null,
+      passes: normalisedPasses,
+      coverImage: hero,
+      images: finalImages,
+      businessProof,
+      ownerIdProof,
+      video,
       status: "pending",
       owner: req.user._id,
     });
+
+    await gym.save(); // pre-save will set rating + cached price from passes
 
     res.status(201).json({
       message: "Gym submitted successfully! Awaiting admin approval.",
@@ -482,6 +596,7 @@ router.put(
     }
 
     gym.status = "approved";
+    gym.verified = true; // mark as verified when admin approves
     await gym.save();
 
     res.json({ message: "✅ Gym approved successfully!", gym });
