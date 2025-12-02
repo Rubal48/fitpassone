@@ -69,7 +69,7 @@ const buildTheme = (mode) => {
   };
 };
 
-/* ---------- 🔗 Media URL builder (backend + CDN) ---------- */
+/* ---------- 🔗 Media URL builder (backend + CDN + Cloudinary) ---------- */
 
 const fallbackGalleryImages = [
   "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1200",
@@ -84,44 +84,100 @@ const getBackendOrigin = () => {
   return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
 };
 
-const buildMediaUrl = (raw) => {
-  if (!raw) return null;
+// Try to read a URL out of any shape (string | obj | array)
+const extractImageValue = (value) => {
+  if (!value) return null;
 
-  // already absolute
-  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+  // direct string
+  if (typeof value === "string") return value;
 
-  const origin = getBackendOrigin();
-  const cleanPath = String(raw).replace(/^\/+/, ""); // remove starting "/"
-
-  if (!origin) {
-    // fallback to same-origin (dev with proxy)
-    return `/${cleanPath}`;
+  // array: pick first usable
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const fromItem = extractImageValue(item);
+      if (fromItem) return fromItem;
+    }
+    return null;
   }
 
-  return `${origin}/${cleanPath}`;
+  // object from Cloudinary / multer / S3, etc.
+  if (typeof value === "object") {
+    return (
+      value.url || // { url: "https://..." } or "/uploads/..."
+      value.secure_url ||
+      value.path || // multer: { path: "uploads/gyms/..." }
+      value.location ||
+      value.key ||
+      value.filename ||
+      null
+    );
+  }
+
+  return null;
+};
+
+const normalizeRelativePath = (rawPath) => {
+  if (!rawPath) return null;
+  let p = String(rawPath).trim();
+
+  // already absolute URL
+  if (p.startsWith("http://") || p.startsWith("https://")) return p;
+
+  // fix Windows slashes and strip "public/"
+  p = p.replace(/\\/g, "/");
+  p = p.replace(/^public\//, "");
+  p = p.replace(/^\/+/, ""); // remove starting "/"
+  return p || null;
+};
+
+const buildMediaUrl = (raw) => {
+  const extracted = extractImageValue(raw);
+  if (!extracted) return null;
+
+  // full URL (Cloudinary, S3, etc.)
+  if (typeof extracted === "string" && extracted.startsWith("http")) {
+    return extracted;
+  }
+
+  const origin = getBackendOrigin();
+  const clean = normalizeRelativePath(extracted);
+  if (!clean) return null;
+
+  // If backend origin unknown, fall back to same origin
+  return origin ? `${origin}/${clean}` : `/${clean}`;
 };
 
 const getGalleryImages = (gym) => {
   if (!gym) return fallbackGalleryImages;
 
-  let candidates = [];
+  const candidates = [];
 
-  // put hero / cover FIRST (from PartnerWithUs)
+  // Prefer hero/cover/banner fields first
+  if (gym.heroImage) candidates.push(gym.heroImage);
   if (gym.coverImage) candidates.push(gym.coverImage);
+  if (gym.bannerImage) candidates.push(gym.bannerImage);
+  if (gym.mainImage) candidates.push(gym.mainImage);
 
-  // gallery arrays next
+  // Then common arrays
   if (Array.isArray(gym.images) && gym.images.length) {
     candidates.push(...gym.images);
-  } else if (Array.isArray(gym.media) && gym.media.length) {
+  }
+  if (Array.isArray(gym.media) && gym.media.length) {
     candidates.push(...gym.media);
   }
+  if (Array.isArray(gym.gallery) && gym.gallery.length) {
+    candidates.push(...gym.gallery);
+  }
 
-  // fallback single image if nothing else
+  // Fallback: single image field
   if (!candidates.length && gym.image) {
     candidates.push(gym.image);
   }
 
-  const mapped = candidates.map(buildMediaUrl).filter(Boolean);
+  const mapped = candidates
+    .map((item) => buildMediaUrl(item))
+    .filter(Boolean);
+
   if (mapped.length) return mapped;
 
   return fallbackGalleryImages;
@@ -924,8 +980,7 @@ export default function GymDetails() {
     openingHoursSpecification: openingHoursSpec,
   };
 
- const jsonLd = JSON.stringify(structuredData);
-
+  const jsonLd = JSON.stringify(structuredData);
 
   /* =======================================================
      RENDER
@@ -969,6 +1024,9 @@ export default function GymDetails() {
             src={galleryImages[0]}
             alt={gym.name}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              e.currentTarget.src = fallbackGalleryImages[0];
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/75 to-transparent" />
           {/* Ambient blobs */}
@@ -1322,6 +1380,12 @@ export default function GymDetails() {
                       src={img}
                       alt={`${gym.name}-${i}`}
                       className="w-full h-32 sm:h-40 object-cover group-hover:scale-[1.05] transition-transform duration-500"
+                      onError={(e) => {
+                        e.currentTarget.src =
+                          fallbackGalleryImages[
+                            i % fallbackGalleryImages.length
+                          ];
+                      }}
                     />
                     <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-[11px] text-gray-100">
                       Tap to enlarge
@@ -2014,6 +2078,12 @@ export default function GymDetails() {
               src={galleryImages[activeImage]}
               alt="active"
               className="max-w-4xl w-full max-h-[80vh] object-contain rounded-2xl border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,1)]"
+              onError={(e) => {
+                e.currentTarget.src =
+                  fallbackGalleryImages[
+                    activeImage % fallbackGalleryImages.length
+                  ];
+              }}
             />
           </div>
         )}

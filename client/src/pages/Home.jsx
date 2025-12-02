@@ -241,7 +241,11 @@ const getEventHeroImage = (event) => {
 const getGymOpeningLabel = (gym) => {
   if (!gym) return null;
   const raw =
-    gym.openingHours || gym.openinghours || gym.hours || gym.timing || gym.schedule;
+    gym.openingHours ||
+    gym.openinghours ||
+    gym.hours ||
+    gym.timing ||
+    gym.schedule;
 
   if (!raw) return null;
 
@@ -1154,6 +1158,9 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                 }
               }
 
+              const ticketCount =
+                typeof b.tickets === "number" && b.tickets > 0 ? b.tickets : 1;
+
               return (
                 <div
                   key={b._id || b.id || b.bookingCode}
@@ -1193,8 +1200,8 @@ function ForYouStrip({ theme, mode, bookings, loading, events }) {
                       style={{ color: theme.accentMint }}
                     >
                       <CheckCircle2 size={12} />
-                      {b.tickets || 1} ticket
-                      {b.tickets > 1 ? "s" : ""}
+                      {ticketCount} ticket
+                      {ticketCount > 1 ? "s" : ""}
                     </span>
                     {eventObj?._id && (
                       <Link
@@ -2432,6 +2439,8 @@ function Footer({ theme, mode }) {
   const bgColor =
     mode === "dark" ? "rgba(15,23,42,0.98)" : "rgba(248,250,252,0.98)";
 
+  const year = new Date().getFullYear();
+
   return (
     <footer
       className="w-full border-t mt-16"
@@ -2618,7 +2627,7 @@ function Footer({ theme, mode }) {
             className="text-[11px]"
             style={{ color: theme.textMuted }}
           >
-            © {new Date().getFullYear()} Passiify. All rights reserved.
+            © {year} Passiify. All rights reserved.
           </p>
           <p
             className="text-[11px]"
@@ -2701,12 +2710,22 @@ export default function Home() {
         setGyms(gymArr);
 
         // pick earliest upcoming or first as hero event
-        const sorted = [...evArr].sort(
-          (a, b) => new Date(a.date) - new Date(b.date)
-        );
+        const sorted = [...evArr].sort((a, b) => {
+          const da = a?.date ? new Date(a.date) : null;
+          const db = b?.date ? new Date(b.date) : null;
+          const ta = da && !Number.isNaN(da.getTime()) ? da.getTime() : Infinity;
+          const tb = db && !Number.isNaN(db.getTime()) ? db.getTime() : Infinity;
+          return ta - tb;
+        });
+
         const now = new Date();
         const upcoming =
-          sorted.find((e) => new Date(e.date) >= now) || sorted[0] || null;
+          sorted.find((e) => {
+            if (!e?.date) return false;
+            const d = new Date(e.date);
+            if (Number.isNaN(d.getTime())) return false;
+            return d >= now;
+          }) || sorted[0] || null;
         setTopEvent(upcoming);
 
         // compute starting day-pass price using 1-day/cheapest pass logic
@@ -2803,6 +2822,7 @@ export default function Home() {
 
   // ✅ SEO constants
   const canonicalUrl = "https://www.passiify.com/";
+  const ogImageUrl = "https://www.passiify.com/og-image.jpg"; // update to your actual OG image path
   const pageTitle =
     "Passiify | Day-Pass Gyms & Fitness Events for Travellers & Locals";
   const pageDescription =
@@ -2812,8 +2832,9 @@ export default function Home() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Passiify",
-    url: "https://www.passiify.com",
+    url: canonicalUrl,
     description: pageDescription,
+    image: ogImageUrl,
     potentialAction: {
       "@type": "SearchAction",
       target: "https://www.passiify.com/explore?query={search_term_string}",
@@ -2834,22 +2855,29 @@ export default function Home() {
         <meta name="author" content="Passiify" />
         <meta name="robots" content="index,follow" />
         <link rel="canonical" href={canonicalUrl} />
+        <meta
+          name="theme-color"
+          content={mode === "dark" ? "#020617" : "#F4F5FB"}
+        />
 
         {/* Open Graph / social preview */}
         <meta property="og:type" content="website" />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={pageDescription} />
         <meta property="og:url" content={canonicalUrl} />
-        {/* Update this when you have a real OG image in your assets */}
+        <meta property="og:site_name" content="Passiify" />
+        <meta property="og:locale" content="en_IN" />
+        <meta property="og:image" content={ogImageUrl} />
         <meta
-          property="og:image"
-          content="https://www.passiify.com/og-image.jpg"
+          property="og:image:alt"
+          content="Passiify — day-pass gyms and fitness events"
         />
 
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={pageTitle} />
         <meta name="twitter:description" content={pageDescription} />
+        <meta name="twitter:image" content={ogImageUrl} />
 
         {/* JSON-LD structured data */}
         <script type="application/ld+json">

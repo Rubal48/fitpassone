@@ -145,6 +145,7 @@ const gymSchema = new mongoose.Schema(
     rating: { type: Number, default: 0 },
 
     // Hero + gallery
+    // These now store full URLs (e.g. Cloudinary secure URLs)
     coverImage: { type: String }, // main banner used in cards/detail
     images: { type: [String], default: [] },
 
@@ -180,7 +181,7 @@ const gymSchema = new mongoose.Schema(
     instagram: { type: String },
     googleMapLink: { type: String },
 
-    // ✅ Verification docs
+    // ✅ Verification docs (also good place for Cloudinary URLs)
     businessProof: { type: String }, // GST / registration doc URL
     ownerIdProof: { type: String }, // Aadhaar / PAN URL
     video: { type: String }, // intro video URL

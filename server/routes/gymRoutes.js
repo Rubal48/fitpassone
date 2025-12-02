@@ -75,6 +75,7 @@ router.get(
 );
 
 // ✅ PUT /api/gyms/me -> update current partner's gym (profile edit)
+// NOTE: For images/coverImage, frontend should send full URLs (now Cloudinary)
 router.put(
   "/me",
   verifyToken,
@@ -547,8 +548,7 @@ router.post(
         .json({ message: "Add at least one pass with a valid price." });
     }
 
-    // Hero + gallery images: keep a separate coverImage and also
-    // ensure the first element of images[] is that hero for Explore / cards.
+    // Hero + gallery images: now they are Cloudinary URLs or any absolute URLs
     const hero = coverImage || images[0] || null;
     const gallery = images || [];
     const finalImages = hero

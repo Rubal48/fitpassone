@@ -1,7 +1,47 @@
+// src/pages/BookingCheckout.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "../utils/api";
 import { Calendar, MapPin, Dumbbell, CreditCard } from "lucide-react";
+
+/* =========================================================
+   Media helpers for checkout image
+========================================================= */
+const fallbackCheckoutImage =
+  "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800";
+
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+
+  try {
+    const origin = getBackendOrigin();
+    const cleanPath = String(raw).replace(/^\/+/, "");
+    if (!origin) return `/${cleanPath}`;
+    return `${origin}/${cleanPath}`;
+  } catch {
+    return null;
+  }
+};
+
+const getCheckoutImage = (gym) => {
+  if (!gym) return fallbackCheckoutImage;
+
+  if (Array.isArray(gym.images) && gym.images.length) {
+    return buildMediaUrl(gym.images[0]) || fallbackCheckoutImage;
+  }
+
+  if (gym.image) {
+    return buildMediaUrl(gym.image) || fallbackCheckoutImage;
+  }
+
+  return fallbackCheckoutImage;
+};
 
 export default function BookingCheckout() {
   const { id } = useParams(); // gym ID
@@ -67,6 +107,8 @@ export default function BookingCheckout() {
     );
   }
 
+  const checkoutImage = getCheckoutImage(gym);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-orange-50 py-16 px-6">
       <div className="max-w-3xl mx-auto bg-white shadow-2xl rounded-3xl p-8 border border-gray-100">
@@ -77,8 +119,14 @@ export default function BookingCheckout() {
         {/* 🏋️ Gym Info */}
         <div className="flex flex-col md:flex-row gap-6 items-center border-b pb-6 mb-6">
           <img
-            src={gym.image || "https://source.unsplash.com/400x300/?gym,fitness"}
-            alt={gym.name}
+            src={checkoutImage}
+            alt={`${gym.name} gym in ${gym.city || "your city"} – 1-day pass`}
+            loading="eager"
+            decoding="async"
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = fallbackCheckoutImage;
+            }}
             className="w-full md:w-1/2 h-48 object-cover rounded-xl"
           />
           <div className="flex-1 text-center md:text-left">
@@ -121,7 +169,7 @@ export default function BookingCheckout() {
           </div>
           <div className="flex justify-between font-bold text-gray-900 mt-2">
             <span>Total</span>
-            <span>₹{gym.price + 10}</span>
+            <span>₹{(gym.price || 0) + 10}</span>
           </div>
         </div>
 

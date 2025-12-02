@@ -100,7 +100,10 @@ const createDefaultHours = () => {
   return base;
 };
 
-/* ---------- Media URL helper (handles /api + relative paths) ---------- */
+/* ---------- Media URL helper
+   - If Cloudinary URL (https...), use as is
+   - If legacy relative path (/uploads/..), prefix with backend origin
+--------------------------------------------------------- */
 const getBackendOrigin = () => {
   if (!API?.defaults?.baseURL) return "";
   // e.g. "https://passiify.onrender.com/api" -> "https://passiify.onrender.com"
@@ -111,6 +114,7 @@ const buildMediaUrl = (raw) => {
   if (!raw) return null;
 
   if (typeof raw === "string" && raw.startsWith("http")) {
+    // Cloudinary (or other absolute) URL
     return raw;
   }
 
@@ -244,14 +248,15 @@ export default function PartnerWithUs() {
       setGlobalError("");
       setFieldErrors((prev) => ({ ...prev, heroImage: "" }));
 
-      const res = await API.post("/upload", formDataUpload, {
+      // 🔗 hit Cloudinary-backed route: POST /api/uploads
+      const res = await API.post("/uploads", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
       const uploaded = (res.data.images && res.data.images[0]) || null;
       if (!uploaded) throw new Error("No file returned");
 
-      setHeroImage(uploaded);
+      setHeroImage(uploaded); // Cloudinary secure_url (or legacy path)
     } catch (err) {
       console.error("Hero image upload failed:", err);
       setGlobalError("Hero image upload failed. Please try again.");
@@ -273,14 +278,15 @@ export default function PartnerWithUs() {
       setGlobalError("");
       setFieldErrors((prev) => ({ ...prev, images: "" }));
 
-      const res = await API.post("/upload", formDataUpload, {
+      // 🔗 Cloudinary route: POST /api/uploads
+      const res = await API.post("/uploads", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
       const uploaded = res.data.images || [];
       if (!uploaded.length) throw new Error("No files returned");
 
-      setGalleryImages((prev) => [...prev, ...uploaded]);
+      setGalleryImages((prev) => [...prev, ...uploaded]); // each is secure_url
     } catch (err) {
       console.error("Gallery upload failed:", err);
       setGlobalError("Image upload failed. Please try again.");
@@ -289,7 +295,7 @@ export default function PartnerWithUs() {
     }
   };
 
-  // 📄 Proofs / video – also via /upload with "images" (single file)
+  // 📄 Proofs / video – also via /uploads with "images" (single file)
   const handleProofUpload = async (e, type) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -301,7 +307,8 @@ export default function PartnerWithUs() {
       setUploadingDocs(true);
       setGlobalError("");
 
-      const res = await API.post("/upload", formDataUpload, {
+      // 🔗 Cloudinary route: POST /api/uploads
+      const res = await API.post("/uploads", formDataUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 

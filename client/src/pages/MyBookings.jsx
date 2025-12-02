@@ -14,6 +14,48 @@ import {
 } from "lucide-react";
 import API from "../utils/api";
 
+/* =========================================================
+   Media helpers — reuse backend image logic
+========================================================= */
+const fallbackUpcomingImage =
+  "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800";
+
+const fallbackPastImage =
+  "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=800";
+
+const getBackendOrigin = () => {
+  if (!API?.defaults?.baseURL) return "";
+  return API.defaults.baseURL.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const buildMediaUrl = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === "string" && raw.startsWith("http")) return raw;
+
+  try {
+    const origin = getBackendOrigin();
+    const cleanPath = String(raw).replace(/^\/+/, "");
+    if (!origin) return `/${cleanPath}`;
+    return `${origin}/${cleanPath}`;
+  } catch {
+    return null;
+  }
+};
+
+const getGymImage = (gym, fallback) => {
+  if (!gym) return fallback;
+
+  if (Array.isArray(gym.images) && gym.images.length) {
+    return buildMediaUrl(gym.images[0]) || fallback;
+  }
+
+  if (gym.image) {
+    return buildMediaUrl(gym.image) || fallback;
+  }
+
+  return fallback;
+};
+
 export default function MyBookings() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
@@ -270,10 +312,7 @@ export default function MyBookings() {
                     booking.status,
                     booking.date
                   );
-                  const image =
-                    gym.image ||
-                    (Array.isArray(gym.images) && gym.images[0]) ||
-                    "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=800";
+                  const image = getGymImage(gym, fallbackUpcomingImage);
 
                   const shortCode =
                     (booking.bookingCode || booking._id || "")
@@ -290,7 +329,15 @@ export default function MyBookings() {
                       <div className="relative h-40 overflow-hidden">
                         <img
                           src={image}
-                          alt={gym.name || "Gym"}
+                          alt={`Passiify booking at ${
+                            gym.name || "gym"
+                          } in ${gym.city || "your city"}`}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = fallbackUpcomingImage;
+                          }}
                           className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-700"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
@@ -316,7 +363,8 @@ export default function MyBookings() {
                       </div>
 
                       {/* Content */}
-                      <div className="p-4 sm:p-5 text-sm text-slate-800 dark:text-slate-100">
+                      <div className="p-4 sm:p-5 text-sm text-slate-8
+00 dark:text-slate-100">
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <h3 className="text-base sm:text-lg font-semibold leading-snug line-clamp-1">
                             {gym.name || "Gym / Studio"}
@@ -401,10 +449,7 @@ export default function MyBookings() {
                     booking.status,
                     booking.date
                   );
-                  const image =
-                    gym.image ||
-                    (Array.isArray(gym.images) && gym.images[0]) ||
-                    "https://images.pexels.com/photos/7031707/pexels-photo-7031707.jpeg?auto=compress&cs=tinysrgb&w=800";
+                  const image = getGymImage(gym, fallbackPastImage);
 
                   return (
                     <article
@@ -414,7 +459,15 @@ export default function MyBookings() {
                       <div className="relative h-36 overflow-hidden">
                         <img
                           src={image}
-                          alt={gym.name || "Gym"}
+                          alt={`Past Passiify visit at ${
+                            gym.name || "gym"
+                          } in ${gym.city || "your city"}`}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = fallbackPastImage;
+                          }}
                           className="w-full h-full object-cover grayscale-[0.3]"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />

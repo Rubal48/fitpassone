@@ -482,7 +482,15 @@ export default function BookingPage() {
           <div className="relative h-56 sm:h-64 md:h-64 overflow-hidden">
             <img
               src={heroImage}
-              alt={gym.name}
+              alt={`${gym?.name || "Passiify partner gym"} in ${
+                gym?.city || "your city"
+              } – book a day pass`}
+              loading="eager"
+              decoding="async"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = fallbackHeroImage;
+              }}
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/55 to-transparent" />
