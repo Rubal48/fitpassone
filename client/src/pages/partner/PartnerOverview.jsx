@@ -96,6 +96,30 @@ const PartnerOverview = () => {
 
   const isVerified = gym?.status === "approved" || gym?.verified;
 
+  // ✅ Safely format opening hours (string OR object with monday–sunday)
+  const openingHours = gym?.openingHours;
+  let openingHoursLabel = "";
+
+  if (typeof openingHours === "string") {
+    openingHoursLabel = openingHours;
+  } else if (openingHours && typeof openingHours === "object") {
+    openingHoursLabel = Object.entries(openingHours)
+      .filter(([_, val]) => !!val)
+      .map(([day, hours]) => {
+        const short =
+          day.toLowerCase().startsWith("mon") ? "Mon" :
+          day.toLowerCase().startsWith("tue") ? "Tue" :
+          day.toLowerCase().startsWith("wed") ? "Wed" :
+          day.toLowerCase().startsWith("thu") ? "Thu" :
+          day.toLowerCase().startsWith("fri") ? "Fri" :
+          day.toLowerCase().startsWith("sat") ? "Sat" :
+          day.toLowerCase().startsWith("sun") ? "Sun" :
+          day[0].toUpperCase() + day.slice(1);
+        return `${short}: ${hours}`;
+      })
+      .join(" · ");
+  }
+
   // 🔢 Stat cards adapt to partner type
   const statCards = [
     {
@@ -204,10 +228,10 @@ const PartnerOverview = () => {
                 {gym.city}
               </span>
             )}
-            {gym?.openingHours && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1">
+            {openingHoursLabel && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 max-w-[230px]">
                 <Clock className="h-3 w-3" />
-                {gym.openingHours}
+                <span className="truncate">{openingHoursLabel}</span>
               </span>
             )}
             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1">
@@ -347,7 +371,7 @@ const PartnerOverview = () => {
                 </>
               )
             ) : (
-              // Gym partners: keep your current placeholder top passes for now
+              // Gym partners: placeholder top passes for now
               <>
                 <div className="flex items-center justify-between">
                   <div>
@@ -390,7 +414,7 @@ const PartnerOverview = () => {
           </div>
         </div>
 
-        {/* Upcoming events (still placeholder for now) */}
+        {/* Upcoming events (placeholder for now) */}
         <div
           className="rounded-2xl border p-4"
           style={{
@@ -405,7 +429,7 @@ const PartnerOverview = () => {
               </p>
               <h3 className="text-sm font-semibold">Upcoming events</h3>
             </div>
-          <button className="text-[11px] text-gray-400 hover:text-gray-200">
+            <button className="text-[11px] text-gray-400 hover:text-gray-200">
               Manage
             </button>
           </div>
