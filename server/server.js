@@ -19,7 +19,7 @@ import testEmailRoute from "./routes/testEmailRoute.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import eventBookingRoutes from "./routes/eventBookingRoutes.js";
 import adminEventRoutes from "./routes/adminEventRoutes.js"; // Event admin routes
-import paymentRoutes from "./routes/paymentRoutes.js";       // Razorpay payments
+import paymentRoutes from "./routes/paymentRoutes.js"; // Razorpay payments
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,8 +42,8 @@ app.use("/api/bookings", bookingRoutes);
 
 // ✅ Uploads router mounted on BOTH singular & plural paths
 // so frontend can use /upload or /uploads safely
-app.use("/api/upload", uploadRoutes);   // legacy (e.g. gym image uploads)
-app.use("/api/uploads", uploadRoutes);  // new (e.g. /uploads/events)
+app.use("/api/upload", uploadRoutes); // legacy (e.g. gym image uploads)
+app.use("/api/uploads", uploadRoutes); // new (e.g. /uploads/events)
 
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/admin", adminRoutes);
@@ -74,7 +74,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ---------- DB Connection (after server starts) ----------
+// ---------- DB Connection ----------
 async function connectDB() {
   try {
     console.log("🔧 NODE_ENV:", process.env.NODE_ENV);
@@ -88,18 +88,18 @@ async function connectDB() {
     }
 
     await mongoose.connect(process.env.MONGO_URI, {
-      // optional but helps timeouts
-      serverSelectionTimeoutMS: 20000,
+      serverSelectionTimeoutMS: 20000, // helps avoid hanging on bad connection
     });
+
     console.log("✅ MongoDB Connected Successfully");
   } catch (err) {
     console.error("❌ MongoDB Connection Error:", err);
-    // we don't exit here so Render still sees the port as open
+    // We don't exit here so Render still sees the port as open
   }
 }
 
-// ---------- Start Server FIRST ----------
+// ---------- Start Server ----------
 app.listen(PORT, () => {
-  console.log(`⚡ Server running on port ${PORT}`);
+  console.log(`⚡ Passiify server running on port ${PORT}`);
   connectDB();
 });
